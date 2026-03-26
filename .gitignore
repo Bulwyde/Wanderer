@@ -1,0 +1,66 @@
+# ======================
+# UNITY - Dossiers générés
+# ======================
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+
+# Mémo-cache VisualStudio/Rider
+.vs/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Fichiers de build Unity
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# Fichiers Unity auto-générés
+*.csproj
+*.unityproj
+*.sln
+*.slnx
+
+# Fichiers de crash
+sysinfo.txt
+*.stackdump
+*.crash
+
+# Caches AssetStore / Package Manager
+/[Aa]ssets/[Aa]ssetStoreTools*
+
+# TextMesh Pro
+/[Aa]ssets/[Pp]lugins/[Ee]ditor/[Jj]etBrains*
+
+# OS divers
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# ======================
+# UNITY - Garder les metas
+# (Ne jamais ignorer les .meta !)
+# ======================
+# !/[Aa]ssets/**/*.meta  <- déjà inclus par défaut
+
+# ======================
+# UNITY - Smart Merge
+# ======================
+# Rien à ignorer, mais penser à configurer :
+# git config merge.tool unityyamlmerge

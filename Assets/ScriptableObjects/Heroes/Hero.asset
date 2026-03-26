@@ -1,0 +1,32 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53143f00b92b79348a9b6201ef50c9cd, type: 3}
+  m_Name: Hero
+  m_EditorClassIdentifier: Assembly-CSharp::CharacterData
+  characterID: hero
+  characterName: "H\xE9ros"
+  portrait: {fileID: 0}
+  isUnlocked: 0
+  maxHP: 100
+  attack: 10
+  defense: 2
+  criticalChance: 0
+  criticalMultiplier: 2
+  regeneration: 0
+  lifeSteal: 0
+  maxEnergy: 3
+  startingSkills: []
+  startingHead: {fileID: 0}
+  startingTorso: {fileID: 0}
+  startingLegs: {fileID: 0}
+  startingArm1: {fileID: 11400000, guid: 00bfed72720722c4a87df02eb7371be4, type: 2}
+  startingArm2: {fileID: 0}

@@ -10,10 +10,10 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b76755a0a8a0b0741b5d7badea9590bb, type: 3}
-  m_Name: Weapon_Test3
+  m_Name: Weapon_TestPoison
   m_EditorClassIdentifier: Assembly-CSharp::EquipmentData
-  equipmentID: weapon_test3
-  equipmentName: Arme de test 3
+  equipmentID: weapon_test_poison
+  equipmentName: Arme de test Poison
   icon: {fileID: 0}
   description: 
   keywords: []
@@ -28,8 +28,7 @@ MonoBehaviour:
   bonusLifeSteal: 0
   passiveEffects: []
   skills:
-  - {fileID: 11400000, guid: 9de6836a04603bf499a97c1a54e2453e, type: 2}
-  - {fileID: 11400000, guid: 8a838b7f076feea4a98507067eb21226, type: 2}
+  - {fileID: 11400000, guid: 9c9666361562e55498dc31655fa61747, type: 2}
   tags: []
   isUnique: 0
   setID: 

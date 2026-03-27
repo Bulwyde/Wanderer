@@ -20,8 +20,8 @@ MonoBehaviour:
   equipmentType: 3
   level: 1
   bonusHP: 0
-  bonusAttack: 2
-  bonusDefense: 1
+  bonusAttack: 0
+  bonusDefense: 0
   bonusCriticalChance: 0
   bonusCriticalMultiplier: 0
   bonusRegeneration: 0

@@ -21,7 +21,7 @@ MonoBehaviour:
   level: 1
   bonusHP: 20
   bonusAttack: 0
-  bonusDefense: 3
+  bonusDefense: 0
   bonusCriticalChance: 0
   bonusCriticalMultiplier: 0
   bonusRegeneration: 0

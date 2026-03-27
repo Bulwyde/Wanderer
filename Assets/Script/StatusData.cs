@@ -1,0 +1,78 @@
+using UnityEngine;
+
+/// <summary>
+/// Définit un statut de combat (Poison, Faiblesse, Force, Brûlure...).
+///
+/// Un statut existe en tant que ScriptableObject — sa *définition* est ici.
+/// Les stacks actifs en combat sont trackés dans CombatManager via des dictionnaires
+/// (playerStatuses / enemyStatuses), jamais dans ce ScriptableObject.
+///
+/// Deux grandes familles de statuts :
+///   - StackOnly : aucun effet automatique, les stacks sont simplement consultés
+///     par d'autres effets (ex : "inflige X dégâts par stack de Faiblesse").
+///   - PerTurnStart : déclenche automatiquement un effet au début du tour
+///     de l'entité affectée (ex : Poison inflige des dégâts chaque tour).
+/// </summary>
+[CreateAssetMenu(fileName = "NewStatus", menuName = "RPG/Status Data")]
+public class StatusData : ScriptableObject
+{
+    // -----------------------------------------------
+    // IDENTITÉ
+    // -----------------------------------------------
+
+    [Header("Identité")]
+    // Identifiant unique — utilisé en interne pour référencer le statut
+    public string statusID;
+
+    // Nom affiché au joueur (ex : "Poison", "Faiblesse", "Force")
+    public string statusName;
+
+    // Description courte affichée en tooltip — peut mentionner {stacks}
+    [TextArea(2, 4)]
+    public string description;
+
+    public Sprite icon;
+
+    // -----------------------------------------------
+    // COMPORTEMENT
+    // -----------------------------------------------
+
+    [Header("Comportement")]
+    // Définit si et quand le statut se déclenche automatiquement
+    public StatusBehavior behavior;
+
+    // Action exécutée automatiquement (uniquement pour PerTurnStart)
+    // Exemple : DealDamage → chaque stack inflige effectPerStack dégâts par tour
+    public EffectAction perTurnAction;
+
+    // Valeur par stack pour l'action automatique
+    // Exemple : 2f avec DealDamage → chaque stack inflige 2 HP de poison par tour
+    public float effectPerStack;
+
+    // -----------------------------------------------
+    // DURÉE & DÉCROISSANCE
+    // -----------------------------------------------
+
+    [Header("Durée & Décroissance")]
+    // Nombre de stacks perdus automatiquement à chaque tick (fin de traitement du tour)
+    // 0 = les stacks ne diminuent jamais d'eux-mêmes (retrait uniquement par effet)
+    public int decayPerTurn;
+
+    // Plafond de stacks accumulables sur une même entité (0 = illimité)
+    public int maxStacks;
+}
+
+/// <summary>
+/// Définit quand (et si) un statut se déclenche automatiquement.
+/// </summary>
+public enum StatusBehavior
+{
+    // Aucun effet automatique — les stacks sont uniquement consultés par d'autres effets
+    // Exemple : "Faiblesse" — une compétence inflige X dégâts par stack de Faiblesse,
+    //           puis consomme les stacks
+    StackOnly,
+
+    // Déclenche perTurnAction au début du tour de l'entité affectée
+    // Exemple : Poison, Brûlure
+    PerTurnStart,
+}

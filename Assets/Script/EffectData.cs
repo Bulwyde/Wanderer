@@ -29,11 +29,27 @@ public class EffectData : ScriptableObject
     public EffectAction action;
 
     [Header("Valeurs")]
-    // Valeur principale de l'effet (ex : montant de dégâts, HP soignés...)
+    // Valeur principale de l'effet (ex : montant de dégâts, HP soignés, stacks appliqués...)
     public float value;
 
-    // Valeur secondaire optionnelle (ex : durée en tours, stacks...)
+    // Valeur secondaire — bonus appliqué par stack du scalingStatus (voir section ci-dessous)
+    // Exemple : 3f → chaque stack de Faiblesse ajoute 3 dégâts supplémentaires
     public float secondaryValue;
+
+    [Header("Statut (pour ApplyStatus)")]
+    // Statut à appliquer sur la cible — value = nombre de stacks infligés
+    // Uniquement utilisé si action == ApplyStatus
+    public StatusData statusToApply;
+
+    [Header("Mise à l'échelle par stacks (optionnel)")]
+    // Si renseigné, l'effet est amplifié selon les stacks actifs de ce statut sur la cible
+    // La valeur bonus par stack est définie dans secondaryValue
+    // Exemple : scalingStatus = Faiblesse, secondaryValue = 5 → +5 dégâts par stack de Faiblesse
+    public StatusData scalingStatus;
+
+    // Si true, tous les stacks du scalingStatus sont consommés (retirés) après l'effet
+    // Si false, les stacks sont simplement lus sans être modifiés
+    public bool consumeStacks;
 
     [Header("Cible")]
     public EffectTarget target;

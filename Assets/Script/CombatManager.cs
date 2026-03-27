@@ -119,10 +119,14 @@ public class CombatManager : MonoBehaviour
     // Stats effectives du joueur — stats de base + bonus de chaque pièce d'équipement.
     // Calculées une fois au démarrage du combat dans ResolveEquipment().
     // On les sépare des données brutes (CharacterData) pour ne jamais modifier le ScriptableObject.
-    private int effectiveMaxHP;
-    private int effectiveAttack;
-    private int effectiveDefense;
-    private int effectiveMaxEnergy;
+    private int   effectiveMaxHP;
+    private int   effectiveAttack;
+    private int   effectiveDefense;
+    private int   effectiveMaxEnergy;
+    private float effectiveCriticalChance;      // Probabilité de coup critique [0, 1]
+    private float effectiveCriticalMultiplier;  // Multiplicateur de dégâts sur un critique
+    private int   effectiveRegeneration;        // HP récupérés au début de chaque tour joueur
+    private float effectiveLifeSteal;           // Fraction des dégâts convertie en soins [0, 1]
 
     // Skills disponibles en combat : collectés depuis l'équipement, ou startingSkills en fallback
     private List<SkillData> availableSkills = new List<SkillData>();
@@ -137,6 +141,11 @@ public class CombatManager : MonoBehaviour
     private Dictionary<SkillData, int> skillCooldowns = new Dictionary<SkillData, int>();
 
     private const float EnemyActionDelay = 1.0f;
+
+    // Statuts actifs en combat — clé = définition du statut, valeur = nombre de stacks
+    // Les stacks sont trackés ici, jamais dans les ScriptableObjects
+    private Dictionary<StatusData, int> playerStatuses = new Dictionary<StatusData, int>();
+    private Dictionary<StatusData, int> enemyStatuses  = new Dictionary<StatusData, int>();
 
     // Cartes de loot instanciées — on les garde pour gérer la sélection visuelle
     private List<LootCard> spawnedLootCards = new List<LootCard>();
@@ -214,18 +223,26 @@ public class CombatManager : MonoBehaviour
     {
         if (characterData == null)
         {
-            effectiveMaxHP     = 100;
-            effectiveAttack    = 10;
-            effectiveDefense   = 0;
-            effectiveMaxEnergy = 3;
+            effectiveMaxHP              = 100;
+            effectiveAttack             = 10;
+            effectiveDefense            = 0;
+            effectiveMaxEnergy          = 3;
+            effectiveCriticalChance     = 0f;
+            effectiveCriticalMultiplier = 2f;
+            effectiveRegeneration       = 0;
+            effectiveLifeSteal          = 0f;
             return;
         }
 
         // On part des stats de base du personnage
-        effectiveMaxHP     = characterData.maxHP;
-        effectiveAttack    = characterData.attack;
-        effectiveDefense   = characterData.defense;
-        effectiveMaxEnergy = characterData.maxEnergy;
+        effectiveMaxHP              = characterData.maxHP;
+        effectiveAttack             = characterData.attack;
+        effectiveDefense            = characterData.defense;
+        effectiveMaxEnergy          = characterData.maxEnergy;
+        effectiveCriticalChance     = characterData.criticalChance;
+        effectiveCriticalMultiplier = characterData.criticalMultiplier;
+        effectiveRegeneration       = characterData.regeneration;
+        effectiveLifeSteal          = characterData.lifeSteal;
 
         availableSkills.Clear();
         bool hasEquipmentSkills = false;
@@ -249,10 +266,13 @@ public class CombatManager : MonoBehaviour
             if (equip == null) continue;
 
             // Additionne les bonus de stats
-            effectiveMaxHP   += equip.bonusHP;
-            effectiveAttack  += equip.bonusAttack;
-            effectiveDefense += equip.bonusDefense;
-            // Les autres bonus (crit, regen, lifesteal...) seront exploités plus tard
+            effectiveMaxHP              += equip.bonusHP;
+            effectiveAttack             += equip.bonusAttack;
+            effectiveDefense            += equip.bonusDefense;
+            effectiveCriticalChance     += equip.bonusCriticalChance;
+            effectiveCriticalMultiplier += equip.bonusCriticalMultiplier;
+            effectiveRegeneration       += equip.bonusRegeneration;
+            effectiveLifeSteal          += equip.bonusLifeSteal;
 
             // Collecte les skills de cette pièce
             foreach (SkillData skill in equip.skills)
@@ -288,8 +308,13 @@ public class CombatManager : MonoBehaviour
             SeedSlotIfFree(EquipmentSlot.Arm2,  characterData.startingArm2);
         }
 
+        // Plafonne la chance de critique entre 0 et 1 (les bonus d'équipement peuvent dépasser)
+        effectiveCriticalChance = Mathf.Clamp01(effectiveCriticalChance);
+
         Debug.Log($"[Combat] Équipement résolu — HP: {effectiveMaxHP}, ATK: {effectiveAttack}, " +
                   $"DEF: {effectiveDefense}, Énergie: {effectiveMaxEnergy}, " +
+                  $"Crit: {effectiveCriticalChance:P0}, Multi: {effectiveCriticalMultiplier:F1}x, " +
+                  $"Regen: {effectiveRegeneration}, LifeSteal: {effectiveLifeSteal:P0}, " +
                   $"Skills: {availableSkills.Count}");
     }
 
@@ -343,6 +368,20 @@ public class CombatManager : MonoBehaviour
         // L'armure du joueur se remet à 0 au début de son tour (comme dans Slay the Spire)
         currentPlayerArmor = 0;
 
+        // Statuts sur le joueur : effets automatiques + décroissance
+        ProcessPerTurnStatuses(forEnemy: false);
+
+        // Régénération : soigne le joueur au début de son tour (plafonné aux HP max)
+        if (effectiveRegeneration > 0)
+        {
+            int healed = Mathf.Min(effectiveRegeneration, GetPlayerMaxHP() - currentPlayerHP);
+            if (healed > 0)
+            {
+                currentPlayerHP += healed;
+                Log($"Régénération — +{healed} HP → {currentPlayerHP}/{GetPlayerMaxHP()}");
+            }
+        }
+
         // Décrémente tous les cooldowns d'un tour
         DecrementCooldowns();
 
@@ -373,6 +412,18 @@ public class CombatManager : MonoBehaviour
     private IEnumerator EnemyTurnRoutine()
     {
         yield return new WaitForSeconds(EnemyActionDelay);
+
+        // Statuts sur l'ennemi : effets automatiques (poison, etc.) + décroissance
+        // Appelé avant l'action ennemie pour que les dégâts de statut soient visibles d'abord
+        ProcessPerTurnStatuses(forEnemy: true);
+        UpdateUI();
+
+        // Si l'ennemi est mort à cause de ses propres statuts, on ne va pas plus loin
+        if (currentEnemyHP <= 0)
+        {
+            EndCombat(victory: true);
+            yield break;
+        }
 
         // Récupère et exécute la prochaine action de la file
         // Si la file est vide (toutes les actions épuisées), repli sur une attaque de base
@@ -489,8 +540,36 @@ public class CombatManager : MonoBehaviour
             case EffectAction.DealDamage:
             {
                 // Formule : dégâts = valeur du coup + attaque du lanceur - défense de la cible
-                int enemyDef = enemyData != null ? enemyData.defense : 0;
+                int enemyDef  = enemyData != null ? enemyData.defense : 0;
                 int rawDamage = Mathf.Max(1, Mathf.RoundToInt(effect.value) + effectiveAttack - enemyDef);
+
+                // Mise à l'échelle par stacks (optionnel) — bonus appliqué avant le calcul du critique
+                // secondaryValue = bonus de dégâts par stack du scalingStatus sur la cible (l'ennemi ici)
+                string stackInfo = "";
+                if (effect.scalingStatus != null)
+                {
+                    int stacks = GetStatusStacks(effect.scalingStatus, onEnemy: true);
+                    if (stacks > 0)
+                    {
+                        int bonus = Mathf.RoundToInt(effect.secondaryValue * stacks);
+                        rawDamage += bonus;
+
+                        // "dont +12 Explo×6" → le bonus est inclus dans le total affiché, pas additionné
+                        string consumeText = effect.consumeStacks ? " [consommés]" : "";
+                        stackInfo = $", dont +{bonus} {effect.scalingStatus.statusName}×{stacks}{consumeText}";
+
+                        if (effect.consumeStacks)
+                            enemyStatuses.Remove(effect.scalingStatus);
+                    }
+                }
+
+                // Coup critique : tirage aléatoire contre la chance de critique effective
+                bool isCrit = effectiveCriticalChance > 0f && Random.value < effectiveCriticalChance;
+                if (isCrit)
+                    rawDamage = Mathf.RoundToInt(rawDamage * effectiveCriticalMultiplier);
+
+                // Sécurité : les dégâts ne peuvent pas dépasser 9999 ni être négatifs
+                rawDamage = Mathf.Clamp(rawDamage, 0, 9999);
 
                 // L'armure absorbe les dégâts directs avant les HP
                 int armorAbsorbed = Mathf.Min(currentEnemyArmor, rawDamage);
@@ -498,8 +577,27 @@ public class CombatManager : MonoBehaviour
                 currentEnemyArmor = Mathf.Max(0, currentEnemyArmor - armorAbsorbed);
                 currentEnemyHP    = Mathf.Max(0, currentEnemyHP    - hpDamage);
 
-                string armorInfo = armorAbsorbed > 0 ? $" (dont {armorAbsorbed} absorbés par l'armure)" : "";
-                Log($"{GetPlayerName()} utilise {sourceName} — {rawDamage} dégâts{armorInfo} → {currentEnemyHP}/{GetEnemyMaxHP()} HP");
+                string critInfo  = isCrit ? " [CRITIQUE !]" : "";
+                string armorInfo = armorAbsorbed > 0 ? $", dont {armorAbsorbed} absorbés par l'armure" : "";
+                // Le total affiché inclut déjà tous les bonus — stackInfo et armorInfo précisent la composition
+                string detailInfo = (stackInfo.Length > 0 || armorInfo.Length > 0)
+                    ? $" ({stackInfo.TrimStart(',', ' ')}{armorInfo})" : "";
+                string logMsg = $"{GetPlayerName()} utilise {sourceName}{critInfo} — {rawDamage} dégâts{detailInfo} → {currentEnemyHP}/{GetEnemyMaxHP()} HP";
+
+                // Vol de vie : soigne le joueur d'une fraction des HP réellement infligés à l'ennemi
+                // On ne vole que les HP perdus par l'ennemi, pas les dégâts absorbés par l'armure
+                if (effectiveLifeSteal > 0f && hpDamage > 0)
+                {
+                    int stolen = Mathf.Max(1, Mathf.RoundToInt(hpDamage * effectiveLifeSteal));
+                    stolen = Mathf.Min(stolen, GetPlayerMaxHP() - currentPlayerHP);
+                    if (stolen > 0)
+                    {
+                        currentPlayerHP += stolen;
+                        logMsg += $" | Vol de vie +{stolen} HP";
+                    }
+                }
+
+                Log(logMsg);
                 break;
             }
 
@@ -517,6 +615,20 @@ public class CombatManager : MonoBehaviour
                 int armor = Mathf.RoundToInt(effect.value);
                 currentPlayerArmor += armor;
                 Log($"{GetPlayerName()} utilise {sourceName} — +{armor} armure → {currentPlayerArmor} armure totale");
+                break;
+            }
+
+            case EffectAction.ApplyStatus:
+            {
+                // Le joueur applique un statut sur l'ennemi (cas standard)
+                // value = nombre de stacks à appliquer
+                if (effect.statusToApply == null)
+                {
+                    Log($"{GetPlayerName()} utilise {sourceName} — Aucun statut défini sur cet effet.");
+                    break;
+                }
+                int stacks = Mathf.RoundToInt(effect.value);
+                ApplyStatus(effect.statusToApply, stacks, toEnemy: true);
                 break;
             }
 
@@ -541,14 +653,37 @@ public class CombatManager : MonoBehaviour
                 int enemyAtk  = enemyData != null ? enemyData.attack : 5;
                 int rawDamage = Mathf.Max(1, Mathf.RoundToInt(effect.value) + enemyAtk - effectiveDefense);
 
+                // Mise à l'échelle par stacks (optionnel) — stacks lus sur le joueur (la cible ici)
+                string stackInfo = "";
+                if (effect.scalingStatus != null)
+                {
+                    int stacks = GetStatusStacks(effect.scalingStatus, onEnemy: false);
+                    if (stacks > 0)
+                    {
+                        int bonus = Mathf.RoundToInt(effect.secondaryValue * stacks);
+                        rawDamage += bonus;
+
+                        string consumeText = effect.consumeStacks ? " [consommés]" : "";
+                        stackInfo = $", dont +{bonus} {effect.scalingStatus.statusName}×{stacks}{consumeText}";
+
+                        if (effect.consumeStacks)
+                            playerStatuses.Remove(effect.scalingStatus);
+                    }
+                }
+
+                // Sécurité : les dégâts ne peuvent pas dépasser 9999 ni être négatifs
+                rawDamage = Mathf.Clamp(rawDamage, 0, 9999);
+
                 // L'armure du joueur absorbe les dégâts directs avant les HP
                 int armorAbsorbed = Mathf.Min(currentPlayerArmor, rawDamage);
                 int hpDamage      = rawDamage - armorAbsorbed;
                 currentPlayerArmor = Mathf.Max(0, currentPlayerArmor - armorAbsorbed);
                 currentPlayerHP    = Mathf.Max(0, currentPlayerHP    - hpDamage);
 
-                string armorInfo = armorAbsorbed > 0 ? $" (dont {armorAbsorbed} absorbés par l'armure)" : "";
-                Log($"{GetEnemyName()} utilise {sourceName} — {rawDamage} dégâts{armorInfo} → {currentPlayerHP}/{GetPlayerMaxHP()} HP");
+                string armorInfo  = armorAbsorbed > 0 ? $", dont {armorAbsorbed} absorbés par l'armure" : "";
+                string detailInfo = (stackInfo.Length > 0 || armorInfo.Length > 0)
+                    ? $" ({stackInfo.TrimStart(',', ' ')}{armorInfo})" : "";
+                Log($"{GetEnemyName()} utilise {sourceName} — {rawDamage} dégâts{detailInfo} → {currentPlayerHP}/{GetPlayerMaxHP()} HP");
                 break;
             }
 
@@ -569,10 +704,155 @@ public class CombatManager : MonoBehaviour
                 break;
             }
 
+            case EffectAction.ApplyStatus:
+            {
+                // L'ennemi applique un statut sur le joueur (cas standard)
+                // value = nombre de stacks à appliquer
+                if (effect.statusToApply == null)
+                {
+                    Log($"{GetEnemyName()} utilise {sourceName} — Aucun statut défini sur cet effet.");
+                    break;
+                }
+                int stacks = Mathf.RoundToInt(effect.value);
+                ApplyStatus(effect.statusToApply, stacks, toEnemy: false);
+                break;
+            }
+
             default:
                 Log($"{GetEnemyName()} utilise {sourceName} — Effet '{effect.action}' non encore implémenté.");
                 break;
         }
+    }
+
+    // -----------------------------------------------
+    // STATUTS
+    // -----------------------------------------------
+
+    /// <summary>
+    /// Applique un nombre de stacks d'un statut à une entité (joueur ou ennemi).
+    /// Respecte le plafond maxStacks si défini (> 0 dans StatusData).
+    /// </summary>
+    private void ApplyStatus(StatusData status, int stacks, bool toEnemy)
+    {
+        if (status == null || stacks <= 0) return;
+
+        Dictionary<StatusData, int> target = toEnemy ? enemyStatuses : playerStatuses;
+        string entityName = toEnemy ? GetEnemyName() : GetPlayerName();
+
+        if (!target.ContainsKey(status))
+            target[status] = 0;
+
+        target[status] += stacks;
+
+        // Plafonne les stacks si maxStacks est défini
+        if (status.maxStacks > 0)
+            target[status] = Mathf.Min(target[status], status.maxStacks);
+
+        Log($"{entityName} reçoit {stacks} stack(s) de {status.statusName} " +
+            $"→ {target[status]} stack(s) au total");
+    }
+
+    /// <summary>
+    /// Retourne le nombre de stacks actifs d'un statut sur une entité.
+    /// Renvoie 0 si le statut n'est pas présent.
+    /// </summary>
+    private int GetStatusStacks(StatusData status, bool onEnemy)
+    {
+        if (status == null) return 0;
+        Dictionary<StatusData, int> source = onEnemy ? enemyStatuses : playerStatuses;
+        return source.TryGetValue(status, out int stacks) ? stacks : 0;
+    }
+
+    /// <summary>
+    /// Exécute les effets automatiques (PerTurnStart) des statuts actifs sur une entité,
+    /// puis applique la décroissance des stacks (decayPerTurn).
+    /// À appeler au début du tour de l'entité concernée.
+    ///
+    /// Règle importante : les statuts StackOnly sont ignorés ici — ils n'ont pas d'effet
+    /// automatique, ils sont uniquement consultés par d'autres effets.
+    /// </summary>
+    private void ProcessPerTurnStatuses(bool forEnemy)
+    {
+        Dictionary<StatusData, int> statuses = forEnemy ? enemyStatuses : playerStatuses;
+        if (statuses.Count == 0) return;
+
+        // On itère sur une copie des clés pour pouvoir modifier le dictionnaire en cours de boucle
+        List<StatusData> keys = new List<StatusData>(statuses.Keys);
+
+        foreach (StatusData status in keys)
+        {
+            if (!statuses.ContainsKey(status)) continue;
+            int stacks = statuses[status];
+            if (stacks <= 0) continue;
+
+            // --- Effet automatique (PerTurnStart) ---
+            if (status.behavior == StatusBehavior.PerTurnStart)
+            {
+                float totalEffect = status.effectPerStack * stacks;
+                string entityName = forEnemy ? GetEnemyName() : GetPlayerName();
+
+                switch (status.perTurnAction)
+                {
+                    case EffectAction.DealDamage:
+                    {
+                        // Le statut inflige des dégâts bruts, sans passer par l'armure
+                        // (comportement type poison dans Slay the Spire)
+                        int dmg = Mathf.Max(1, Mathf.RoundToInt(totalEffect));
+                        if (forEnemy)
+                            currentEnemyHP = Mathf.Max(0, currentEnemyHP - dmg);
+                        else
+                            currentPlayerHP = Mathf.Max(0, currentPlayerHP - dmg);
+
+                        Log($"{entityName} subit {dmg} dégâts de {status.statusName} " +
+                            $"({stacks} stack(s))");
+                        break;
+                    }
+
+                    case EffectAction.Heal:
+                    {
+                        int healed;
+                        if (forEnemy)
+                        {
+                            healed = Mathf.Min(Mathf.RoundToInt(totalEffect),
+                                               GetEnemyMaxHP() - currentEnemyHP);
+                            currentEnemyHP += healed;
+                        }
+                        else
+                        {
+                            healed = Mathf.Min(Mathf.RoundToInt(totalEffect),
+                                               GetPlayerMaxHP() - currentPlayerHP);
+                            currentPlayerHP += healed;
+                        }
+                        Log($"{entityName} récupère {healed} HP grâce à {status.statusName} " +
+                            $"({stacks} stack(s))");
+                        break;
+                    }
+
+                    default:
+                        Log($"{status.statusName} — action automatique '{status.perTurnAction}' " +
+                            $"non implémentée.");
+                        break;
+                }
+            }
+
+            // --- Décroissance des stacks ---
+            if (status.decayPerTurn > 0)
+            {
+                statuses[status] = Mathf.Max(0, stacks - status.decayPerTurn);
+                if (statuses[status] == 0)
+                {
+                    string entityName = forEnemy ? GetEnemyName() : GetPlayerName();
+                    Log($"{entityName} n'a plus de {status.statusName}");
+                }
+            }
+        }
+
+        // Nettoie les entrées à 0 stacks pour garder les dictionnaires propres
+        List<StatusData> toRemove = new List<StatusData>();
+        foreach (var kvp in statuses)
+            if (kvp.Value <= 0) toRemove.Add(kvp.Key);
+        foreach (StatusData key in toRemove)
+            statuses.Remove(key);
     }
 
     // -----------------------------------------------

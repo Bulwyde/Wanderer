@@ -18,7 +18,7 @@ MonoBehaviour:
   isUnlocked: 0
   maxHP: 100
   attack: 10
-  defense: 2
+  defense: 0
   criticalChance: 0
   criticalMultiplier: 2
   regeneration: 0

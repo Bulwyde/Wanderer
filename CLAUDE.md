@@ -82,9 +82,11 @@ public enum CellType { Start, Classic, Boss, Event, Empty }
 - Machine à états : `PlayerTurn → EnemyTurn → Victory/Defeat`
 - **Énergie** : rechargée à `effectiveMaxEnergy` chaque début de tour joueur
 - **Armure** (style StS) : absorbe les dégâts directs, se remet à 0 au début du tour de l'entité concernée. Ne bloque PAS le poison.
-- **Stats effectives** : calculées une fois au démarrage via `ResolveEquipment()` — base CharacterData + bonus de chaque pièce équipée
+- **Stats effectives** : calculées une fois au démarrage via `ResolveEquipment()` — base CharacterData + bonus de chaque pièce équipée (HP, ATK, DEF, crit, regen, lifesteal)
 - **Compétences** : viennent de l'équipement (fallback : `CharacterData.startingSkills`)
 - **IA ennemie** : file d'actions circulaire gérée par `EnemyAI`
+- **Statuts** : `playerStatuses` / `enemyStatuses` (Dictionary<StatusData, int>). Tick via `ProcessPerTurnStatuses()` — joueur au début de son tour, ennemi au début du sien. Si l'ennemi meurt de ses statuts, victoire immédiate.
+- **Dégâts** : clampés entre 0 et 9999. Log format : `"X dégâts (dont +Y Statut×N [consommés])"` — le total affiché inclut déjà tous les bonus.
 - **Loot** : tirage aléatoire Fisher-Yates dans `EnemyData.lootPool`, affichage de `lootOfferCount` cartes via `LootCard`
 - **Fin de combat victoire** : → panel Loot → `OnLootContinueClicked()` → sauvegarde HP dans RunManager → `GoToNavigation()`
 - **Fin de combat défaite** : → panel End → `GoToMainMenu()`
@@ -150,20 +152,32 @@ public int value;
 
 **`EffectData.cs`**
 ```csharp
-public enum EffectAction { DealDamage, Heal, AddArmor, ApplyStatus, ModifyStat }
+public enum EffectAction { DealDamage, Heal, AddArmor, ApplyStatus, ModifyStat, ... }
 public EffectAction action;
-public float value;
+public float value;           // dégâts / soins / stacks à appliquer
+public float secondaryValue;  // bonus de valeur par stack (pour scalingStatus)
+public StatusData statusToApply;  // statut à appliquer (si action == ApplyStatus)
+public StatusData scalingStatus;  // statut dont les stacks amplifient l'effet (DealDamage)
+public bool consumeStacks;        // si true, les stacks du scalingStatus sont retirés après l'effet
 ```
-Seuls `DealDamage`, `Heal` et `AddArmor` sont implémentés dans CombatManager.
+`DealDamage`, `Heal`, `AddArmor` et `ApplyStatus` sont implémentés. `ModifyStat` reste à faire.
+Les dégâts sont clampés entre 0 et 9999 dans `ApplyEffect` et `ApplyEnemyEffect`.
 
 **`EquipmentData.cs`**
 - `equipmentName`, `EquipmentSlot slot`
-- Bonus : `bonusHP`, `bonusAttack`, `bonusDefense`
+- Bonus stats : `bonusHP`, `bonusAttack`, `bonusDefense`, `bonusCriticalChance`, `bonusCriticalMultiplier`, `bonusRegeneration`, `bonusLifeSteal`
 - `List<SkillData> skills`
 
 ```csharp
 public enum EquipmentSlot { Head, Torso, Legs, Arm1, Arm2 }
 ```
+
+**`StatusData.cs`**
+- `statusID`, `statusName`, `description`, `icon`
+- `StatusBehavior behavior` : `StackOnly` (pas d'effet auto) ou `PerTurnStart` (tick au début du tour)
+- `EffectAction perTurnAction` + `float effectPerStack` — définissent ce que fait le statut par stack par tour
+- `int decayPerTurn` — stacks perdus automatiquement par tour (0 = permanent)
+- `int maxStacks` — plafond de stacks (0 = illimité)
 
 **`KeywordData.cs`**, **`ModuleData.cs`** — définis mais pas encore utilisés activement
 
@@ -196,7 +210,7 @@ public enum EquipmentSlot { Head, Torso, Legs, Arm1, Arm2 }
 - Chaque script commence par un bloc `<summary>` expliquant son rôle et la structure de scène recommandée
 - Les sections sont séparées par des commentaires `// ---...---`
 - Les `Debug.Log` ont des préfixes explicites : `[RunManager]`, `[Combat]`, `[Event]`, etc.
-- Préférer `Mathf.Max(1, ...)` pour éviter les dégâts nuls
+- Préférer `Mathf.Max(1, ...)` pour éviter les dégâts nuls, et `Mathf.Clamp(x, 0, 9999)` pour plafonner
 - Les ScriptableObjects ne sont jamais modifiés au runtime — les données variables vont dans RunManager
 
 ---
@@ -211,15 +225,24 @@ public enum EquipmentSlot { Head, Torso, Legs, Arm1, Arm2 }
 - Navigation carte (brouillard de guerre, déplacement clavier, sauvegarde état)
 - Système d'événements narratifs (chargement, choix, effets ModifyHP)
 - Transitions entre scènes via SceneLoader + RunManager
+- Stats avancées en combat : `criticalChance`, `criticalMultiplier`, `regeneration`, `lifeSteal` (+ bonus d'équipement accumulés dans `ResolveEquipment()`)
+- Système de statuts : `StatusData` (ScriptableObject), `ApplyStatus()`, `ProcessPerTurnStatuses()`, stacks avec lecture et/ou consommation par les effets de dégâts (`scalingStatus`, `consumeStacks` dans `EffectData`)
 
 ### En cours / À faire 🔧
 - Scène MainMenu (sélection de personnage non branchée)
-- Effets de combat non implémentés : `ApplyStatus`, `ModifyStat`
+- Effets de combat non implémentés : `ModifyStat`
 - Effets d'événements non implémentés : tout sauf `ModifyHP`
 - `KeywordData` et `ModuleData` définis mais non utilisés
-- Stats avancées non exploitées en combat : `criticalChance`, `criticalMultiplier`, `regeneration`, `lifeSteal`
+- `GameEvents.cs` défini mais jamais déclenché (aucun `TriggerXxx()` appelé)
 - Boss, salles spéciales
 - Sons, animations, retours visuels
+- Inventaire (prévu dans RunManager, commentaire `// Futur`)
+
+### Localisation 🌍
+- **À implémenter après la première version jouable de bout en bout** (pas avant que le contenu textuel soit stable)
+- Utiliser le package officiel **Unity Localization** (`com.unity.localization`)
+- Le refactoring consistera à : remplacer les `public string` de texte visible dans les ScriptableObjects par des `LocalizedString`, et ajouter des composants `LocalizeStringEvent` sur les TextMeshPro dans les scènes
+- **Règle à tenir dès maintenant** : ne jamais hardcoder du texte visible dans le code C# — tout texte affiché au joueur doit passer par les ScriptableObjects ou les champs Inspector
 
 ---
 

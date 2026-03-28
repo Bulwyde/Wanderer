@@ -59,6 +59,18 @@ public class CombatManager : MonoBehaviour
     public GameObject skillButtonPrefab;
 
     // -----------------------------------------------
+    // UI — CONSOMMABLES
+    // -----------------------------------------------
+
+    [Header("UI — Consommables")]
+    // Conteneur où les boutons de consommables seront générés dynamiquement
+    // (Horizontal ou Vertical Layout Group recommandé)
+    public Transform consumableButtonContainer;
+
+    // Préfab d'un bouton de consommable — doit avoir le composant ConsumableButton
+    public GameObject consumableButtonPrefab;
+
+    // -----------------------------------------------
     // UI — DEBUG
     // -----------------------------------------------
 
@@ -137,6 +149,9 @@ public class CombatManager : MonoBehaviour
     // Liste des boutons de compétences instanciés — on les garde pour les mettre à jour
     private List<SkillButton> spawnedSkillButtons = new List<SkillButton>();
 
+    // Liste des boutons de consommables instanciés — recréés après chaque utilisation
+    private List<ConsumableButton> spawnedConsumableButtons = new List<ConsumableButton>();
+
     // Cooldowns par compétence : nombre de tours restants avant de pouvoir l'utiliser
     private Dictionary<SkillData, int> skillCooldowns = new Dictionary<SkillData, int>();
 
@@ -201,6 +216,7 @@ public class CombatManager : MonoBehaviour
         }
 
         SpawnSkillButtons();
+        SpawnConsumableButtons();
         UpdateUI();
         UpdateEnemyNextActionUI();
         Log($"Combat commencé — {GetPlayerName()} vs {GetEnemyName()}");
@@ -245,7 +261,6 @@ public class CombatManager : MonoBehaviour
         effectiveLifeSteal          = characterData.lifeSteal;
 
         availableSkills.Clear();
-        bool hasEquipmentSkills = false;
 
         // Priorité : pièce sauvegardée dans RunManager (gagnée pendant la run)
         // Fallback  : pièce de départ définie sur le CharacterData (config initiale)
@@ -278,20 +293,6 @@ public class CombatManager : MonoBehaviour
             foreach (SkillData skill in equip.skills)
             {
                 if (skill != null)
-                {
-                    availableSkills.Add(skill);
-                    hasEquipmentSkills = true;
-                }
-            }
-        }
-
-        // Fallback : si aucun équipement ne fournit de skills,
-        // on utilise les startingSkills directement définis sur le CharacterData
-        if (!hasEquipmentSkills)
-        {
-            foreach (SkillData skill in characterData.startingSkills)
-            {
-                if (skill != null)
                     availableSkills.Add(skill);
             }
         }
@@ -306,6 +307,28 @@ public class CombatManager : MonoBehaviour
             SeedSlotIfFree(EquipmentSlot.Legs,  characterData.startingLegs);
             SeedSlotIfFree(EquipmentSlot.Arm1,  characterData.startingArm1);
             SeedSlotIfFree(EquipmentSlot.Arm2,  characterData.startingArm2);
+
+            // Seed le module de départ si le joueur n'en possède pas encore.
+            // Même logique que pour l'équipement : on ne le donne qu'une seule fois.
+            if (characterData.startingModule != null
+                && !RunManager.Instance.HasModule(characterData.startingModule))
+            {
+                RunManager.Instance.AddModule(characterData.startingModule);
+            }
+
+            // Seed les consommables de départ — donnés une seule fois par run, au premier combat.
+            // Le flag startingConsumablesSeeded empêche de les redonner si le joueur
+            // a tout utilisé et entre dans un nouveau combat pendant le même run.
+            if (characterData.startingConsumables != null
+                && !RunManager.Instance.startingConsumablesSeeded)
+            {
+                foreach (ConsumableData consumable in characterData.startingConsumables)
+                {
+                    if (consumable != null)
+                        RunManager.Instance.AddConsumable(consumable);
+                }
+                RunManager.Instance.startingConsumablesSeeded = true;
+            }
         }
 
         // Plafonne la chance de critique entre 0 et 1 (les bonus d'équipement peuvent dépasser)
@@ -355,6 +378,40 @@ public class CombatManager : MonoBehaviour
     }
 
     // -----------------------------------------------
+    // GÉNÉRATION DES BOUTONS DE CONSOMMABLES
+    // -----------------------------------------------
+
+    /// <summary>
+    /// Instancie un bouton par consommable utilisable en combat.
+    /// Appelé à l'initialisation et après chaque utilisation (pour refléter l'inventaire mis à jour).
+    /// </summary>
+    private void SpawnConsumableButtons()
+    {
+        if (consumableButtonPrefab == null || consumableButtonContainer == null) return;
+
+        // Nettoie les anciens boutons avant de recréer
+        foreach (ConsumableButton cb in spawnedConsumableButtons)
+            if (cb != null) Destroy(cb.gameObject);
+        spawnedConsumableButtons.Clear();
+
+        List<ConsumableData> consumables = RunManager.Instance != null
+            ? RunManager.Instance.GetConsumables()
+            : new List<ConsumableData>();
+
+        foreach (ConsumableData consumable in consumables)
+        {
+            if (consumable == null || !consumable.usableInCombat) continue;
+
+            GameObject go = Instantiate(consumableButtonPrefab, consumableButtonContainer);
+            ConsumableButton cb = go.GetComponent<ConsumableButton>();
+            if (cb == null) continue;
+
+            cb.Setup(consumable, UseConsumable);
+            spawnedConsumableButtons.Add(cb);
+        }
+    }
+
+    // -----------------------------------------------
     // MACHINE À ÉTATS — TRANSITIONS
     // -----------------------------------------------
 
@@ -389,6 +446,11 @@ public class CombatManager : MonoBehaviour
         if (turnText      != null) turnText.text = "Tour du joueur";
 
         UpdateSkillButtons();
+
+        // Réactive les boutons de consommables (bloqués pendant le tour ennemi)
+        foreach (ConsumableButton cb in spawnedConsumableButtons)
+            cb.SetInteractable(true);
+
         UpdateUI();
     }
 
@@ -402,9 +464,11 @@ public class CombatManager : MonoBehaviour
         if (endTurnButton != null) endTurnButton.interactable = false;
         if (turnText      != null) turnText.text = "Tour de l'ennemi";
 
-        // Désactive tous les boutons de compétences pendant le tour ennemi
+        // Désactive tous les boutons de compétences et consommables pendant le tour ennemi
         foreach (SkillButton sb in spawnedSkillButtons)
             sb.SetInteractable(false);
+        foreach (ConsumableButton cb in spawnedConsumableButtons)
+            cb.SetInteractable(false);
 
         StartCoroutine(EnemyTurnRoutine());
     }
@@ -522,6 +586,36 @@ public class CombatManager : MonoBehaviour
             EndCombat(victory: true);
             return;
         }
+    }
+
+    /// <summary>
+    /// Utilise un consommable pendant le tour du joueur.
+    /// Applique son effet via ApplyConsumableEffect (valeurs brutes, sans stats de combat),
+    /// le retire de RunManager, puis recrée les boutons.
+    /// </summary>
+    private void UseConsumable(ConsumableData consumable)
+    {
+        if (battleState != BattleState.PlayerTurn) return;
+        if (consumable == null || !consumable.usableInCombat) return;
+
+        if (consumable.effect != null)
+            ApplyConsumableEffect(consumable.effect, consumable.consumableName);
+        else
+            Log($"{GetPlayerName()} utilise {consumable.consumableName} — (aucun effet défini)");
+
+        RunManager.Instance?.RemoveConsumable(consumable);
+
+        UpdateUI();
+
+        // Vérifie si l'ennemi est mort (ex : consommable offensif)
+        if (currentEnemyHP <= 0)
+        {
+            EndCombat(victory: true);
+            return;
+        }
+
+        // Recrée les boutons depuis RunManager (le consommable utilisé n'y est plus)
+        SpawnConsumableButtons();
     }
 
     // -----------------------------------------------
@@ -725,6 +819,70 @@ public class CombatManager : MonoBehaviour
     }
 
     // -----------------------------------------------
+    // EFFETS DE CONSOMMABLES
+    // -----------------------------------------------
+
+    /// <summary>
+    /// Applique l'effet d'un consommable avec des valeurs brutes — sans les stats de combat.
+    /// Contrairement à ApplyEffect() (compétences), les dégâts ne tiennent pas compte de
+    /// l'attaque du joueur ni de la défense ennemie : une bombe fait toujours ses X dégâts,
+    /// une potion soigne toujours ses X HP, quelle que soit la build du personnage.
+    /// </summary>
+    private void ApplyConsumableEffect(EffectData effect, string sourceName)
+    {
+        switch (effect.action)
+        {
+            case EffectAction.DealDamage:
+            {
+                // Dégâts bruts — ni attaque ajoutée, ni défense soustraite, ni critique
+                int dmg = Mathf.Clamp(Mathf.RoundToInt(effect.value), 0, 9999);
+
+                int armorAbsorbed = Mathf.Min(currentEnemyArmor, dmg);
+                int hpDamage      = dmg - armorAbsorbed;
+                currentEnemyArmor = Mathf.Max(0, currentEnemyArmor - armorAbsorbed);
+                currentEnemyHP    = Mathf.Max(0, currentEnemyHP    - hpDamage);
+
+                string armorInfo = armorAbsorbed > 0 ? $" (dont {armorAbsorbed} absorbés par l'armure)" : "";
+                Log($"{GetPlayerName()} utilise {sourceName} — {dmg} dégâts{armorInfo} → {currentEnemyHP}/{GetEnemyMaxHP()} HP");
+                break;
+            }
+
+            case EffectAction.Heal:
+            {
+                // Soin brut — plafonné aux HP max
+                int healed = Mathf.Min(Mathf.RoundToInt(effect.value), GetPlayerMaxHP() - currentPlayerHP);
+                currentPlayerHP += healed;
+                Log($"{GetPlayerName()} utilise {sourceName} — Soin de {healed} HP → {currentPlayerHP}/{GetPlayerMaxHP()}");
+                break;
+            }
+
+            case EffectAction.AddArmor:
+            {
+                int armor = Mathf.RoundToInt(effect.value);
+                currentPlayerArmor += armor;
+                Log($"{GetPlayerName()} utilise {sourceName} — +{armor} armure → {currentPlayerArmor} armure totale");
+                break;
+            }
+
+            case EffectAction.ApplyStatus:
+            {
+                if (effect.statusToApply == null)
+                {
+                    Log($"{GetPlayerName()} utilise {sourceName} — Aucun statut défini sur cet effet.");
+                    break;
+                }
+                int stacks = Mathf.RoundToInt(effect.value);
+                ApplyStatus(effect.statusToApply, stacks, toEnemy: true);
+                break;
+            }
+
+            default:
+                Log($"{GetPlayerName()} utilise {sourceName} — Effet '{effect.action}' non encore implémenté.");
+                break;
+        }
+    }
+
+    // -----------------------------------------------
     // STATUTS
     // -----------------------------------------------
 
@@ -893,6 +1051,8 @@ public class CombatManager : MonoBehaviour
         if (endTurnButton != null) endTurnButton.interactable = false;
         foreach (SkillButton sb in spawnedSkillButtons)
             sb.SetInteractable(false);
+        foreach (ConsumableButton cb in spawnedConsumableButtons)
+            cb.SetInteractable(false);
 
         if (combatActivePanel != null) combatActivePanel.SetActive(false);
 
@@ -946,6 +1106,10 @@ public class CombatManager : MonoBehaviour
         if (lootPanel == null) return;
         lootPanel.SetActive(true);
 
+        // Tente d'accorder un consommable depuis le pool de l'ennemi (si slot libre)
+        // Fait avant l'affichage des cartes pour que le log soit cohérent
+        TryGrantConsumableLoot();
+
         // Nettoie les cartes précédentes (au cas où)
         foreach (LootCard card in spawnedLootCards)
             if (card != null) Destroy(card.gameObject);
@@ -962,9 +1126,8 @@ public class CombatManager : MonoBehaviour
             return;
         }
 
-        // Le bouton "Continuer" commence désactivé : le joueur doit faire un choix
-        // (ou on peut le laisser actif si on veut permettre de passer le loot)
-        if (lootContinueButton != null) lootContinueButton.interactable = false;
+        // Le bouton "Continuer" est toujours actif : le joueur peut ignorer le loot
+        if (lootContinueButton != null) lootContinueButton.interactable = true;
 
         // Instancie une carte par offre
         foreach (EquipmentData equip in offers)
@@ -1001,6 +1164,29 @@ public class CombatManager : MonoBehaviour
 
         int count = Mathf.Min(enemyData.lootOfferCount, pool.Count);
         return pool.GetRange(0, count);
+    }
+
+    /// <summary>
+    /// Accorde automatiquement un consommable aléatoire tiré dans consumableLootPool de l'ennemi,
+    /// mais uniquement si le joueur a un slot libre.
+    /// Un seul consommable est accordé par victoire — pas de choix proposé au joueur.
+    /// </summary>
+    private void TryGrantConsumableLoot()
+    {
+        if (enemyData == null
+            || enemyData.consumableLootPool == null
+            || enemyData.consumableLootPool.Count == 0) return;
+
+        if (RunManager.Instance == null || !RunManager.Instance.HasConsumableSlotFree()) return;
+
+        // Tire un consommable aléatoire dans le pool
+        int index = Random.Range(0, enemyData.consumableLootPool.Count);
+        ConsumableData granted = enemyData.consumableLootPool[index];
+        if (granted == null) return;
+
+        bool added = RunManager.Instance.AddConsumable(granted);
+        if (added)
+            Log($"Consommable obtenu : {granted.consumableName}");
     }
 
     /// <summary>

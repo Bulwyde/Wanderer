@@ -99,6 +99,90 @@ public class RunManager : MonoBehaviour
         return GetEquipped(slot) == null;
     }
 
+    // -----------------------------------------------
+    // MODULES ACTIFS
+    // -----------------------------------------------
+
+    // Modules passifs acquis pendant la run (équivalent des reliques dans StS).
+    // Le module de départ du personnage est seedé au premier combat via CombatManager.
+    private List<ModuleData> activeModules = new List<ModuleData>();
+
+    /// <summary>
+    /// Ajoute un module à la liste des modules actifs.
+    /// Ignore les doublons — un même module ne peut être ajouté qu'une fois.
+    /// </summary>
+    public void AddModule(ModuleData module)
+    {
+        if (module == null || activeModules.Contains(module)) return;
+        activeModules.Add(module);
+        Debug.Log($"[RunManager] Module acquis : {module.moduleName}");
+    }
+
+    /// <summary>
+    /// Retourne une copie de la liste des modules actifs.
+    /// </summary>
+    public List<ModuleData> GetModules() => new List<ModuleData>(activeModules);
+
+    /// <summary>
+    /// Retourne true si le module est actuellement actif.
+    /// </summary>
+    public bool HasModule(ModuleData module) => module != null && activeModules.Contains(module);
+
+    // -----------------------------------------------
+    // CONSOMMABLES
+    // -----------------------------------------------
+
+    // Nombre de slots disponibles — 3 par défaut, modifiable par modules (max 6)
+    public int maxConsumableSlots = 3;
+
+    // Indique si les consommables de départ ont déjà été donnés au joueur ce run.
+    // Évite de les redonner si le joueur a tout utilisé et entre dans un nouveau combat.
+    public bool startingConsumablesSeeded = false;
+
+    // Consommables actuellement en possession du joueur
+    private List<ConsumableData> consumables = new List<ConsumableData>();
+
+    /// <summary>
+    /// Ajoute un consommable si un slot est disponible.
+    /// Retourne true si l'ajout réussit, false si l'inventaire est plein.
+    /// </summary>
+    public bool AddConsumable(ConsumableData consumable)
+    {
+        if (consumable == null) return false;
+
+        int effectiveMax = Mathf.Clamp(maxConsumableSlots, 1, 6);
+        if (consumables.Count >= effectiveMax)
+        {
+            Debug.Log($"[RunManager] Impossible d'ajouter {consumable.consumableName} " +
+                      $"— inventaire plein ({consumables.Count}/{effectiveMax})");
+            return false;
+        }
+
+        consumables.Add(consumable);
+        Debug.Log($"[RunManager] Consommable obtenu : {consumable.consumableName} " +
+                  $"({consumables.Count}/{effectiveMax})");
+        return true;
+    }
+
+    /// <summary>
+    /// Retire un consommable de l'inventaire (après utilisation).
+    /// </summary>
+    public void RemoveConsumable(ConsumableData consumable)
+    {
+        if (consumables.Remove(consumable))
+            Debug.Log($"[RunManager] Consommable utilisé : {consumable.consumableName}");
+    }
+
+    /// <summary>
+    /// Retourne une copie de la liste des consommables actifs.
+    /// </summary>
+    public List<ConsumableData> GetConsumables() => new List<ConsumableData>(consumables);
+
+    /// <summary>
+    /// Retourne true si le joueur a au moins un slot de consommable libre.
+    /// </summary>
+    public bool HasConsumableSlotFree() => consumables.Count < Mathf.Clamp(maxConsumableSlots, 1, 6);
+
     // Salles complétées pendant la run — stockées par clé "x,y".
     // HashSet est idéal ici : vérification instantanée, pas de doublons.
     // Ce n'est pas sérialisé car c'est un état purement runtime (réinitialisé à chaque run).
@@ -141,6 +225,10 @@ public class RunManager : MonoBehaviour
         eventFlags.Clear();
         clearedRooms.Clear();
         equippedItems.Clear();
+        activeModules.Clear();
+        consumables.Clear();
+        maxConsumableSlots = 3;
+        startingConsumablesSeeded = false;
 
         // Réinitialise l'état de navigation : le joueur repart de la case de départ
         hasNavigationState = false;

@@ -45,11 +45,11 @@ public class CharacterData : ScriptableObject
     // modifiée par des bonus d'équipement ou des effets passifs.
     public int maxEnergy = 3;
 
-    [Header("Compétences de départ")]
-    // Liste des compétences disponibles en combat.
-    // Placeholder : à terme, elles proviendront de l'équipement équipé.
-    // On les assigne ici directement pour pouvoir tester sans équipement.
-    public List<SkillData> startingSkills = new List<SkillData>();
+    [Header("Module de départ")]
+    // Module passif donné au joueur au début de chaque run avec ce personnage.
+    // Équivalent d'une relique de départ (comme dans Slay the Spire).
+    // Peut être null si le personnage n'a pas de module de départ.
+    public ModuleData startingModule;
 
     [Header("Équipement de départ")]
     // Les 5 emplacements d'équipement — peuvent être null si vides au départ
@@ -58,4 +58,9 @@ public class CharacterData : ScriptableObject
     public EquipmentData startingLegs;
     public EquipmentData startingArm1;
     public EquipmentData startingArm2;
+
+    [Header("Consommables de départ")]
+    // Consommables donnés au joueur au début de chaque run avec ce personnage.
+    // Limités par maxConsumableSlots du RunManager (3 par défaut).
+    public List<ConsumableData> startingConsumables;
 }

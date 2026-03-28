@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d730bac26e8d4204ba7d5b3416a8b789, type: 3}
+  m_Name: Conso_Bouclier
+  m_EditorClassIdentifier: Assembly-CSharp::ConsumableData
+  consumableID: bouclier
+  consumableName: Bouclier
+  icon: {fileID: 0}
+  description: Gagnez 10 points d'armure.
+  effect: {fileID: 11400000, guid: 1059e634690376c42a0ffe6fe72e4cb2, type: 2}
+  usableInCombat: 1
+  usableOnMap: 0

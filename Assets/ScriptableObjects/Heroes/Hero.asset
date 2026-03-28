@@ -24,9 +24,13 @@ MonoBehaviour:
   regeneration: 0
   lifeSteal: 0
   maxEnergy: 3
-  startingSkills: []
+  startingModule: {fileID: 0}
   startingHead: {fileID: 0}
   startingTorso: {fileID: 0}
   startingLegs: {fileID: 0}
   startingArm1: {fileID: 11400000, guid: 00bfed72720722c4a87df02eb7371be4, type: 2}
   startingArm2: {fileID: 0}
+  startingConsumables:
+  - {fileID: 11400000, guid: d6c4a653009701145be19cc2e5d6958c, type: 2}
+  - {fileID: 11400000, guid: 04445750443ee984c9e8f37267ee79b7, type: 2}
+  - {fileID: 11400000, guid: 27f19f8a6535b8a47b3c481e4f0c6e7e, type: 2}

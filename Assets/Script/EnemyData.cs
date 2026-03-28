@@ -47,7 +47,7 @@ public class EnemyData : ScriptableObject
     // LOOT
     // -----------------------------------------------
 
-    [Header("Loot")]
+    [Header("Loot — Équipement")]
     [Tooltip("Pièces d'équipement que cet ennemi peut lâcher")]
     public List<EquipmentData> lootPool = new List<EquipmentData>();
 
@@ -55,6 +55,11 @@ public class EnemyData : ScriptableObject
              "Si le pool contient moins de pièces que ce nombre, toutes sont proposées.")]
     [Range(1, 4)]
     public int lootOfferCount = 2;
+
+    [Header("Loot — Consommables")]
+    [Tooltip("Consommables que cet ennemi peut lâcher. " +
+             "Un seul est accordé aléatoirement si le joueur a un slot libre.")]
+    public List<ConsumableData> consumableLootPool = new List<ConsumableData>();
 }
 
 /// <summary>

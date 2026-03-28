@@ -45,6 +45,8 @@ SceneLoader.Instance.GoToMainMenu()
 - Singleton central — conserve tout l'état de la run entre les scènes
 - Contient : HP courants/max, personnage sélectionné, position sur la carte, équipement porté, salles complétées, flags d'événements, état de navigation sauvegardé
 - Méthodes clés : `StartNewRun()`, `EnterRoom(CellData)`, `SaveNavigationState()`, `ClearCurrentRoom()`, `EquipItem()`, `GetEquipped()`, `IsSlotFree()`
+- Modules : `AddModule()`, `GetModules()`, `HasModule()`
+- Consommables : `AddConsumable()`, `RemoveConsumable()`, `GetConsumables()`, `HasConsumableSlotFree()` — slots limités par `maxConsumableSlots` (1–6). Flag `startingConsumablesSeeded` : empêche de redonner les consommables de départ si le joueur vide ses slots en cours de run.
 
 **`SceneLoader.cs`**
 - Singleton simple — wraps `SceneManager.LoadScene()`
@@ -83,12 +85,14 @@ public enum CellType { Start, Classic, Boss, Event, Empty }
 - **Énergie** : rechargée à `effectiveMaxEnergy` chaque début de tour joueur
 - **Armure** (style StS) : absorbe les dégâts directs, se remet à 0 au début du tour de l'entité concernée. Ne bloque PAS le poison.
 - **Stats effectives** : calculées une fois au démarrage via `ResolveEquipment()` — base CharacterData + bonus de chaque pièce équipée (HP, ATK, DEF, crit, regen, lifesteal)
-- **Compétences** : viennent de l'équipement (fallback : `CharacterData.startingSkills`)
+- **Compétences** : viennent de l'équipement
 - **IA ennemie** : file d'actions circulaire gérée par `EnemyAI`
 - **Statuts** : `playerStatuses` / `enemyStatuses` (Dictionary<StatusData, int>). Tick via `ProcessPerTurnStatuses()` — joueur au début de son tour, ennemi au début du sien. Si l'ennemi meurt de ses statuts, victoire immédiate.
 - **Dégâts** : clampés entre 0 et 9999. Log format : `"X dégâts (dont +Y Statut×N [consommés])"` — le total affiché inclut déjà tous les bonus.
 - **Loot** : tirage aléatoire Fisher-Yates dans `EnemyData.lootPool`, affichage de `lootOfferCount` cartes via `LootCard`
-- **Fin de combat victoire** : → panel Loot → `OnLootContinueClicked()` → sauvegarde HP dans RunManager → `GoToNavigation()`
+- **Consommables en combat** : `SpawnConsumableButtons()` génère les boutons depuis `RunManager.GetConsumables()`. `UseConsumable()` applique l'effet via `ApplyConsumableEffect()` (valeurs brutes — pas de stats ATK/DEF) puis retire le consommable du RunManager et recrée les boutons. `TryGrantConsumableLoot()` accorde automatiquement un consommable depuis `EnemyData.consumableLootPool` si slot libre (appelé dans `ShowLootPanel()`). Boutons bloqués pendant le tour ennemi / fin de combat.
+- Champs UI : `consumableButtonContainer` (Transform) + `consumableButtonPrefab` (GameObject) à assigner dans l'Inspector.
+- **Fin de combat victoire** : → panel Loot (avec loot consommable auto) → `OnLootContinueClicked()` → sauvegarde HP dans RunManager → `GoToNavigation()`
 - **Fin de combat défaite** : → panel End → `GoToMainMenu()`
 - Bouton debug "Victoire instantanée" (`victoireButton`) à retirer en production
 
@@ -139,13 +143,15 @@ public int value;
 
 **`CharacterData.cs`**
 - Stats de base : `maxHP`, `attack`, `defense`, `criticalChance`, `criticalMultiplier`, `regeneration`, `lifeSteal`, `maxEnergy`
-- `startingSkills` : fallback si pas d'équipement
+- `startingModule` : module passif donné au joueur au début de chaque run (peut être null)
 - `startingHead/Torso/Legs/Arm1/Arm2` : équipement initial
+- `startingConsumables` : consommables donnés au joueur au premier combat du run (une seule fois, gardé par `startingConsumablesSeeded` dans RunManager)
 
 **`EnemyData.cs`**
 - `maxHP`, `attack`, `defense`
-- `List<SkillData> actions` (file de l'IA)
+- `List<EnemyAction> actions` (file de l'IA — `EnemyAction` contient `SkillData skill` + `int maxUses`)
 - `List<EquipmentData> lootPool` + `int lootOfferCount`
+- `List<ConsumableData> consumableLootPool` — un seul consommable accordé aléatoirement si slot libre
 
 **`SkillData.cs`**
 - `skillName`, `energyCost`, `cooldown`, `EffectData effect`
@@ -179,7 +185,18 @@ public enum EquipmentSlot { Head, Torso, Legs, Arm1, Arm2 }
 - `int decayPerTurn` — stacks perdus automatiquement par tour (0 = permanent)
 - `int maxStacks` — plafond de stacks (0 = illimité)
 
-**`KeywordData.cs`**, **`ModuleData.cs`** — définis mais pas encore utilisés activement
+**`ModuleData.cs`**
+- `moduleID`, `moduleName`, `icon`, `description`, `keywords`
+- `EffectData effect` — effet du module (non encore déclenché, en attente de GameEvents)
+- `bool isStartingModule` — flag informatif (le lien avec le personnage est sur CharacterData)
+- Tracké dans `RunManager.activeModules` pendant la run. Seedé au premier combat via `CombatManager.ResolveEquipment()`
+
+**`ConsumableData.cs`**
+- `consumableID`, `consumableName`, `icon`, `description`
+- `EffectData effect` — effet appliqué à l'utilisation (via `ApplyConsumableEffect()`, valeurs brutes sans stats de combat)
+- `bool usableInCombat`, `bool usableOnMap`
+
+**`KeywordData.cs`** — défini mais pas encore utilisé activement
 
 ---
 
@@ -187,9 +204,10 @@ public enum EquipmentSlot { Head, Torso, Legs, Arm1, Arm2 }
 
 | Prefab               | Usage                                           |
 |---------------------|-------------------------------------------------|
-| `ChoiceButton`      | Boutons de choix dans la scène Event            |
-| `SkillButtonPrefab` | Boutons de compétences dans la scène Combat      |
-| `LootCard`          | Cartes d'équipement affichées après victoire     |
+| `ChoiceButton`         | Boutons de choix dans la scène Event                        |
+| `SkillButtonPrefab`    | Boutons de compétences dans la scène Combat                 |
+| `LootCard`             | Cartes d'équipement affichées après victoire                |
+| `ConsumableButton`     | Bouton icône seul (pas de texte — tooltip prévu au survol)  |
 
 ### ChoiceButton — configuration importante
 - Taille : **360×65 px**
@@ -227,13 +245,17 @@ public enum EquipmentSlot { Head, Torso, Legs, Arm1, Arm2 }
 - Transitions entre scènes via SceneLoader + RunManager
 - Stats avancées en combat : `criticalChance`, `criticalMultiplier`, `regeneration`, `lifeSteal` (+ bonus d'équipement accumulés dans `ResolveEquipment()`)
 - Système de statuts : `StatusData` (ScriptableObject), `ApplyStatus()`, `ProcessPerTurnStatuses()`, stacks avec lecture et/ou consommation par les effets de dégâts (`scalingStatus`, `consumeStacks` dans `EffectData`)
+- Modules passifs : `ModuleData` seedé depuis `CharacterData.startingModule` au premier combat, tracké dans `RunManager.activeModules`
+- Loot post-combat : bouton "Continuer" toujours actif (le joueur peut ignorer le loot)
+- Consommables : `ConsumableData` (ScriptableObject), `ConsumableButton` (UI), système complet en combat (spawn, use, loot auto depuis `EnemyData.consumableLootPool`)
 
 ### En cours / À faire 🔧
 - Scène MainMenu (sélection de personnage non branchée)
 - Effets de combat non implémentés : `ModifyStat`
 - Effets d'événements non implémentés : tout sauf `ModifyHP`
-- `KeywordData` et `ModuleData` définis mais non utilisés
+- `KeywordData` défini mais non utilisé activement
 - `GameEvents.cs` défini mais jamais déclenché (aucun `TriggerXxx()` appelé)
+- Consommables côté navigation (hors combat) : `usableOnMap` présent sur `ConsumableData` mais l'intégration dans `NavigationManager` reste à faire
 - Boss, salles spéciales
 - Sons, animations, retours visuels
 - Inventaire (prévu dans RunManager, commentaire `// Futur`)
@@ -252,3 +274,4 @@ public enum EquipmentSlot { Head, Torso, Legs, Arm1, Arm2 }
 2. **RunManager null** : toujours utiliser `RunManager.Instance?.` (null-conditional) car en test direct d'une scène isolée, RunManager peut ne pas exister.
 3. **Destroy() asynchrone** : `Destroy(go)` ne prend effet qu'à la fin du frame. Ne pas compter sur une destruction immédiate.
 4. **VerticalLayoutGroup + ContentSizeFitter** : si la largeur du container est gérée par le ContentSizeFitter, ne pas activer `ChildControlWidth` en même temps — choisir l'un ou l'autre. Ici on utilise une largeur fixe + ContentSizeFitter vertical uniquement.
+5. **Layout Group + taille des enfants** : si les boutons enfants ignorent la taille définie dans le prefab, c'est que `Control Child Size` est coché sur le Layout Group du conteneur. Le décocher (Width et Height) pour respecter la taille du prefab. Le `Content Size Fitter` doit être sur le *conteneur*, jamais sur les enfants si on veut une taille fixe.

@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 98fb6cd1a235c4141958267325857b6b, type: 3}
+  m_Name: Module_Bouclier_Salle
+  m_EditorClassIdentifier: Assembly-CSharp::ModuleData
+  moduleID: bouclier_salle
+  moduleName: Bouclier de Salle
+  icon: {fileID: 3423692955083361472, guid: e28c2cbc76b2abf41a66581cb2d5bfbe, type: 3}
+  description: "Vous gagnez 10 armures en d\xE9but de combat."
+  keywords: []
+  trigger: 6
+  effect: {fileID: 11400000, guid: dbd87b8fd5e56f041bdcba98edbf25ad, type: 2}
+  tags: []
+  isStartingModule: 1

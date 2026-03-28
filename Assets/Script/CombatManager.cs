@@ -157,6 +157,10 @@ public class CombatManager : MonoBehaviour
 
     private const float EnemyActionDelay = 1.0f;
 
+    // Vrai uniquement pendant le tout premier tour du combat.
+    // Permet d'appliquer les modules Passive après le reset d'armure initial.
+    private bool isFirstTurn = true;
+
     // Statuts actifs en combat — clé = définition du statut, valeur = nombre de stacks
     // Les stacks sont trackés ici, jamais dans les ScriptableObjects
     private Dictionary<StatusData, int> playerStatuses = new Dictionary<StatusData, int>();
@@ -425,6 +429,14 @@ public class CombatManager : MonoBehaviour
         // L'armure du joueur se remet à 0 au début de son tour (comme dans Slay the Spire)
         currentPlayerArmor = 0;
 
+        // Modules Passive : appliqués une seule fois au premier tour, après le reset d'armure.
+        // Placés ici (et non dans InitializeCombat) pour éviter que le reset efface l'armure passive.
+        if (isFirstTurn)
+        {
+            isFirstTurn = false;
+            ModuleManager.Instance?.ApplyModulesWithTrigger(EffectTrigger.OnFightStart);
+        }
+
         // Statuts sur le joueur : effets automatiques + décroissance
         ProcessPerTurnStatuses(forEnemy: false);
 
@@ -452,6 +464,9 @@ public class CombatManager : MonoBehaviour
             cb.SetInteractable(true);
 
         UpdateUI();
+
+        // Notifie les modules abonnés au début du tour joueur
+        GameEvents.TriggerPlayerTurnStarted();
     }
 
     private void StartEnemyTurn()
@@ -539,6 +554,10 @@ public class CombatManager : MonoBehaviour
     {
         if (battleState != BattleState.PlayerTurn) return;
         Log($"{GetPlayerName()} termine son tour.");
+
+        // Notifie les modules abonnés à la fin du tour joueur
+        GameEvents.TriggerPlayerTurnEnded();
+
         StartEnemyTurn();
     }
 
@@ -678,6 +697,10 @@ public class CombatManager : MonoBehaviour
                     ? $" ({stackInfo.TrimStart(',', ' ')}{armorInfo})" : "";
                 string logMsg = $"{GetPlayerName()} utilise {sourceName}{critInfo} — {rawDamage} dégâts{detailInfo} → {currentEnemyHP}/{GetEnemyMaxHP()} HP";
 
+                // Notifie les modules abonnés aux dégâts infligés par le joueur
+                if (hpDamage > 0)
+                    GameEvents.TriggerPlayerDealtDamage(hpDamage);
+
                 // Vol de vie : soigne le joueur d'une fraction des HP réellement infligés à l'ennemi
                 // On ne vole que les HP perdus par l'ennemi, pas les dégâts absorbés par l'armure
                 if (effectiveLifeSteal > 0f && hpDamage > 0)
@@ -714,15 +737,15 @@ public class CombatManager : MonoBehaviour
 
             case EffectAction.ApplyStatus:
             {
-                // Le joueur applique un statut sur l'ennemi (cas standard)
-                // value = nombre de stacks à appliquer
                 if (effect.statusToApply == null)
                 {
                     Log($"{GetPlayerName()} utilise {sourceName} — Aucun statut défini sur cet effet.");
                     break;
                 }
                 int stacks = Mathf.RoundToInt(effect.value);
-                ApplyStatus(effect.statusToApply, stacks, toEnemy: true);
+                // Self → applique sur le joueur lui-même, sinon sur l'ennemi
+                bool toEnemy = effect.target != EffectTarget.Self;
+                ApplyStatus(effect.statusToApply, stacks, toEnemy);
                 break;
             }
 
@@ -778,6 +801,11 @@ public class CombatManager : MonoBehaviour
                 string detailInfo = (stackInfo.Length > 0 || armorInfo.Length > 0)
                     ? $" ({stackInfo.TrimStart(',', ' ')}{armorInfo})" : "";
                 Log($"{GetEnemyName()} utilise {sourceName} — {rawDamage} dégâts{detailInfo} → {currentPlayerHP}/{GetPlayerMaxHP()} HP");
+
+                // Notifie les modules abonnés aux dégâts reçus par le joueur
+                if (hpDamage > 0)
+                    GameEvents.TriggerPlayerDamaged(hpDamage);
+
                 break;
             }
 
@@ -800,15 +828,16 @@ public class CombatManager : MonoBehaviour
 
             case EffectAction.ApplyStatus:
             {
-                // L'ennemi applique un statut sur le joueur (cas standard)
-                // value = nombre de stacks à appliquer
                 if (effect.statusToApply == null)
                 {
                     Log($"{GetEnemyName()} utilise {sourceName} — Aucun statut défini sur cet effet.");
                     break;
                 }
                 int stacks = Mathf.RoundToInt(effect.value);
-                ApplyStatus(effect.statusToApply, stacks, toEnemy: false);
+                // Ici "Self" = l'ennemi lui-même → toEnemy: true
+                // "SingleEnemy" = le joueur (la cible de l'ennemi) → toEnemy: false
+                bool toEnemy = effect.target == EffectTarget.Self;
+                ApplyStatus(effect.statusToApply, stacks, toEnemy);
                 break;
             }
 
@@ -872,7 +901,9 @@ public class CombatManager : MonoBehaviour
                     break;
                 }
                 int stacks = Mathf.RoundToInt(effect.value);
-                ApplyStatus(effect.statusToApply, stacks, toEnemy: true);
+                // Self → applique sur le joueur lui-même, sinon sur l'ennemi
+                bool toEnemy = effect.target != EffectTarget.Self;
+                ApplyStatus(effect.statusToApply, stacks, toEnemy);
                 break;
             }
 
@@ -880,6 +911,107 @@ public class CombatManager : MonoBehaviour
                 Log($"{GetPlayerName()} utilise {sourceName} — Effet '{effect.action}' non encore implémenté.");
                 break;
         }
+    }
+
+    // -----------------------------------------------
+    // EFFETS DE MODULES
+    // -----------------------------------------------
+
+    /// <summary>
+    /// Applique l'effet d'un module passif ou déclenché.
+    /// Appelé par ModuleManager quand un trigger correspondant est reçu.
+    ///
+    /// La cible est lue depuis EffectData.target :
+    ///   - Self                               → cible le joueur
+    ///   - SingleEnemy / AllEnemies / Random  → cible l'ennemi
+    ///
+    /// Les dégâts sont bruts — pas d'ATK ajoutée, pas de critique.
+    /// </summary>
+    public void ApplyModuleEffect(EffectData effect, string moduleName)
+    {
+        if (effect == null) return;
+
+        string source    = $"[Module] {moduleName}";
+        bool targetsSelf = effect.target == EffectTarget.Self;
+
+        switch (effect.action)
+        {
+            case EffectAction.DealDamage:
+            {
+                // DealDamage cible toujours l'ennemi
+                int dmg = Mathf.Clamp(Mathf.RoundToInt(effect.value), 0, 9999);
+
+                int armorAbsorbed = Mathf.Min(currentEnemyArmor, dmg);
+                int hpDamage      = dmg - armorAbsorbed;
+                currentEnemyArmor = Mathf.Max(0, currentEnemyArmor - armorAbsorbed);
+                currentEnemyHP    = Mathf.Max(0, currentEnemyHP    - hpDamage);
+
+                string armorInfo = armorAbsorbed > 0 ? $" (dont {armorAbsorbed} absorbés par l'armure)" : "";
+                Log($"{source} — {dmg} dégâts{armorInfo} → {currentEnemyHP}/{GetEnemyMaxHP()} HP");
+                break;
+            }
+
+            case EffectAction.Heal:
+            {
+                if (targetsSelf)
+                {
+                    int healed = Mathf.Min(Mathf.RoundToInt(effect.value), GetPlayerMaxHP() - currentPlayerHP);
+                    if (healed > 0)
+                    {
+                        currentPlayerHP += healed;
+                        Log($"{source} — +{healed} HP joueur → {currentPlayerHP}/{GetPlayerMaxHP()}");
+                    }
+                }
+                else
+                {
+                    int healed = Mathf.Min(Mathf.RoundToInt(effect.value), GetEnemyMaxHP() - currentEnemyHP);
+                    if (healed > 0)
+                    {
+                        currentEnemyHP += healed;
+                        Log($"{source} — +{healed} HP ennemi → {currentEnemyHP}/{GetEnemyMaxHP()}");
+                    }
+                }
+                break;
+            }
+
+            case EffectAction.AddArmor:
+            {
+                int armor = Mathf.RoundToInt(effect.value);
+                if (targetsSelf)
+                {
+                    currentPlayerArmor += armor;
+                    Log($"{source} — +{armor} armure joueur → {currentPlayerArmor} armure totale");
+                }
+                else
+                {
+                    currentEnemyArmor += armor;
+                    Log($"{source} — +{armor} armure ennemi → {currentEnemyArmor} armure totale");
+                }
+                break;
+            }
+
+            case EffectAction.ApplyStatus:
+            {
+                if (effect.statusToApply == null)
+                {
+                    Log($"{source} — Aucun statut défini sur cet effet.");
+                    break;
+                }
+                int stacks = Mathf.RoundToInt(effect.value);
+                // Self = applique sur le joueur, sinon sur l'ennemi
+                ApplyStatus(effect.statusToApply, stacks, toEnemy: !targetsSelf);
+                break;
+            }
+
+            default:
+                Log($"{source} — Effet '{effect.action}' non encore implémenté pour les modules.");
+                break;
+        }
+
+        // Met à jour l'UI et vérifie si l'ennemi est mort suite à l'effet du module
+        UpdateUI();
+        if (currentEnemyHP <= 0 && battleState == BattleState.PlayerTurn)
+            EndCombat(victory: true);
     }
 
     // -----------------------------------------------
@@ -1058,6 +1190,9 @@ public class CombatManager : MonoBehaviour
 
         if (victory)
         {
+            // Notifie les modules abonnés à la mort de l'ennemi
+            GameEvents.TriggerEnemyDied();
+
             // Victoire → panel de loot avant de continuer
             ShowLootPanel();
             Log("Combat terminé — Victoire !");

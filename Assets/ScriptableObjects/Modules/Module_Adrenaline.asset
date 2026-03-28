@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 98fb6cd1a235c4141958267325857b6b, type: 3}
+  m_Name: Module_Adrenaline
+  m_EditorClassIdentifier: Assembly-CSharp::ModuleData
+  moduleID: adrenaline
+  moduleName: "Adr\xE9naline"
+  icon: {fileID: 7162193755672658714, guid: 7ddd7c08f07da7f4da28c9efc6d19931, type: 3}
+  description: Soigne de 15 points de vie quand vous tuez un ennemi.
+  keywords: []
+  trigger: 5
+  effect: {fileID: 11400000, guid: 1ea4413310a856949bacfe42c06a5411, type: 2}
+  tags: []
+  isStartingModule: 1

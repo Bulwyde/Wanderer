@@ -6,6 +6,26 @@
 
 ---
 
+## Consignes pour Claude
+
+### Niveau de détail attendu dans les explications
+- Quand une modification de code est faite, expliquer **pourquoi** (cause du problème, logique du fix) et pas seulement quoi.
+- Pour le setup Unity (Inspector, hiérarchie), donner les **noms exacts des champs, composants et valeurs** à saisir — pas de descriptions vagues.
+- Quand quelque chose ne fonctionne pas, diagnostiquer la **cause racine** avant de proposer un fix.
+- Signaler les **pièges Unity spécifiques** au contexte (DontDestroyOnLoad, événements statiques vs instance, ordre d'initialisation, etc.).
+- Ne pas hardcoder de caractères Unicode spéciaux (emoji, symboles) dans les textes TMP — utiliser des mots ou une `Image` séparée.
+- Utiliser `FindFirstObjectByType<T>()` (pas l'ancienne `FindObjectOfType<T>()` dépréciée).
+
+### Conventions de code
+- Tous les scripts sont en **français** (commentaires, logs, noms de méthodes UI)
+- Chaque script commence par un bloc `<summary>` expliquant son rôle et la structure de scène recommandée
+- Les sections sont séparées par des commentaires `// ---...---`
+- Les `Debug.Log` ont des préfixes explicites : `[RunManager]`, `[Combat]`, `[Module]`, `[Event]`, etc.
+- Préférer `Mathf.Max(1, ...)` pour éviter les dégâts nuls, et `Mathf.Clamp(x, 0, 9999)` pour plafonner
+- Les ScriptableObjects ne sont **jamais modifiés au runtime** — les données variables vont dans RunManager
+
+---
+
 ## Vue d'ensemble du projet
 
 Roguelike au tour par tour en Unity (C#), inspiré de Slay the Spire et Darkest Dungeon.
@@ -45,11 +65,19 @@ SceneLoader.Instance.GoToMainMenu()
 - Singleton central — conserve tout l'état de la run entre les scènes
 - Contient : HP courants/max, personnage sélectionné, position sur la carte, équipement porté, salles complétées, flags d'événements, état de navigation sauvegardé
 - Méthodes clés : `StartNewRun()`, `EnterRoom(CellData)`, `SaveNavigationState()`, `ClearCurrentRoom()`, `EquipItem()`, `GetEquipped()`, `IsSlotFree()`
-- Modules : `AddModule()`, `GetModules()`, `HasModule()`
+- Modules : `AddModule()`, `GetModules()`, `HasModule()` — `AddModule()` appelle automatiquement `ModuleManager.NotifyModulesChanged()` pour rafraîchir le HUD
 - Consommables : `AddConsumable()`, `RemoveConsumable()`, `GetConsumables()`, `HasConsumableSlotFree()` — slots limités par `maxConsumableSlots` (1–6). Flag `startingConsumablesSeeded` : empêche de redonner les consommables de départ si le joueur vide ses slots en cours de run.
 
 **`SceneLoader.cs`**
 - Singleton simple — wraps `SceneManager.LoadScene()`
+
+**`ModuleManager.cs`**
+- Singleton DontDestroyOnLoad — **doit être placé dans la scène Navigation** (scène de démarrage)
+- S'abonne aux `GameEvents` et déclenche les effets des modules actifs selon leur `EffectData.trigger`
+- `ApplyModulesWithTrigger(EffectTrigger trigger)` — méthode publique appelée aussi par `CombatManager`
+- Événement statique `OnModulesChanged` — écouté par les `ModuleHUDManager` dans chaque scène
+- `NotifyModulesChanged()` — méthode statique (fonctionne sans instance) pour rafraîchir le HUD
+- ⚠️ **Piège** : `OnModulesChanged` étant statique, le HUD s'affiche même sans instance de `ModuleManager` dans la scène. Mais sans instance, les `GameEvents` ne sont pas écoutés et les effets ne se déclenchent pas.
 
 ---
 
@@ -63,14 +91,25 @@ SceneLoader.Instance.GoToMainMenu()
 
 **`MapRenderer.cs`**
 - Affiche la carte (tiles) selon les sets de visibilité de NavigationManager
+- La carte est dans un `mapContainer` (RectTransform) déplacé/zoomé par `MapCameraController`
 
 **`MapCameraController.cs`**
-- Caméra de la carte
+- Déplace/zoome le `mapContainer` (RectTransform) — ce n'est **pas** une vraie caméra Unity
+- ⚠️ Tout élément d'interface fixe à l'écran doit être **enfant direct du Canvas**, pas du `mapContainer`
+
+**`NavigationHUD.cs`**
+- Affiche les HP du joueur (`HP : X / Y`) dans la scène Navigation
+- Mis à jour chaque frame via `Update()` → `RefreshHP()`
+- Doit être placé sous le Canvas (pas sous `mapContainer`)
+
+**`ModuleHUDManager.cs`** (présent dans Navigation et Combat)
+- Instancie les icônes de modules depuis le prefab `ModuleIcon`
+- S'abonne à `ModuleManager.OnModulesChanged` pour rafraîchir automatiquement
+- Champs Inspector : `moduleIconContainer` (Transform) + `moduleIconPrefab` (GameObject)
 
 **`MapData.cs`**
 - ScriptableObject — grille de `CellData[]`
 
-**`MapData / CellData`**
 ```csharp
 public enum CellType { Start, Classic, Boss, Event, Empty }
 // CellData contient : int x, y ; CellType cellType ; string specificEventID
@@ -89,10 +128,22 @@ public enum CellType { Start, Classic, Boss, Event, Empty }
 - **IA ennemie** : file d'actions circulaire gérée par `EnemyAI`
 - **Statuts** : `playerStatuses` / `enemyStatuses` (Dictionary<StatusData, int>). Tick via `ProcessPerTurnStatuses()` — joueur au début de son tour, ennemi au début du sien. Si l'ennemi meurt de ses statuts, victoire immédiate.
 - **Dégâts** : clampés entre 0 et 9999. Log format : `"X dégâts (dont +Y Statut×N [consommés])"` — le total affiché inclut déjà tous les bonus.
+- **`ApplyStatus(StatusData, int stacks, bool toEnemy)`** : utilisé par `ApplyEffect`, `ApplyEnemyEffect`, `ApplyConsumableEffect`, `ApplyModuleEffect`. Le paramètre `toEnemy` est maintenant déterminé par `effect.target` dans toutes les méthodes (plus hardcodé).
+  - `ApplyEffect` (skill joueur) : `toEnemy = effect.target != EffectTarget.Self`
+  - `ApplyEnemyEffect` (skill ennemi) : `toEnemy = effect.target == EffectTarget.Self` (logique inversée — "Self" pour l'ennemi = l'ennemi lui-même)
+  - `ApplyConsumableEffect` : même logique que `ApplyEffect`
 - **Loot** : tirage aléatoire Fisher-Yates dans `EnemyData.lootPool`, affichage de `lootOfferCount` cartes via `LootCard`
-- **Consommables en combat** : `SpawnConsumableButtons()` génère les boutons depuis `RunManager.GetConsumables()`. `UseConsumable()` applique l'effet via `ApplyConsumableEffect()` (valeurs brutes — pas de stats ATK/DEF) puis retire le consommable du RunManager et recrée les boutons. `TryGrantConsumableLoot()` accorde automatiquement un consommable depuis `EnemyData.consumableLootPool` si slot libre (appelé dans `ShowLootPanel()`). Boutons bloqués pendant le tour ennemi / fin de combat.
-- Champs UI : `consumableButtonContainer` (Transform) + `consumableButtonPrefab` (GameObject) à assigner dans l'Inspector.
-- **Fin de combat victoire** : → panel Loot (avec loot consommable auto) → `OnLootContinueClicked()` → sauvegarde HP dans RunManager → `GoToNavigation()`
+- **Consommables en combat** : `SpawnConsumableButtons()` génère les boutons depuis `RunManager.GetConsumables()`. Boutons bloqués pendant le tour ennemi / fin de combat.
+- **Modules en combat** :
+  - `isFirstTurn` (bool) : vrai jusqu'au premier `StartPlayerTurn()`. Permet d'appliquer les modules `OnFightStart` **après** le reset d'armure initial.
+  - `ApplyModuleEffect(EffectData, string moduleName)` : méthode publique appelée par `ModuleManager`. Respecte `effect.target` (Self → joueur, sinon ennemi). Dégâts bruts (pas d'ATK ajoutée).
+- **GameEvents déclenchés** :
+  - `TriggerPlayerTurnStarted()` → fin de `StartPlayerTurn()`
+  - `TriggerPlayerTurnEnded()` → début de `OnEndTurn()`
+  - `TriggerPlayerDealtDamage(hpDamage)` → dans `ApplyEffect` DealDamage
+  - `TriggerPlayerDamaged(hpDamage)` → dans `ApplyEnemyEffect` DealDamage
+  - `TriggerEnemyDied()` → dans `EndCombat(victory: true)`
+- **Fin de combat victoire** : `TriggerEnemyDied()` → panel Loot → `OnLootContinueClicked()` → sauvegarde HP dans RunManager → `GoToNavigation()`
 - **Fin de combat défaite** : → panel End → `GoToMainMenu()`
 - Bouton debug "Victoire instantanée" (`victoireButton`) à retirer en production
 
@@ -117,6 +168,7 @@ public enum CellType { Start, Classic, Boss, Event, Empty }
 - `SpawnChoiceButtons()` : instancie dynamiquement les boutons depuis le prefab
 - Après choix : applique les effets (`ModifyHP` implémenté, reste à compléter), remplace la description par `outcomeText`, affiche le bouton "Continuer"
 - "Continuer" → `RunManager.ClearCurrentRoom()` → `GoToNavigation()`
+- ⚠️ Système d'effets propre (`EventEffect` / `EventEffectType`) — indépendant de `EffectData`
 
 **`EventData.cs`**
 ```csharp
@@ -143,9 +195,9 @@ public int value;
 
 **`CharacterData.cs`**
 - Stats de base : `maxHP`, `attack`, `defense`, `criticalChance`, `criticalMultiplier`, `regeneration`, `lifeSteal`, `maxEnergy`
-- `startingModule` : module passif donné au joueur au début de chaque run (peut être null)
+- `startingModule` : module donné au joueur au début de chaque run (seedé dans `ResolveEquipment()`)
 - `startingHead/Torso/Legs/Arm1/Arm2` : équipement initial
-- `startingConsumables` : consommables donnés au joueur au premier combat du run (une seule fois, gardé par `startingConsumablesSeeded` dans RunManager)
+- `startingConsumables` : consommables donnés au joueur au premier combat du run (une seule fois)
 
 **`EnemyData.cs`**
 - `maxHP`, `attack`, `defense`
@@ -157,22 +209,41 @@ public int value;
 - `skillName`, `energyCost`, `cooldown`, `EffectData effect`
 
 **`EffectData.cs`**
+- Utilisé par : compétences, consommables, modules, passiveEffects d'équipement
+- Le **trigger** et la **cible** sont définis ici — source unique de vérité pour tout ce qui concerne l'effet
 ```csharp
-public enum EffectAction { DealDamage, Heal, AddArmor, ApplyStatus, ModifyStat, ... }
-public EffectAction action;
-public float value;           // dégâts / soins / stacks à appliquer
-public float secondaryValue;  // bonus de valeur par stack (pour scalingStatus)
-public StatusData statusToApply;  // statut à appliquer (si action == ApplyStatus)
-public StatusData scalingStatus;  // statut dont les stacks amplifient l'effet (DealDamage)
-public bool consumeStacks;        // si true, les stacks du scalingStatus sont retirés après l'effet
+public EffectTrigger trigger;  // Quand l'effet se déclenche
+public EffectAction  action;   // Ce que fait l'effet
+public EffectTarget  target;   // Sur qui (Self = joueur, SingleEnemy = ennemi, etc.)
+public float value;
+public float secondaryValue;       // Bonus par stack du scalingStatus
+public StatusData statusToApply;   // Pour ApplyStatus
+public StatusData scalingStatus;   // Statut dont les stacks amplifient l'effet
+public bool consumeStacks;
 ```
-`DealDamage`, `Heal`, `AddArmor` et `ApplyStatus` sont implémentés. `ModifyStat` reste à faire.
-Les dégâts sont clampés entre 0 et 9999 dans `ApplyEffect` et `ApplyEnemyEffect`.
+
+**Règles de saisie du `trigger` dans l'Inspector :**
+- Compétences / Consommables → laisser sur `OnSkillUsed` (jamais lu par le code, géré implicitement)
+- Modules → choisir le trigger voulu (voir tableau ci-dessous)
+- `passiveEffects` d'équipement → `OnFightStart` pour un bonus de début de combat
+
+| Trigger | Quand | Contexte |
+|---|---|---|
+| `OnFightStart` | Premier tour du combat, après le reset d'armure | Armure de départ, statut initial, soin d'entrée |
+| `OnPlayerTurnStart` | Début de chaque tour joueur | Dégâts/soins récurrents |
+| `OnPlayerTurnEnd` | Fin du tour joueur | Effets de fin de tour |
+| `OnPlayerDamaged` | Quand le joueur reçoit des dégâts | Contre-attaque, bouclier réactif |
+| `OnPlayerDealtDamage` | Quand le joueur inflige des dégâts | Bonus sur attaque |
+| `OnEnemyDied` | Mort de l'ennemi (victoire) | Soin post-combat, bonus de run |
+| `OnSkillUsed` | À l'utilisation d'une compétence | Usage compétences/consommables |
+
+**`EffectAction` implémentés :** `DealDamage`, `Heal`, `AddArmor`, `ApplyStatus`. `ModifyStat` reste à faire.
 
 **`EquipmentData.cs`**
 - `equipmentName`, `EquipmentSlot slot`
 - Bonus stats : `bonusHP`, `bonusAttack`, `bonusDefense`, `bonusCriticalChance`, `bonusCriticalMultiplier`, `bonusRegeneration`, `bonusLifeSteal`
 - `List<SkillData> skills`
+- `List<EffectData> passiveEffects` — **défini mais pas encore branché dans CombatManager** (prévu : effets passifs déclenchés par trigger, comme les modules mais portés par l'équipement)
 
 ```csharp
 public enum EquipmentSlot { Head, Torso, Legs, Arm1, Arm2 }
@@ -186,14 +257,14 @@ public enum EquipmentSlot { Head, Torso, Legs, Arm1, Arm2 }
 - `int maxStacks` — plafond de stacks (0 = illimité)
 
 **`ModuleData.cs`**
-- `moduleID`, `moduleName`, `icon`, `description`, `keywords`
-- `EffectData effect` — effet du module (non encore déclenché, en attente de GameEvents)
-- `bool isStartingModule` — flag informatif (le lien avec le personnage est sur CharacterData)
-- Tracké dans `RunManager.activeModules` pendant la run. Seedé au premier combat via `CombatManager.ResolveEquipment()`
+- `moduleID`, `moduleName`, `icon`, `description`, `keywords`, `tags`
+- `EffectData effect` — le trigger, l'action et la cible sont **tous sur l'EffectData** (pas de champ trigger sur ModuleData)
+- Tracké dans `RunManager.activeModules`. Seedé depuis `CharacterData.startingModule` au premier combat via `CombatManager.ResolveEquipment()`
+- Pour assigner un module de départ : le glisser dans `CharacterData.startingModule` (pas de flag `isStartingModule` sur ModuleData — retiré car redondant)
 
 **`ConsumableData.cs`**
 - `consumableID`, `consumableName`, `icon`, `description`
-- `EffectData effect` — effet appliqué à l'utilisation (via `ApplyConsumableEffect()`, valeurs brutes sans stats de combat)
+- `EffectData effect` — valeurs brutes à l'utilisation (sans stats ATK/DEF)
 - `bool usableInCombat`, `bool usableOnMap`
 
 **`KeywordData.cs`** — défini mais pas encore utilisé activement
@@ -204,15 +275,16 @@ public enum EquipmentSlot { Head, Torso, Legs, Arm1, Arm2 }
 
 | Prefab               | Usage                                           |
 |---------------------|-------------------------------------------------|
-| `ChoiceButton`         | Boutons de choix dans la scène Event                        |
-| `SkillButtonPrefab`    | Boutons de compétences dans la scène Combat                 |
-| `LootCard`             | Cartes d'équipement affichées après victoire                |
-| `ConsumableButton`     | Bouton icône seul (pas de texte — tooltip prévu au survol)  |
+| `ChoiceButton`         | Boutons de choix dans la scène Event            |
+| `SkillButtonPrefab`    | Boutons de compétences dans la scène Combat     |
+| `LootCard`             | Cartes d'équipement affichées après victoire    |
+| `ConsumableButton`     | Bouton icône (tooltip prévu au survol)          |
+| `ModuleIcon`           | Icône de module dans le HUD (48×48 px, Image + script `ModuleIcon`) |
 
 ### ChoiceButton — configuration importante
 - Taille : **360×65 px**
 - TextMeshPro avec **auto-sizing activé** (min 10pt, max 22pt), marges internes 8/4 px
-- **Ne pas placer d'instance du prefab directement dans la scène** — assigner le prefab asset depuis `Assets/Prefab/` dans le champ `choiceButtonPrefab` de EventManager
+- **Ne pas placer d'instance du prefab directement dans la scène** — assigner le prefab asset depuis `Assets/Prefab/`
 
 ### ChoiceContainer (scène Event)
 - Ancrage **bas-centre** du ContentPanel (`AnchorMin/Max x=0.5, y=0`)
@@ -220,16 +292,39 @@ public enum EquipmentSlot { Head, Torso, Legs, Arm1, Arm2 }
 - Largeur fixe **380px**, hauteur auto (ContentSizeFitter VerticalFit=PreferredSize, HorizontalFit=Unconstrained)
 - VerticalLayoutGroup : padding 10px, spacing 12px, `ChildControlWidth=true`, `ChildForceExpandWidth=true`
 
+### ModuleHUD — configuration (à répéter dans Navigation et Combat)
+```
+Canvas
+├── mapContainer / CombatActivePanel   ← contenu de la scène (bouge / s'active)
+└── ModuleHUD                          ← enfant DIRECT du Canvas, jamais du mapContainer
+    └── ModuleIconContainer            ← HorizontalLayoutGroup, spacing 6, Child Control Size W+H : true, Force Expand : false
+                                          + ContentSizeFitter (Horizontal + Vertical = Preferred Size)
+```
+- `ModuleHUDManager` sur le parent `ModuleHUD`, champs : `moduleIconContainer` + `moduleIconPrefab`
+
+### NavigationHUD — configuration
+```
+Canvas
+└── NavigationHUD                      ← enfant direct du Canvas, ancré haut-droite
+    └── HPText                         ← TextMeshPro, affiche "HP : X / Y"
+```
+- `NavigationHUD` script sur le parent, champ : `hpText`
+
 ---
 
-## Conventions de code
+## Bus d'événements — GameEvents.cs
 
-- Tous les scripts sont en français (commentaires, logs, noms de méthodes UI)
-- Chaque script commence par un bloc `<summary>` expliquant son rôle et la structure de scène recommandée
-- Les sections sont séparées par des commentaires `// ---...---`
-- Les `Debug.Log` ont des préfixes explicites : `[RunManager]`, `[Combat]`, `[Event]`, etc.
-- Préférer `Mathf.Max(1, ...)` pour éviter les dégâts nuls, et `Mathf.Clamp(x, 0, 9999)` pour plafonner
-- Les ScriptableObjects ne sont jamais modifiés au runtime — les données variables vont dans RunManager
+Événements déclenchés à ce jour :
+
+| Méthode Trigger | Appelée dans | Écoutée par |
+|---|---|---|
+| `TriggerPlayerTurnStarted()` | `CombatManager.StartPlayerTurn()` | `ModuleManager` → `OnPlayerTurnStart` |
+| `TriggerPlayerTurnEnded()` | `CombatManager.OnEndTurn()` | `ModuleManager` → `OnPlayerTurnEnd` |
+| `TriggerPlayerDealtDamage(dmg)` | `CombatManager.ApplyEffect()` | `ModuleManager` → `OnPlayerDealtDamage` |
+| `TriggerPlayerDamaged(dmg)` | `CombatManager.ApplyEnemyEffect()` | `ModuleManager` → `OnPlayerDamaged` |
+| `TriggerEnemyDied()` | `CombatManager.EndCombat(victory)` | `ModuleManager` → `OnEnemyDied` |
+
+`OnRoomEntered`, `OnChestOpened`, `OnShopEntered` sont définis dans `GameEvents` mais pas encore écoutés par les modules.
 
 ---
 
@@ -243,35 +338,39 @@ public enum EquipmentSlot { Head, Torso, Legs, Arm1, Arm2 }
 - Navigation carte (brouillard de guerre, déplacement clavier, sauvegarde état)
 - Système d'événements narratifs (chargement, choix, effets ModifyHP)
 - Transitions entre scènes via SceneLoader + RunManager
-- Stats avancées en combat : `criticalChance`, `criticalMultiplier`, `regeneration`, `lifeSteal` (+ bonus d'équipement accumulés dans `ResolveEquipment()`)
-- Système de statuts : `StatusData` (ScriptableObject), `ApplyStatus()`, `ProcessPerTurnStatuses()`, stacks avec lecture et/ou consommation par les effets de dégâts (`scalingStatus`, `consumeStacks` dans `EffectData`)
-- Modules passifs : `ModuleData` seedé depuis `CharacterData.startingModule` au premier combat, tracké dans `RunManager.activeModules`
-- Loot post-combat : bouton "Continuer" toujours actif (le joueur peut ignorer le loot)
-- Consommables : `ConsumableData` (ScriptableObject), `ConsumableButton` (UI), système complet en combat (spawn, use, loot auto depuis `EnemyData.consumableLootPool`)
+- Stats avancées en combat : `criticalChance`, `criticalMultiplier`, `regeneration`, `lifeSteal`
+- Système de statuts complet avec scaling et consommation de stacks
+- **Modules** : système complet — triggers via GameEvents, effets (DealDamage, Heal, AddArmor, ApplyStatus), HUD icônes dans Combat et Navigation, `OnFightStart` après reset d'armure
+- Loot post-combat : bouton "Continuer" toujours actif
+- Consommables : système complet en combat
+- `ApplyStatus` respecte `EffectTarget` dans toutes les méthodes (joueur peut s'appliquer un statut à lui-même)
+- HUD Navigation : affichage HP joueur
 
 ### En cours / À faire 🔧
+- `passiveEffects` sur `EquipmentData` : champ défini mais non branché dans `CombatManager` — à implémenter comme les modules (triggers + `ApplyModuleEffect`)
 - Scène MainMenu (sélection de personnage non branchée)
 - Effets de combat non implémentés : `ModifyStat`
 - Effets d'événements non implémentés : tout sauf `ModifyHP`
 - `KeywordData` défini mais non utilisé activement
-- `GameEvents.cs` défini mais jamais déclenché (aucun `TriggerXxx()` appelé)
-- Consommables côté navigation (hors combat) : `usableOnMap` présent sur `ConsumableData` mais l'intégration dans `NavigationManager` reste à faire
+- Consommables côté navigation (hors combat) : `usableOnMap` présent mais non intégré dans `NavigationManager`
 - Boss, salles spéciales
 - Sons, animations, retours visuels
 - Inventaire (prévu dans RunManager, commentaire `// Futur`)
 
 ### Localisation 🌍
-- **À implémenter après la première version jouable de bout en bout** (pas avant que le contenu textuel soit stable)
+- **À implémenter après la première version jouable de bout en bout**
 - Utiliser le package officiel **Unity Localization** (`com.unity.localization`)
-- Le refactoring consistera à : remplacer les `public string` de texte visible dans les ScriptableObjects par des `LocalizedString`, et ajouter des composants `LocalizeStringEvent` sur les TextMeshPro dans les scènes
-- **Règle à tenir dès maintenant** : ne jamais hardcoder du texte visible dans le code C# — tout texte affiché au joueur doit passer par les ScriptableObjects ou les champs Inspector
+- Règle immédiate : ne jamais hardcoder du texte visible dans le code C# — tout passe par les ScriptableObjects ou les champs Inspector
 
 ---
 
 ## Pièges connus
 
-1. **ChoiceButton dans la scène** : ne jamais glisser une instance du prefab dans la scène pour la référencer — utiliser le prefab asset directement depuis le dossier `Assets/Prefab/`. Sinon l'instance reste visible au runtime.
-2. **RunManager null** : toujours utiliser `RunManager.Instance?.` (null-conditional) car en test direct d'une scène isolée, RunManager peut ne pas exister.
-3. **Destroy() asynchrone** : `Destroy(go)` ne prend effet qu'à la fin du frame. Ne pas compter sur une destruction immédiate.
-4. **VerticalLayoutGroup + ContentSizeFitter** : si la largeur du container est gérée par le ContentSizeFitter, ne pas activer `ChildControlWidth` en même temps — choisir l'un ou l'autre. Ici on utilise une largeur fixe + ContentSizeFitter vertical uniquement.
-5. **Layout Group + taille des enfants** : si les boutons enfants ignorent la taille définie dans le prefab, c'est que `Control Child Size` est coché sur le Layout Group du conteneur. Le décocher (Width et Height) pour respecter la taille du prefab. Le `Content Size Fitter` doit être sur le *conteneur*, jamais sur les enfants si on veut une taille fixe.
+1. **Prefab dans la scène** : ne jamais glisser une instance de prefab dans la scène pour la référencer — utiliser le prefab asset depuis `Assets/Prefab/`. Sinon l'instance reste visible au runtime.
+2. **RunManager / ModuleManager null** : toujours utiliser `Instance?.` (null-conditional) — en test direct d'une scène isolée, les singletons peuvent ne pas exister.
+3. **Destroy() asynchrone** : `Destroy(go)` ne prend effet qu'à la fin du frame.
+4. **VerticalLayoutGroup + ContentSizeFitter** : largeur fixe + ContentSizeFitter vertical uniquement. Ne pas activer `ChildControlWidth` si la largeur est fixe — choisir l'un ou l'autre.
+5. **Layout Group + taille des enfants** : si les enfants ignorent la taille du prefab, `Control Child Size` est coché sur le conteneur. Le décocher pour respecter la taille du prefab.
+6. **Éléments HUD en Navigation** : le `MapCameraController` déplace `mapContainer`. Tout élément fixe à l'écran doit être **enfant direct du Canvas**, jamais de `mapContainer`.
+7. **ModuleManager — événement statique vs instance** : `OnModulesChanged` est statique → le HUD fonctionne sans instance. Mais les abonnements aux `GameEvents` nécessitent une instance → sans `ModuleManager` dans la scène, les effets ne se déclenchent pas même si les icônes s'affichent.
+8. **OnFightStart et reset d'armure** : les modules `OnFightStart` sont appliqués dans `StartPlayerTurn()` après `currentPlayerArmor = 0`, grâce au flag `isFirstTurn`. Ne pas déplacer cet appel avant le reset.

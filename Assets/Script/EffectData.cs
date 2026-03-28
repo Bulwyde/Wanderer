@@ -22,6 +22,11 @@ public class EffectData : ScriptableObject
 
     [Header("Déclencheur")]
     // Quand cet effet se déclenche-t-il ?
+    // • Compétences  → laisser sur OnSkillUsed (géré automatiquement par CombatManager)
+    // • Consommables → laisser sur OnSkillUsed (géré automatiquement à l'utilisation)
+    // • Modules      → choisir le trigger voulu (OnPlayerTurnStart, OnEnemyDied, Passive…)
+    // • Équipement passiveEffects → Passive pour un bonus permanent, ou un trigger de combat
+    [Tooltip("Compétences / Consommables : laisser sur OnSkillUsed.\nModules : choisir quand l'effet doit se déclencher (OnPlayerTurnStart, OnEnemyDied, OnFightStart…).\nOnFightStart = au premier tour du combat, après le reset d'armure.")]
     public EffectTrigger trigger;
 
     [Header("Action")]
@@ -70,13 +75,12 @@ public enum EffectTrigger
     OnArmorDepleted,        // Quand le joueur perd toute son armure
     OnSkillUsed,            // Quand la compétence liée est utilisée
 
-    // Navigation
-    OnRoomEntered,          // Quand le joueur entre dans une salle
+    // Début de combat
+    OnFightStart,           // Au premier tour du combat, après le reset d'armure initial
+
+    // Navigation (hors combat)
     OnChestOpened,          // Quand un coffre est ouvert
     OnShopEntered,          // Quand le joueur entre chez un marchand
-
-    // Passif permanent
-    Passive                 // Toujours actif, modifie une stat en permanence
 }
 
 /// <summary>

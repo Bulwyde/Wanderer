@@ -116,6 +116,9 @@ public class RunManager : MonoBehaviour
         if (module == null || activeModules.Contains(module)) return;
         activeModules.Add(module);
         Debug.Log($"[RunManager] Module acquis : {module.moduleName}");
+
+        // Notifie les HUDs pour qu'ils rafraîchissent l'affichage des icônes
+        ModuleManager.NotifyModulesChanged();
     }
 
     /// <summary>

@@ -197,18 +197,103 @@ public class EventManager : MonoBehaviour
         {
             switch (effect.type)
             {
+                // -----------------------------------------------------------
+                // MODIFICATEURS DE HP
+                // -----------------------------------------------------------
+
                 case EventEffectType.ModifyHP:
+                    // Un événement ne tue jamais le joueur (plancher à 1)
                     int newHP = Mathf.Clamp(
                         RunManager.Instance.currentHP + effect.value,
-                        1,                          // un événement ne tue pas le joueur
+                        1,
                         RunManager.Instance.maxHP
                     );
                     RunManager.Instance.currentHP = newHP;
                     Debug.Log($"[Event] HP : {(effect.value >= 0 ? "+" : "")}{effect.value} → {newHP}/{RunManager.Instance.maxHP}");
                     break;
 
+                case EventEffectType.ModifyMaxHP:
+                    // Le max ne peut pas descendre sous 1
+                    int newMax = Mathf.Max(1, RunManager.Instance.maxHP + effect.value);
+                    RunManager.Instance.maxHP = newMax;
+                    // Les HP courants ne peuvent pas dépasser le nouveau max
+                    RunManager.Instance.currentHP = Mathf.Min(RunManager.Instance.currentHP, newMax);
+                    Debug.Log($"[Event] HP max : {(effect.value >= 0 ? "+" : "")}{effect.value} → max = {newMax}, courant = {RunManager.Instance.currentHP}");
+                    break;
+
+                case EventEffectType.HealToFull:
+                    RunManager.Instance.currentHP = RunManager.Instance.maxHP;
+                    Debug.Log($"[Event] Soin complet → {RunManager.Instance.currentHP}/{RunManager.Instance.maxHP}");
+                    break;
+
+                // -----------------------------------------------------------
+                // OBJETS
+                // -----------------------------------------------------------
+
+                case EventEffectType.GainConsumable:
+                    if (effect.consumableToGive == null)
+                    {
+                        Debug.LogWarning("[Event] GainConsumable : aucun ConsumableData assigné dans l'Inspector.");
+                        break;
+                    }
+                    bool ajouté = RunManager.Instance.AddConsumable(effect.consumableToGive);
+                    if (!ajouté)
+                        Debug.Log($"[Event] {effect.consumableToGive.consumableName} non obtenu — inventaire de consommables plein.");
+                    break;
+
+                case EventEffectType.GainModule:
+                    switch (effect.gainModuleMode)
+                    {
+                        case GainModuleMode.FromList:
+                            if (effect.modulesToGive == null || effect.modulesToGive.Count == 0)
+                            {
+                                Debug.LogWarning("[Event] GainModule (FromList) : la liste modulesToGive est vide.");
+                                break;
+                            }
+                            foreach (ModuleData module in effect.modulesToGive)
+                            {
+                                if (module == null) continue;
+                                if (RunManager.Instance.HasModule(module))
+                                {
+                                    Debug.Log($"[Event] GainModule : '{module.moduleName}' déjà possédé — ignoré.");
+                                    continue;
+                                }
+                                RunManager.Instance.AddModule(module);
+                            }
+                            break;
+
+                        case GainModuleMode.FromLootTable:
+                            if (effect.moduleLootTable == null)
+                            {
+                                Debug.LogWarning("[Event] GainModule (FromLootTable) : aucune ModuleLootTable assignée dans l'Inspector.");
+                                break;
+                            }
+                            ModuleData tiré = effect.moduleLootTable.GetRandom();
+                            if (tiré != null)
+                                RunManager.Instance.AddModule(tiré);
+                            // Si tiré == null : GetRandom() a déjà loggé la raison (table vide ou tout possédé)
+                            break;
+                    }
+                    break;
+
+                // -----------------------------------------------------------
+                // FLAGS
+                // -----------------------------------------------------------
+
+                case EventEffectType.SetEventFlag:
+                    if (string.IsNullOrEmpty(effect.flagKey))
+                    {
+                        Debug.LogWarning("[Event] SetEventFlag : flagKey est vide — aucun flag posé.");
+                        break;
+                    }
+                    RunManager.Instance.SetEventFlag(effect.flagKey, effect.flagValue);
+                    Debug.Log($"[Event] Flag '{effect.flagKey}' → {effect.flagValue}");
+                    break;
+
+                // -----------------------------------------------------------
+
                 default:
-                    Debug.Log($"[Event] Effet '{effect.type}' non encore implémenté.");
+                    Debug.LogWarning($"[Event] Effet '{effect.type}' non reconnu.");
                     break;
             }
         }
@@ -220,8 +305,13 @@ public class EventManager : MonoBehaviour
 
     private void OnContinueClicked()
     {
-        // Marque la salle comme complétée pour ne pas y revenir
-        RunManager.Instance?.ClearCurrentRoom();
+        if (RunManager.Instance != null)
+        {
+            // Marque l'event comme joué pour ne pas le retirer dans le pool d'une future visite
+            RunManager.Instance.MarkEventPlayed(currentEvent.eventID);
+            // Marque la salle comme complétée (comportement identique aux salles de combat)
+            RunManager.Instance.ClearCurrentRoom();
+        }
         SceneLoader.Instance.GoToNavigation();
     }
 }

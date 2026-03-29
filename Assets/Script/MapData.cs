@@ -63,9 +63,26 @@ public class CellData
     // Type de la case
     public CellType cellType;
 
-    // Identifiant optionnel pour les salles à contenu précis
-    // Ex : "event_radar_1" pour un événement spécifique designé à la main
-    public string specificEventID;
+    // Mode de sélection des événements pour les cases de type Event.
+    // ManualList  → liste saisie à la main directement dans la case
+    // FromPool    → EventPool ScriptableObject réutilisable
+    public EventCellMode eventCellMode;
+
+    // Mode ManualList : liste d'EventData saisie directement dans l'éditeur de carte.
+    // Un event aléatoire (non encore joué) est tiré à chaque visite.
+    public List<EventData> eventList = new List<EventData>();
+
+    // Mode FromPool : référence vers un EventPool ScriptableObject prédéfini.
+    public EventPool eventPool;
+}
+
+/// <summary>
+/// Mode de sélection des événements pour une case de type Event.
+/// </summary>
+public enum EventCellMode
+{
+    ManualList, // Liste d'EventData saisie à la main dans la case
+    FromPool,   // EventPool ScriptableObject réutilisable
 }
 
 /// <summary>
@@ -77,7 +94,7 @@ public enum CellType
     Start,          // Case de départ du joueur
     Boss,           // Salle du boss
     Classic,        // Salle classique — contenu décidé par la génération
-    Event,          // Salle d'événement textuel — specificEventID pointe vers un EventData
+    Event,          // Salle d'événement textuel — eventPool contient les EventData disponibles
     NonNavigable,   // Bloc non navigable — obstacle infranchissable
 }
 

@@ -214,6 +214,66 @@ private void UpdateVisibility()
         return true;
     }
 
+    // -----------------------------------------------
+    // TIRAGE D'ÉVÉNEMENT
+    // -----------------------------------------------
+
+    /// <summary>
+    /// Tire aléatoirement un EventData depuis le pool de la case,
+    /// en excluant les events déjà joués pendant ce run.
+    /// Retourne null si le pool est vide ou tous les events ont été joués.
+    /// </summary>
+    private EventData ChoisirEventAleatoire(CellData cell)
+    {
+        switch (cell.eventCellMode)
+        {
+            case EventCellMode.ManualList:
+                return ChoisirDepuisListe(cell);
+
+            case EventCellMode.FromPool:
+                if (cell.eventPool == null)
+                {
+                    Debug.LogWarning($"[Navigation] Salle ({cell.x},{cell.y}) : mode FromPool mais aucun EventPool assigné.");
+                    return null;
+                }
+                return cell.eventPool.GetRandom();
+
+            default:
+                return null;
+        }
+    }
+
+    /// <summary>
+    /// Tire aléatoirement un EventData depuis la liste manuelle de la case,
+    /// en excluant les events déjà joués pendant ce run.
+    /// </summary>
+    private EventData ChoisirDepuisListe(CellData cell)
+    {
+        if (cell.eventList == null || cell.eventList.Count == 0)
+        {
+            Debug.LogWarning($"[Navigation] Salle ({cell.x},{cell.y}) : mode ManualList mais eventList vide.");
+            return null;
+        }
+
+        List<EventData> disponibles = new List<EventData>();
+        foreach (EventData ev in cell.eventList)
+        {
+            if (ev == null) continue;
+            if (RunManager.Instance != null && RunManager.Instance.IsEventPlayed(ev.eventID)) continue;
+            disponibles.Add(ev);
+        }
+
+        if (disponibles.Count == 0)
+        {
+            Debug.Log($"[Navigation] Salle ({cell.x},{cell.y}) : tous les events de la liste ont déjà été joués.");
+            return null;
+        }
+
+        EventData choisi = disponibles[Random.Range(0, disponibles.Count)];
+        Debug.Log($"[Navigation] Salle ({cell.x},{cell.y}) : event '{choisi.eventID}' tiré parmi {disponibles.Count} disponible(s).");
+        return choisi;
+    }
+
     /// <summary>
     /// Retourne true si une case est visible OU a déjà été visitée.
     /// </summary>
@@ -263,7 +323,7 @@ private void UpdateVisibility()
                 if (RunManager.Instance != null &&
                     RunManager.Instance.IsRoomCleared(cell.x, cell.y))
                 {
-                    Debug.Log($"({PlayerX},{PlayerY}) — Événement déjà complété, pas de transition");
+                    Debug.Log($"({PlayerX},{PlayerY}) — Salle d'événement déjà complétée, pas de transition");
                     break;
                 }
 
@@ -273,9 +333,20 @@ private void UpdateVisibility()
                     break;
                 }
 
+                EventData eventChoisi = ChoisirEventAleatoire(cell);
+
+                if (eventChoisi == null)
+                {
+                    // Tous les events du pool ont été joués — la salle devient vide
+                    Debug.Log($"({PlayerX},{PlayerY}) — Tous les events du pool ont été joués, salle ignorée");
+                    break;
+                }
+
                 RunManager.Instance.SaveNavigationState(
                     PlayerX, PlayerY, visitedCells, exploredCells);
                 RunManager.Instance.EnterRoom(cell);
+                // On écrase currentSpecificEventID avec l'event tiré au sort
+                RunManager.Instance.currentSpecificEventID = eventChoisi.eventID;
                 SceneLoader.Instance.GoToEvent();
                 break;
 

@@ -67,6 +67,8 @@ SceneLoader.Instance.GoToMainMenu()
 - Méthodes clés : `StartNewRun()`, `EnterRoom(CellData)`, `SaveNavigationState()`, `ClearCurrentRoom()`, `EquipItem()`, `GetEquipped()`, `IsSlotFree()`
 - Modules : `AddModule()`, `GetModules()`, `HasModule()` — `AddModule()` appelle automatiquement `ModuleManager.NotifyModulesChanged()` pour rafraîchir le HUD
 - Consommables : `AddConsumable()`, `RemoveConsumable()`, `GetConsumables()`, `HasConsumableSlotFree()` — slots limités par `maxConsumableSlots` (1–6). Flag `startingConsumablesSeeded` : empêche de redonner les consommables de départ si le joueur vide ses slots en cours de run.
+- Événements joués : `MarkEventPlayed(string)`, `IsEventPlayed(string)` — `HashSet<string> playedEventIDs`, remis à zéro dans `StartNewRun()`
+- ⚠️ `EnterRoom(CellData)` ne set plus `currentSpecificEventID` — c'est `NavigationManager` qui l'assigne après le tirage aléatoire
 
 **`SceneLoader.cs`**
 - Singleton simple — wraps `SceneManager.LoadScene()`
@@ -88,6 +90,8 @@ SceneLoader.Instance.GoToMainMenu()
 - Trois sets : `visibleCells`, `visitedCells`, `exploredCells`
 - En quittant vers Combat/Event : appelle `RunManager.SaveNavigationState()` puis `RunManager.EnterRoom()`
 - Au retour d'une autre scène : restaure l'état depuis RunManager si `hasNavigationState == true`
+- `ChoisirEventAleatoire(CellData)` : dispatch selon `eventCellMode` (ManualList → `ChoisirDepuisListe()`, FromPool → `EventPool.GetRandom()`). Retourne `null` si tout est joué → salle ignorée sans transition
+- ⚠️ Après `EnterRoom()`, le code écrase `RunManager.Instance.currentSpecificEventID` avec l'ID de l'event tiré
 
 **`MapRenderer.cs`**
 - Affiche la carte (tiles) selon les sets de visibilité de NavigationManager
@@ -111,9 +115,21 @@ SceneLoader.Instance.GoToMainMenu()
 - ScriptableObject — grille de `CellData[]`
 
 ```csharp
-public enum CellType { Start, Classic, Boss, Event, Empty }
-// CellData contient : int x, y ; CellType cellType ; string specificEventID
+public enum CellType { Empty, Start, Boss, Classic, Event, NonNavigable }
+
+public enum EventCellMode { ManualList, FromPool }
+
+// CellData contient :
+//   int x, y
+//   CellType cellType
+//   EventCellMode eventCellMode
+//   List<EventData> eventList   ← mode ManualList : liste saisie à la main
+//   EventPool eventPool         ← mode FromPool : ScriptableObject réutilisable
 ```
+
+- Les cases de type `Event` utilisent `eventCellMode` pour choisir entre liste manuelle et pool prédéfini
+- `NavigationManager.ChoisirEventAleatoire()` dispatch selon le mode, filtre les events déjà joués, retourne `null` si tout est joué (salle ignorée sans transition)
+- ⚠️ Éditeur de carte : `MapEditorWindow` (Assets/Editor) — le panneau "Événements" apparaît uniquement pour les cases de type `Event`
 
 ---
 
@@ -166,8 +182,8 @@ public enum CellType { Start, Classic, Boss, Event, Empty }
 **`EventManager.cs`**
 - Lit `RunManager.currentSpecificEventID` → cherche dans `EventDatabase` → affiche titre, description, boutons de choix
 - `SpawnChoiceButtons()` : instancie dynamiquement les boutons depuis le prefab
-- Après choix : applique les effets (`ModifyHP` implémenté, reste à compléter), remplace la description par `outcomeText`, affiche le bouton "Continuer"
-- "Continuer" → `RunManager.ClearCurrentRoom()` → `GoToNavigation()`
+- Après choix : applique les effets, remplace la description par `outcomeText`, affiche le bouton "Continuer"
+- "Continuer" → `RunManager.MarkEventPlayed(eventID)` → `RunManager.ClearCurrentRoom()` → `GoToNavigation()`
 - ⚠️ Système d'effets propre (`EventEffect` / `EventEffectType`) — indépendant de `EffectData`
 
 **`EventData.cs`**
@@ -181,13 +197,41 @@ public List<EventChoice> choices;
 public string choiceText, outcomeText;
 public List<EventEffect> effects;
 
-// EventEffect :
-public EventEffectType type;  // ModifyHP, ...
-public int value;
+// EventEffect — champs utilisés selon le type :
+public EventEffectType type;
+public int value;                        // ModifyHP, ModifyMaxHP
+public ConsumableData consumableToGive;  // GainConsumable
+public GainModuleMode gainModuleMode;    // GainModule : FromList ou FromLootTable
+public List<ModuleData> modulesToGive;   // GainModule → FromList (tous donnés, doublons ignorés)
+public ModuleLootTable moduleLootTable;  // GainModule → FromLootTable (tirage aléatoire)
+public string flagKey;                   // SetEventFlag
+public bool flagValue;                   // SetEventFlag
 ```
+
+**`EventEffectType` implémentés :**
+| Type | Effet | Champ(s) |
+|---|---|---|
+| `ModifyHP` | Soigne/blesse le joueur (plancher à 1) | `value` |
+| `ModifyMaxHP` | Modifie les HP max (plancher à 1, clamp HP courants) | `value` |
+| `HealToFull` | Soin complet | — |
+| `GainConsumable` | Donne un consommable si slot libre | `consumableToGive` |
+| `GainModule` | Donne un ou des modules (anti-doublon) | voir `GainModuleMode` |
+| `SetEventFlag` | Pose un flag booléen dans RunManager | `flagKey`, `flagValue` |
+
+⚠️ **`GainConsumable` plein** : si l'inventaire est plein, l'objet n'est pas donné (log console). À terme, il faudra afficher un message au joueur et lui permettre de se débarrasser d'un consommable manuellement.
 
 **`EventDatabase.cs`**
 - ScriptableObject contenant une `List<EventData>`, avec `GetByID(string id)`
+
+**`EventPool.cs`**
+- ScriptableObject réutilisable (`RPG → Event Pool`) — `List<EventData> events`
+- `GetRandom()` : exclut les events déjà joués (`RunManager.IsEventPlayed`) et tire au sort
+- Retourne `null` si tout a été joué
+
+**`ModuleLootTable.cs`**
+- ScriptableObject réutilisable (`RPG → Module Loot Table`) — `List<ModuleData> modules`
+- `GetRandom()` : exclut les modules déjà possédés (`RunManager.HasModule`) et tire au sort
+- Retourne `null` si tout est possédé
 
 ---
 
@@ -336,7 +380,6 @@ Canvas
 - Équipement : résolution des stats effectives + compétences depuis l'équipement
 - Loot post-combat (sélection de carte, gestion des slots bras)
 - Navigation carte (brouillard de guerre, déplacement clavier, sauvegarde état)
-- Système d'événements narratifs (chargement, choix, effets ModifyHP)
 - Transitions entre scènes via SceneLoader + RunManager
 - Stats avancées en combat : `criticalChance`, `criticalMultiplier`, `regeneration`, `lifeSteal`
 - Système de statuts complet avec scaling et consommation de stacks
@@ -345,12 +388,18 @@ Canvas
 - Consommables : système complet en combat
 - `ApplyStatus` respecte `EffectTarget` dans toutes les méthodes (joueur peut s'appliquer un statut à lui-même)
 - HUD Navigation : affichage HP joueur
+- **Événements narratifs** : système complet — effets `ModifyHP`, `ModifyMaxHP`, `HealToFull`, `GainConsumable`, `GainModule` (liste ou loot table, anti-doublon), `SetEventFlag`
+- **Pool d'events par salle** : cases Event utilisent `EventCellMode` (ManualList ou FromPool via `EventPool` ScriptableObject). Events déjà joués exclus du tirage. Salle ignorée si tout est joué.
+- **`ModuleLootTable`** : ScriptableObject pour tirer un module aléatoire non encore possédé
+- **`EventPool`** : ScriptableObject pour tirer un event aléatoire non encore joué
+- Éditeur de carte (`MapEditorWindow`) : gestion des deux modes de pool d'events par case
 
 ### En cours / À faire 🔧
+- **Loot tables consommables** : même principe que `ModuleLootTable` — `ConsumableLootTable` ScriptableObject avec `GetRandom()`. À brancher dans `EventEffect.GainConsumable` (mode liste ou loot table). ⚠️ Également prévoir la gestion du plein : afficher un message au joueur et lui permettre de jeter un consommable manuellement.
+- **Loot tables équipements** : même principe — `EquipmentLootTable` ScriptableObject. À brancher dans un futur `EventEffect.GainEquipment` (mode liste ou loot table).
 - `passiveEffects` sur `EquipmentData` : champ défini mais non branché dans `CombatManager` — à implémenter comme les modules (triggers + `ApplyModuleEffect`)
 - Scène MainMenu (sélection de personnage non branchée)
 - Effets de combat non implémentés : `ModifyStat`
-- Effets d'événements non implémentés : tout sauf `ModifyHP`
 - `KeywordData` défini mais non utilisé activement
 - Consommables côté navigation (hors combat) : `usableOnMap` présent mais non intégré dans `NavigationManager`
 - Boss, salles spéciales
@@ -374,3 +423,4 @@ Canvas
 6. **Éléments HUD en Navigation** : le `MapCameraController` déplace `mapContainer`. Tout élément fixe à l'écran doit être **enfant direct du Canvas**, jamais de `mapContainer`.
 7. **ModuleManager — événement statique vs instance** : `OnModulesChanged` est statique → le HUD fonctionne sans instance. Mais les abonnements aux `GameEvents` nécessitent une instance → sans `ModuleManager` dans la scène, les effets ne se déclenchent pas même si les icônes s'affichent.
 8. **OnFightStart et reset d'armure** : les modules `OnFightStart` sont appliqués dans `StartPlayerTurn()` après `currentPlayerArmor = 0`, grâce au flag `isFirstTurn`. Ne pas déplacer cet appel avant le reset.
+9. **GUILayout Begin/End dans les boucles Editor** : tout `EditorGUILayout.BeginHorizontal()` doit avoir son `EndHorizontal()` appelé dans **tous** les chemins d'exécution, y compris avant un `break`. Sinon : `GUI Error: Invalid GUILayout state`.

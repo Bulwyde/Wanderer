@@ -192,6 +192,33 @@ public class RunManager : MonoBehaviour
     private HashSet<string> clearedRooms = new HashSet<string>();
 
     // -----------------------------------------------
+    // ÉVÉNEMENTS JOUÉS
+    // -----------------------------------------------
+
+    // IDs des événements déjà joués pendant la run.
+    // Permet d'exclure un event du pool d'une salle s'il a déjà été déclenché.
+    private HashSet<string> playedEventIDs = new HashSet<string>();
+
+    /// <summary>
+    /// Marque un événement comme joué.
+    /// Appelé par EventManager quand le joueur clique sur "Continuer".
+    /// </summary>
+    public void MarkEventPlayed(string eventID)
+    {
+        if (string.IsNullOrEmpty(eventID)) return;
+        playedEventIDs.Add(eventID);
+        Debug.Log($"[RunManager] Événement '{eventID}' marqué comme joué.");
+    }
+
+    /// <summary>
+    /// Retourne true si cet événement a déjà été joué pendant la run.
+    /// </summary>
+    public bool IsEventPlayed(string eventID)
+    {
+        return !string.IsNullOrEmpty(eventID) && playedEventIDs.Contains(eventID);
+    }
+
+    // -----------------------------------------------
     // ÉTAT DE NAVIGATION SAUVEGARDÉ
     // -----------------------------------------------
 
@@ -227,6 +254,7 @@ public class RunManager : MonoBehaviour
         difficultyModifier  = 1.0f;
         eventFlags.Clear();
         clearedRooms.Clear();
+        playedEventIDs.Clear();
         equippedItems.Clear();
         activeModules.Clear();
         consumables.Clear();
@@ -248,10 +276,11 @@ public class RunManager : MonoBehaviour
     /// </summary>
     public void EnterRoom(CellData cell)
     {
-        currentRoomX            = cell.x;
-        currentRoomY            = cell.y;
-        currentCellType         = cell.cellType;
-        currentSpecificEventID  = cell.specificEventID;
+        currentRoomX   = cell.x;
+        currentRoomY   = cell.y;
+        currentCellType = cell.cellType;
+        // currentSpecificEventID est désormais assigné par NavigationManager
+        // après le tirage aléatoire dans ChoisirEventAleatoire()
 
         Debug.Log($"RunManager — Entrée en salle ({cell.x},{cell.y}) — Type : {cell.cellType}");
     }

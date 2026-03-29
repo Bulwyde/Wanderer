@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2d9e59739edeec740b98c00d8c052605, type: 3}
+  m_Name: EventModule_Alea
+  m_EditorClassIdentifier: Assembly-CSharp::EventData
+  eventID: event_module_alea
+  title: Event Module Alea
+  description: "Vous arrivez dans une d\xE9charge remplie d'objet en tout genre.
+    Peut-\xEAtre trouverez vous un objet int\xE9ressant ?"
+  backgroundImage: {fileID: 0}
+  choices:
+  - choiceText: Fouiller
+    outcomeText: "Au milieu des d\xE9chets, vous trouvez un objet int\xE9ressant."
+    effects:
+    - type: 4
+      value: 0
+      consumableToGive: {fileID: 0}
+      gainModuleMode: 1
+      modulesToGive: []
+      moduleLootTable: {fileID: 11400000, guid: aaeb4f2ba6abd3b4d87c6981f4d93660, type: 2}
+      flagKey: 
+      flagValue: 0

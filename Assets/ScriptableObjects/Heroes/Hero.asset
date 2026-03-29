@@ -24,7 +24,7 @@ MonoBehaviour:
   regeneration: 0
   lifeSteal: 0
   maxEnergy: 3
-  startingModule: {fileID: 11400000, guid: 0cc8e728129508249a25ec4d87a48a4e, type: 2}
+  startingModule: {fileID: 0}
   startingHead: {fileID: 0}
   startingTorso: {fileID: 0}
   startingLegs: {fileID: 0}

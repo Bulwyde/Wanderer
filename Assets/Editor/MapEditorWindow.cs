@@ -210,18 +210,75 @@ public class MapEditorWindow : EditorWindow
             EditorUtility.SetDirty(currentMap);
         }
 
-        // ID d'événement — visible pour tous les types mais n'a d'effet que pour Event
-        EditorGUI.BeginChangeCheck();
-        string newID = EditorGUILayout.TextField("Event ID", selectedCell.specificEventID);
-        if (EditorGUI.EndChangeCheck())
+        // Configuration des événements — uniquement pour les cases de type Event
+        if (selectedCell.cellType == CellType.Event)
         {
-            selectedCell.specificEventID = newID;
-            EditorUtility.SetDirty(currentMap);
-        }
+            EditorGUILayout.Space(4);
+            EditorGUILayout.LabelField("Événements", EditorStyles.boldLabel);
 
-        // Aide contextuelle
-        if (selectedCell.cellType == CellType.Event && string.IsNullOrEmpty(selectedCell.specificEventID))
-            EditorGUILayout.HelpBox("Renseigne l'Event ID pour lier cette case à un EventData.", MessageType.Warning);
+            // Dropdown pour choisir le mode
+            EventCellMode newMode = (EventCellMode)EditorGUILayout.EnumPopup("Mode", selectedCell.eventCellMode);
+            if (newMode != selectedCell.eventCellMode)
+            {
+                selectedCell.eventCellMode = newMode;
+                EditorUtility.SetDirty(currentMap);
+            }
+
+            EditorGUILayout.Space(2);
+
+            if (selectedCell.eventCellMode == EventCellMode.ManualList)
+            {
+                // Liste manuelle d'EventData
+                for (int i = 0; i < selectedCell.eventList.Count; i++)
+                {
+                    EditorGUILayout.BeginHorizontal();
+                    EventData newEntry = (EventData)EditorGUILayout.ObjectField(
+                        selectedCell.eventList[i], typeof(EventData), false);
+                    if (newEntry != selectedCell.eventList[i])
+                    {
+                        selectedCell.eventList[i] = newEntry;
+                        EditorUtility.SetDirty(currentMap);
+                    }
+                    if (GUILayout.Button("-", GUILayout.Width(22)))
+                    {
+                        selectedCell.eventList.RemoveAt(i);
+                        EditorUtility.SetDirty(currentMap);
+                        EditorGUILayout.EndHorizontal(); // fermer avant de sortir de la boucle
+                        break;
+                    }
+                    EditorGUILayout.EndHorizontal();
+                }
+
+                if (GUILayout.Button("+ Ajouter un Event"))
+                {
+                    selectedCell.eventList.Add(null);
+                    EditorUtility.SetDirty(currentMap);
+                }
+
+                bool listeVide = selectedCell.eventList.Count == 0 ||
+                                 selectedCell.eventList.TrueForAll(e => e == null);
+                if (listeVide)
+                    EditorGUILayout.HelpBox(
+                        "La liste est vide. Ajoute au moins un EventData.",
+                        MessageType.Warning);
+            }
+            else // FromPool
+            {
+                // Référence vers un EventPool ScriptableObject
+                EventPool newPool = (EventPool)EditorGUILayout.ObjectField(
+                    "Event Pool", selectedCell.eventPool, typeof(EventPool), false);
+                if (newPool != selectedCell.eventPool)
+                {
+                    selectedCell.eventPool = newPool;
+                    EditorUtility.SetDirty(currentMap);
+                }
+
+                if (selectedCell.eventPool == null)
+                    EditorGUILayout.HelpBox(
+                        "Aucun EventPool assigné. Crée-en un via RPG → Event Pool.",
+                        MessageType.Warning);
+            }
+        }
 
         EditorGUILayout.EndVertical();
         EditorGUILayout.Space(2);

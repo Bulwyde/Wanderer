@@ -9,9 +9,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: b9a3cbfaa8e88324d92dec92febe0fe1, type: 3}
-  m_Name: EventDatabase
-  m_EditorClassIdentifier: Assembly-CSharp::EventDatabase
+  m_Script: {fileID: 11500000, guid: 4c65279412d720245bae2a11201dc4f6, type: 3}
+  m_Name: EventPool_World1
+  m_EditorClassIdentifier: Assembly-CSharp::EventPool
   events:
   - {fileID: 11400000, guid: ec47b010b847b2f46b06e20505ab9d03, type: 2}
   - {fileID: 11400000, guid: 9b98efe580868604da5b244131a8162d, type: 2}

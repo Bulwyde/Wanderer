@@ -10,12 +10,18 @@ using System.Collections.Generic;
 ///
 /// Structure de la scène recommandée :
 ///   Canvas
-///     BackgroundImage   (Image — plein écran)
+///     BackgroundImage      (Image — plein écran)
 ///     ContentPanel
-///       TitleText       (TextMeshProUGUI)
-///       DescriptionText (TextMeshProUGUI)
-///       ChoiceContainer (Transform + Vertical Layout Group)
-///     ContinueButton    (Button — caché jusqu'au choix)
+///       TitleText          (TextMeshProUGUI)
+///       DescriptionText    (TextMeshProUGUI)
+///       ChoiceContainer    (Transform + Vertical Layout Group)
+///     ContinueButton       (Button — caché jusqu'au choix ET après offre résolue)
+///     EquipmentOfferArea   (GameObject — EquipmentOfferController, caché par défaut)
+///       LootCardContainer  (Transform — Horizontal Layout Group)
+///       SkipButton         (Button — "Passer")
+///       ArmSelectionPanel  (GameObject — caché par défaut)
+///         Arm1Button       (Button — "Bras gauche")
+///         Arm2Button       (Button — "Bras droit")
 /// </summary>
 public class EventManager : MonoBehaviour
 {
@@ -58,14 +64,25 @@ public class EventManager : MonoBehaviour
     // -----------------------------------------------
 
     [Header("UI — Continuer")]
-    // Affiché uniquement après que le joueur a fait un choix
+    // Affiché après le choix, et après que l'offre d'équipement est résolue
     public Button continueButton;
+
+    // -----------------------------------------------
+    // UI — OFFRE D'ÉQUIPEMENT
+    // -----------------------------------------------
+
+    [Header("UI — Offre d'équipement")]
+    // Composant partagé avec la scène Combat — gère l'affichage et la résolution des offres
+    public EquipmentOfferController equipmentOfferController;
 
     // -----------------------------------------------
     // ÉTAT INTERNE
     // -----------------------------------------------
 
     private EventData currentEvent;
+
+    // Liste des pièces à proposer au joueur (slot occupé → pas d'auto-équipement)
+    private List<EquipmentData> pendingEquipmentOffers = new List<EquipmentData>();
 
     // -----------------------------------------------
     // INITIALISATION
@@ -162,11 +179,13 @@ public class EventManager : MonoBehaviour
 
     /// <summary>
     /// Appelé quand le joueur clique sur un bouton de choix.
-    /// Applique les effets, remplace le texte par l'outcome,
-    /// supprime les boutons de choix et affiche "Continuer".
+    /// Applique les effets, remplace le texte par l'outcome, supprime les boutons.
+    /// Si des équipements sont en attente, délègue à EquipmentOfferController avant "Continuer".
     /// </summary>
     private void OnChoiceMade(EventChoice choice)
     {
+        pendingEquipmentOffers.Clear();
+
         ApplyEffects(choice.effects);
 
         // Remplace la description par le texte de résultat
@@ -177,9 +196,14 @@ public class EventManager : MonoBehaviour
         foreach (Transform child in choiceContainer)
             Destroy(child.gameObject);
 
-        // Affiche le bouton "Continuer"
-        if (continueButton != null)
-            continueButton.gameObject.SetActive(true);
+        // Si des pièces sont à proposer, déléguer au contrôleur partagé
+        if (pendingEquipmentOffers.Count > 0 && equipmentOfferController != null)
+        {
+            equipmentOfferController.StartOffresSequentielles(pendingEquipmentOffers, OnEquipementResolu);
+            pendingEquipmentOffers.Clear();
+        }
+        else
+            MontrerContinueButton();
     }
 
     // -----------------------------------------------
@@ -188,6 +212,8 @@ public class EventManager : MonoBehaviour
 
     /// <summary>
     /// Applique les effets d'un choix sur l'état du run.
+    /// Les pièces d'équipement qui ne peuvent pas être auto-équipées
+    /// sont ajoutées à pendingEquipmentOffers pour une résolution interactive.
     /// </summary>
     private void ApplyEffects(List<EventEffect> effects)
     {
@@ -231,14 +257,39 @@ public class EventManager : MonoBehaviour
                 // -----------------------------------------------------------
 
                 case EventEffectType.GainConsumable:
-                    if (effect.consumableToGive == null)
+                    switch (effect.gainConsumableMode)
                     {
-                        Debug.LogWarning("[Event] GainConsumable : aucun ConsumableData assigné dans l'Inspector.");
-                        break;
+                        case GainConsumableMode.FromList:
+                            if (effect.consumablesToGive == null || effect.consumablesToGive.Count == 0)
+                            {
+                                Debug.LogWarning("[Event] GainConsumable (FromList) : la liste consumablesToGive est vide.");
+                                break;
+                            }
+                            foreach (ConsumableData consommable in effect.consumablesToGive)
+                            {
+                                if (consommable == null) continue;
+                                if (!RunManager.Instance.AddConsumable(consommable))
+                                {
+                                    Debug.Log($"[Event] {consommable.consumableName} non obtenu — inventaire de consommables plein.");
+                                    break; // Inutile de continuer si l'inventaire est déjà plein
+                                }
+                            }
+                            break;
+
+                        case GainConsumableMode.FromLootTable:
+                            if (effect.consumableLootTable == null)
+                            {
+                                Debug.LogWarning("[Event] GainConsumable (FromLootTable) : aucune ConsumableLootTable assignée dans l'Inspector.");
+                                break;
+                            }
+                            ConsumableData consommableTiré = effect.consumableLootTable.GetRandom();
+                            if (consommableTiré != null)
+                            {
+                                if (!RunManager.Instance.AddConsumable(consommableTiré))
+                                    Debug.Log($"[Event] {consommableTiré.consumableName} non obtenu — inventaire de consommables plein.");
+                            }
+                            break;
                     }
-                    bool ajouté = RunManager.Instance.AddConsumable(effect.consumableToGive);
-                    if (!ajouté)
-                        Debug.Log($"[Event] {effect.consumableToGive.consumableName} non obtenu — inventaire de consommables plein.");
                     break;
 
                 case EventEffectType.GainModule:
@@ -271,7 +322,39 @@ public class EventManager : MonoBehaviour
                             ModuleData tiré = effect.moduleLootTable.GetRandom();
                             if (tiré != null)
                                 RunManager.Instance.AddModule(tiré);
-                            // Si tiré == null : GetRandom() a déjà loggé la raison (table vide ou tout possédé)
+                            break;
+                    }
+                    break;
+
+                // -----------------------------------------------------------
+                // ÉQUIPEMENT
+                // -----------------------------------------------------------
+
+                case EventEffectType.GainEquipment:
+                    switch (effect.gainEquipmentMode)
+                    {
+                        case GainEquipmentMode.FromList:
+                            if (effect.equipmentsToGive == null || effect.equipmentsToGive.Count == 0)
+                            {
+                                Debug.LogWarning("[Event] GainEquipment (FromList) : la liste equipmentsToGive est vide.");
+                                break;
+                            }
+                            foreach (EquipmentData pièce in effect.equipmentsToGive)
+                            {
+                                if (pièce != null)
+                                    TenterEquipementOuMettrEnFile(pièce);
+                            }
+                            break;
+
+                        case GainEquipmentMode.FromLootTable:
+                            if (effect.equipmentLootTable == null)
+                            {
+                                Debug.LogWarning("[Event] GainEquipment (FromLootTable) : aucune EquipmentLootTable assignée dans l'Inspector.");
+                                break;
+                            }
+                            EquipmentData équipementTiré = effect.equipmentLootTable.GetRandom();
+                            if (équipementTiré != null)
+                                TenterEquipementOuMettrEnFile(équipementTiré);
                             break;
                     }
                     break;
@@ -297,6 +380,110 @@ public class EventManager : MonoBehaviour
                     break;
             }
         }
+    }
+
+    // -----------------------------------------------
+    // ÉQUIPEMENT — AUTO-ÉQUIPEMENT ET FILE D'ATTENTE
+    // -----------------------------------------------
+
+    /// <summary>
+    /// Tente d'équiper automatiquement une pièce si son slot est libre.
+    /// Si le slot est occupé (ou les deux bras occupés pour un Arm),
+    /// ajoute la pièce à pendingEquipmentOffers pour une résolution interactive
+    /// via EquipmentOfferController.
+    /// </summary>
+    private void TenterEquipementOuMettrEnFile(EquipmentData pièce)
+    {
+        if (pièce == null || RunManager.Instance == null) return;
+
+        if (pièce.equipmentType == EquipmentType.Arm)
+        {
+            // Pour les bras : cherche un slot libre en priorité
+            if (RunManager.Instance.IsSlotFree(EquipmentSlot.Arm1))
+            {
+                RunManager.Instance.EquipItem(EquipmentSlot.Arm1, pièce);
+                Debug.Log($"[Event] '{pièce.equipmentName}' équipé automatiquement → Arm1");
+            }
+            else if (RunManager.Instance.IsSlotFree(EquipmentSlot.Arm2))
+            {
+                RunManager.Instance.EquipItem(EquipmentSlot.Arm2, pièce);
+                Debug.Log($"[Event] '{pièce.equipmentName}' équipé automatiquement → Arm2");
+            }
+            else
+            {
+                // Les deux bras sont occupés → proposer le remplacement au joueur
+                Debug.Log($"[Event] '{pièce.equipmentName}' mis en attente — les deux bras sont occupés.");
+                pendingEquipmentOffers.Add(pièce);
+            }
+        }
+        else
+        {
+            EquipmentSlot slot = EquipmentTypeToSlot(pièce.equipmentType);
+            if (RunManager.Instance.IsSlotFree(slot))
+            {
+                RunManager.Instance.EquipItem(slot, pièce);
+                Debug.Log($"[Event] '{pièce.equipmentName}' équipé automatiquement → {slot}");
+            }
+            else
+            {
+                // Slot occupé → proposer le remplacement au joueur
+                Debug.Log($"[Event] '{pièce.equipmentName}' mis en attente — slot {slot} occupé.");
+                pendingEquipmentOffers.Add(pièce);
+            }
+        }
+    }
+
+    // -----------------------------------------------
+    // ÉQUIPEMENT — CALLBACK DE FIN D'OFFRE
+    // -----------------------------------------------
+
+    /// <summary>
+    /// Appelé par EquipmentOfferController quand toutes les offres sont résolues
+    /// (équipées ou passées). Affiche le bouton "Continuer".
+    /// </summary>
+    private void OnEquipementResolu()
+    {
+        MontrerContinueButton();
+    }
+
+    /// <summary>
+    /// Active le bouton "Continuer" et s'assure que son parent immédiat est lui aussi actif.
+    /// Piège Unity : SetActive(true) sur un enfant n'a aucun effet visible si le parent est inactif.
+    /// </summary>
+    private void MontrerContinueButton()
+    {
+        if (continueButton == null) return;
+
+        // Active tous les parents jusqu'au Canvas (exclu) pour s'assurer que le bouton
+        // est visible quelle que soit sa profondeur dans la hiérarchie.
+        // Piège Unity : SetActive(true) sur un enfant n'a aucun effet si un ancêtre est inactif.
+        Transform t = continueButton.transform.parent;
+        while (t != null && t.GetComponent<Canvas>() == null)
+        {
+            t.gameObject.SetActive(true);
+            t = t.parent;
+        }
+
+        continueButton.gameObject.SetActive(true);
+    }
+
+    // -----------------------------------------------
+    // UTILITAIRES ÉQUIPEMENT
+    // -----------------------------------------------
+
+    /// <summary>
+    /// Convertit un EquipmentType (non-bras) en EquipmentSlot.
+    /// Ne pas appeler avec EquipmentType.Arm — géré séparément.
+    /// </summary>
+    private static EquipmentSlot EquipmentTypeToSlot(EquipmentType type)
+    {
+        return type switch
+        {
+            EquipmentType.Head  => EquipmentSlot.Head,
+            EquipmentType.Torso => EquipmentSlot.Torso,
+            EquipmentType.Legs  => EquipmentSlot.Legs,
+            _                   => EquipmentSlot.Head // fallback (ne devrait pas arriver)
+        };
     }
 
     // -----------------------------------------------

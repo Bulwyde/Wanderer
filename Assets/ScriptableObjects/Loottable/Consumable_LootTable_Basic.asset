@@ -1,0 +1,17 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 89ff0b5dd9d418544b2c3a658e2f35e2, type: 3}
+  m_Name: Consumable_LootTable_Basic
+  m_EditorClassIdentifier: Assembly-CSharp::ConsumableLootTable
+  consumables:
+  - {fileID: 11400000, guid: d6c4a653009701145be19cc2e5d6958c, type: 2}
+  - {fileID: 11400000, guid: 04445750443ee984c9e8f37267ee79b7, type: 2}

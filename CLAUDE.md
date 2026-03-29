@@ -148,7 +148,7 @@ public enum EventCellMode { ManualList, FromPool }
   - `ApplyEffect` (skill joueur) : `toEnemy = effect.target != EffectTarget.Self`
   - `ApplyEnemyEffect` (skill ennemi) : `toEnemy = effect.target == EffectTarget.Self` (logique inversée — "Self" pour l'ennemi = l'ennemi lui-même)
   - `ApplyConsumableEffect` : même logique que `ApplyEffect`
-- **Loot** : tirage aléatoire Fisher-Yates dans `EnemyData.lootPool`, affichage de `lootOfferCount` cartes via `LootCard`
+- **Loot** : tirage aléatoire Fisher-Yates dans `EnemyData.lootPool`, délégué à `EquipmentOfferController.StartOffresSimultanées()`. `lootContinueButton` affiché via `SetActive(true)` dans `ShowLootPanel()` et masqué dans `Start()`.
 - **Consommables en combat** : `SpawnConsumableButtons()` génère les boutons depuis `RunManager.GetConsumables()`. Boutons bloqués pendant le tour ennemi / fin de combat.
 - **Modules en combat** :
   - `isFirstTurn` (bool) : vrai jusqu'au premier `StartPlayerTurn()`. Permet d'appliquer les modules `OnFightStart` **après** le reset d'armure initial.
@@ -174,6 +174,31 @@ public enum EventCellMode { ManualList, FromPool }
 **`LootCard.cs`**
 - `Setup(EquipmentData equip, Action<EquipmentData> callback)`
 - `SetSelected(bool)` pour le feedback visuel de sélection
+- `SetInteractable(bool)` pour verrouiller la carte après sélection
+- `Equipment` (propriété publique) — retourne l'`EquipmentData` associée
+
+**`EquipmentOfferController.cs`** — MonoBehaviour partagé entre Combat et Event
+- Gère l'affichage et la résolution des offres d'équipement (LootCards + sélection slot bras)
+- Deux modes : `StartOffresSimultanées(List<EquipmentData>, Action)` (combat) et `StartOffresSequentielles(List<EquipmentData>, Action)` (event)
+- `Awake()` : branche les listeners skip/bras, désactive `armSelectionPanel`, appelle `gameObject.SetActive(false)`
+- **Mode simultané** : toutes les cartes affichées, le joueur en choisit une. Après choix, cartes verrouillées, callback appelé — le GO ne se désactive **pas** (le panel parent gère sa propre fermeture).
+- **Mode séquentiel** : une carte à la fois avec bouton "Passer". Quand la file est vide : `gameObject.SetActive(false)` puis callback.
+- `OnCardChosen` vérifie `IsSlotFree(Arm1)` puis `IsSlotFree(Arm2)` avant d'afficher `ArmSelectionPanel` — auto-équipement si un slot est libre.
+- ⚠️ Laisser `skipButton` non assigné en mode simultané (combat).
+
+Structure du prefab recommandée :
+```
+EquipmentOfferArea        ← ce composant (EquipmentOfferController)
+  ├─ LootCardContainer    (Transform — Horizontal Layout Group)
+  ├─ SkipButton           (Button — optionnel, séquentiel uniquement)
+  └─ ArmSelectionPanel    (GameObject — désactivé par défaut)
+       ├─ Arm1Button      (Button)
+       └─ Arm2Button      (Button)
+```
+
+⚠️ **Piège** : `EquipmentOfferController.Awake()` désactive son GO. Si `lootContinueButton` (Combat) ou `continueButton` (Event) est **enfant** de ce GO, il sera invisible au démarrage. Placer ces boutons comme **frères** de `EquipmentOfferArea`, pas à l'intérieur.
+
+⚠️ **Piège** : `lootContinueButton` doit être explicitement caché dans `CombatManager.Start()` (`SetActive(false)`) puis réactivé dans `ShowLootPanel()` — sans ça, il est cliquable avant la fin du combat.
 
 ---
 
@@ -182,7 +207,10 @@ public enum EventCellMode { ManualList, FromPool }
 **`EventManager.cs`**
 - Lit `RunManager.currentSpecificEventID` → cherche dans `EventDatabase` → affiche titre, description, boutons de choix
 - `SpawnChoiceButtons()` : instancie dynamiquement les boutons depuis le prefab
-- Après choix : applique les effets, remplace la description par `outcomeText`, affiche le bouton "Continuer"
+- Après choix : applique les effets via `ApplyEffects()`, remplace la description par `outcomeText`, supprime les boutons
+- Si des équipements ne peuvent pas être auto-équipés → `pendingEquipmentOffers` (List) → `equipmentOfferController.StartOffresSequentielles(...)` → callback `OnEquipementResolu()`
+- Si aucun équipement en attente → `MontrerContinueButton()` directement
+- `MontrerContinueButton()` : remonte toute la hiérarchie jusqu'au Canvas et active chaque parent avant d'activer le bouton (protège contre les panels désactivés)
 - "Continuer" → `RunManager.MarkEventPlayed(eventID)` → `RunManager.ClearCurrentRoom()` → `GoToNavigation()`
 - ⚠️ Système d'effets propre (`EventEffect` / `EventEffectType`) — indépendant de `EffectData`
 
@@ -197,16 +225,23 @@ public List<EventChoice> choices;
 public string choiceText, outcomeText;
 public List<EventEffect> effects;
 
-// EventEffect — champs utilisés selon le type :
+// EventEffect — champs affichés conditionnellement via EventEffectDrawer (CustomPropertyDrawer) :
 public EventEffectType type;
-public int value;                        // ModifyHP, ModifyMaxHP
-public ConsumableData consumableToGive;  // GainConsumable
-public GainModuleMode gainModuleMode;    // GainModule : FromList ou FromLootTable
-public List<ModuleData> modulesToGive;   // GainModule → FromList (tous donnés, doublons ignorés)
-public ModuleLootTable moduleLootTable;  // GainModule → FromLootTable (tirage aléatoire)
-public string flagKey;                   // SetEventFlag
-public bool flagValue;                   // SetEventFlag
+public int value;                              // ModifyHP, ModifyMaxHP
+public GainConsumableMode gainConsumableMode;  // GainConsumable : FromList ou FromLootTable
+public List<ConsumableData> consumablesToGive; // GainConsumable → FromList
+public ConsumableLootTable consumableLootTable;// GainConsumable → FromLootTable
+public GainModuleMode gainModuleMode;          // GainModule : FromList ou FromLootTable
+public List<ModuleData> modulesToGive;         // GainModule → FromList (anti-doublon)
+public ModuleLootTable moduleLootTable;        // GainModule → FromLootTable
+public GainEquipmentMode gainEquipmentMode;    // GainEquipment : FromList ou FromLootTable
+public List<EquipmentData> equipmentsToGive;   // GainEquipment → FromList
+public EquipmentLootTable equipmentLootTable;  // GainEquipment → FromLootTable
+public string flagKey;                         // SetEventFlag
+public bool flagValue;                         // SetEventFlag
 ```
+
+⚠️ **Ne jamais mettre `[Header]` sur des champs d'une classe gérée par un `CustomPropertyDrawer`** — Unity rend les headers dans `OnGUI` mais ne les inclut pas dans `GetPropertyHeight`, causant des décalages/chevauchements dans l'Inspector.
 
 **`EventEffectType` implémentés :**
 | Type | Effet | Champ(s) |
@@ -214,11 +249,14 @@ public bool flagValue;                   // SetEventFlag
 | `ModifyHP` | Soigne/blesse le joueur (plancher à 1) | `value` |
 | `ModifyMaxHP` | Modifie les HP max (plancher à 1, clamp HP courants) | `value` |
 | `HealToFull` | Soin complet | — |
-| `GainConsumable` | Donne un consommable si slot libre | `consumableToGive` |
-| `GainModule` | Donne un ou des modules (anti-doublon) | voir `GainModuleMode` |
+| `GainConsumable` | Donne un ou des consommables si slot libre | `gainConsumableMode` + `consumablesToGive` ou `consumableLootTable` |
+| `GainModule` | Donne un ou des modules (anti-doublon) | `gainModuleMode` + `modulesToGive` ou `moduleLootTable` |
+| `GainEquipment` | Donne un équipement (auto-équipe si slot libre, sinon propose remplacement) | `gainEquipmentMode` + `equipmentsToGive` ou `equipmentLootTable` |
 | `SetEventFlag` | Pose un flag booléen dans RunManager | `flagKey`, `flagValue` |
 
-⚠️ **`GainConsumable` plein** : si l'inventaire est plein, l'objet n'est pas donné (log console). À terme, il faudra afficher un message au joueur et lui permettre de se débarrasser d'un consommable manuellement.
+⚠️ **`GainConsumable` plein** : si l'inventaire est plein, l'objet n'est pas donné (log console). À terme, afficher un message et permettre de jeter un consommable manuellement.
+
+⚠️ **`GainEquipment` slot occupé** : passe par `EquipmentOfferController.StartOffresSequentielles` — le joueur voit la carte et peut choisir de remplacer ou passer.
 
 **`EventDatabase.cs`**
 - ScriptableObject contenant une `List<EventData>`, avec `GetByID(string id)`
@@ -232,6 +270,16 @@ public bool flagValue;                   // SetEventFlag
 - ScriptableObject réutilisable (`RPG → Module Loot Table`) — `List<ModuleData> modules`
 - `GetRandom()` : exclut les modules déjà possédés (`RunManager.HasModule`) et tire au sort
 - Retourne `null` si tout est possédé
+
+**`ConsumableLootTable.cs`**
+- ScriptableObject (`RPG → Consumable Loot Table`) — `List<ConsumableData> consumables`
+- `GetRandom()` : tire au sort (pas de filtre "déjà possédé" — les consommables peuvent se cumuler)
+- Retourne `null` si la liste est vide
+
+**`EquipmentLootTable.cs`**
+- ScriptableObject (`RPG → Equipment Loot Table`) — `List<EquipmentData> equipments`
+- `GetRandom()` : tire au sort (pas de filtre — les slots peuvent être remplacés)
+- Retourne `null` si la liste est vide
 
 ---
 
@@ -393,10 +441,16 @@ Canvas
 - **`ModuleLootTable`** : ScriptableObject pour tirer un module aléatoire non encore possédé
 - **`EventPool`** : ScriptableObject pour tirer un event aléatoire non encore joué
 - Éditeur de carte (`MapEditorWindow`) : gestion des deux modes de pool d'events par case
+- **`ConsumableLootTable` / `EquipmentLootTable`** : ScriptableObjects pour loot tables de consommables et d'équipements
+- **`GainEquipment`** dans `EventEffectType` : donne un équipement depuis une liste ou une loot table, avec auto-équipement si slot libre et proposition de remplacement sinon
+- **`EquipmentOfferController`** : logique d'offre d'équipement factorisée, partagée entre Combat (mode simultané) et Event (mode séquentiel)
+- **`EventEffectDrawer`** (`Assets/Editor`) : `CustomPropertyDrawer` sur `EventEffect` — masque les champs inutiles selon le type et le mode sélectionné dans l'Inspector
 
 ### En cours / À faire 🔧
-- **Loot tables consommables** : même principe que `ModuleLootTable` — `ConsumableLootTable` ScriptableObject avec `GetRandom()`. À brancher dans `EventEffect.GainConsumable` (mode liste ou loot table). ⚠️ Également prévoir la gestion du plein : afficher un message au joueur et lui permettre de jeter un consommable manuellement.
-- **Loot tables équipements** : même principe — `EquipmentLootTable` ScriptableObject. À brancher dans un futur `EventEffect.GainEquipment` (mode liste ou loot table).
+- **Loot tables consommables** : ✅ `ConsumableLootTable` ScriptableObject créé. `GainConsumable` supporte `FromList` et `FromLootTable`. ⚠️ Si inventaire plein : objet non donné (log console) — à terme, message joueur + jeter manuellement.
+- **Loot tables équipements** : ✅ `EquipmentLootTable` ScriptableObject créé. `GainEquipment` dans `EventEffectType`, modes `FromList` et `FromLootTable`. Auto-équipement si slot libre, sinon passage par `EquipmentOfferController`.
+- **`EquipmentOfferController`** : ✅ MonoBehaviour partagé Combat/Event pour l'affichage et la résolution des offres d'équipement. `CombatManager` et `EventManager` lui délèguent entièrement cette logique.
+- **Inspector conditionnel (`EventEffectDrawer`)** : ✅ `CustomPropertyDrawer` sur `EventEffect` — affiche uniquement les champs pertinents selon le type et le mode sélectionné.
 - `passiveEffects` sur `EquipmentData` : champ défini mais non branché dans `CombatManager` — à implémenter comme les modules (triggers + `ApplyModuleEffect`)
 - Scène MainMenu (sélection de personnage non branchée)
 - Effets de combat non implémentés : `ModifyStat`
@@ -424,3 +478,7 @@ Canvas
 7. **ModuleManager — événement statique vs instance** : `OnModulesChanged` est statique → le HUD fonctionne sans instance. Mais les abonnements aux `GameEvents` nécessitent une instance → sans `ModuleManager` dans la scène, les effets ne se déclenchent pas même si les icônes s'affichent.
 8. **OnFightStart et reset d'armure** : les modules `OnFightStart` sont appliqués dans `StartPlayerTurn()` après `currentPlayerArmor = 0`, grâce au flag `isFirstTurn`. Ne pas déplacer cet appel avant le reset.
 9. **GUILayout Begin/End dans les boucles Editor** : tout `EditorGUILayout.BeginHorizontal()` doit avoir son `EndHorizontal()` appelé dans **tous** les chemins d'exécution, y compris avant un `break`. Sinon : `GUI Error: Invalid GUILayout state`.
+10. **`[Header]` dans un `CustomPropertyDrawer`** : Unity rend les attributs `[Header]` dans `OnGUI` mais ne les inclut pas dans `GetPropertyHeight`. Résultat : les champs se chevauchent. Ne jamais mettre `[Header]` sur des champs d'une classe gérée par un `CustomPropertyDrawer`.
+11. **`SetActive(true)` sur un enfant d'un GO inactif** : l'enfant ne devient pas visible — il faut activer tous les parents jusqu'au Canvas d'abord. `MontrerContinueButton()` dans `EventManager` illustre ce pattern (boucle sur `transform.parent` jusqu'au Canvas).
+12. **`interactable = true` ≠ visible** : sur un `Button`, `interactable = true` ne rend pas le GO actif. Toujours faire `gameObject.SetActive(true)` en plus si le GO peut être inactif.
+13. **`EquipmentOfferController` + bouton "Continuer"** : le controller se désactive lui-même via `Awake()`. Tout bouton "Continuer" doit être **frère** du GO `EquipmentOfferArea`, jamais enfant — sinon il disparaît avec le controller. En Combat, le `lootContinueButton` doit aussi être explicitement masqué dans `Start()` (il serait cliquable pendant le combat sinon).

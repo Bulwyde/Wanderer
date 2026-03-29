@@ -97,19 +97,11 @@ public class CombatManager : MonoBehaviour
     // Panel principal affiché après une victoire
     public GameObject lootPanel;
 
-    // Conteneur des cartes d'équipement (ex : Horizontal Layout Group)
-    public Transform lootCardContainer;
-
-    // Préfab d'une carte — doit avoir le composant LootCard
-    public GameObject lootCardPrefab;
-
-    // Bouton "Continuer" du panel loot — actif dès qu'une pièce est choisie (ou si aucun loot)
+    // Bouton "Continuer" du panel loot — toujours actif (le joueur peut ignorer le loot)
     public Button lootContinueButton;
 
-    // Sous-panel de choix du slot bras (visible uniquement quand les deux bras sont occupés)
-    public GameObject armSelectionPanel;
-    public Button     armSelectArm1Button; // "Bras gauche"
-    public Button     armSelectArm2Button; // "Bras droit"
+    // Contrôleur partagé qui gère l'affichage et la résolution des cartes de loot
+    public EquipmentOfferController equipmentOfferController;
 
     // -----------------------------------------------
     // ÉTAT INTERNE
@@ -166,11 +158,6 @@ public class CombatManager : MonoBehaviour
     private Dictionary<StatusData, int> playerStatuses = new Dictionary<StatusData, int>();
     private Dictionary<StatusData, int> enemyStatuses  = new Dictionary<StatusData, int>();
 
-    // Cartes de loot instanciées — on les garde pour gérer la sélection visuelle
-    private List<LootCard> spawnedLootCards = new List<LootCard>();
-
-    // La pièce que le joueur a sélectionnée (avant confirmation du slot pour les bras)
-    private EquipmentData pendingLootChoice;
 
     // -----------------------------------------------
     // INITIALISATION
@@ -182,14 +169,10 @@ public class CombatManager : MonoBehaviour
         if (endButton          != null) endButton.onClick.AddListener(OnEndButtonClicked);
         if (victoireButton     != null) victoireButton.onClick.AddListener(OnVictoireCheat);
         if (lootContinueButton != null) lootContinueButton.onClick.AddListener(OnLootContinueClicked);
-        if (armSelectArm1Button != null)
-            armSelectArm1Button.onClick.AddListener(() => ConfirmArmPlacement(EquipmentSlot.Arm1));
-        if (armSelectArm2Button != null)
-            armSelectArm2Button.onClick.AddListener(() => ConfirmArmPlacement(EquipmentSlot.Arm2));
 
-        if (endPanel          != null) endPanel.SetActive(false);
-        if (lootPanel         != null) lootPanel.SetActive(false);
-        if (armSelectionPanel != null) armSelectionPanel.SetActive(false);
+        if (endPanel           != null) endPanel.SetActive(false);
+        if (lootPanel          != null) lootPanel.SetActive(false);
+        if (lootContinueButton != null) lootContinueButton.gameObject.SetActive(false);
 
         InitializeCombat();
     }
@@ -1234,7 +1217,8 @@ public class CombatManager : MonoBehaviour
 
     /// <summary>
     /// Affiche le panel de loot avec 2-3 pièces tirées au hasard dans le lootPool de l'ennemi.
-    /// Si le pool est vide, active directement le bouton "Continuer".
+    /// Délègue l'affichage des cartes et la résolution à EquipmentOfferController.
+    /// Le bouton "Continuer" est toujours actif : le joueur peut ignorer le loot.
     /// </summary>
     private void ShowLootPanel()
     {
@@ -1245,37 +1229,21 @@ public class CombatManager : MonoBehaviour
         // Fait avant l'affichage des cartes pour que le log soit cohérent
         TryGrantConsumableLoot();
 
-        // Nettoie les cartes précédentes (au cas où)
-        foreach (LootCard card in spawnedLootCards)
-            if (card != null) Destroy(card.gameObject);
-        spawnedLootCards.Clear();
-        pendingLootChoice = null;
+        // Le bouton "Continuer" est toujours visible et cliquable dès l'ouverture du panel.
+        // SetActive(true) est nécessaire en plus de interactable : si le bouton est enfant de
+        // EquipmentOfferArea (désactivé par Awake), il reste invisible sans ce SetActive explicite.
+        if (lootContinueButton != null)
+        {
+            lootContinueButton.gameObject.SetActive(true);
+            lootContinueButton.interactable = true;
+        }
 
-        // Tire les pièces à proposer
         List<EquipmentData> offers = PickLootOffers();
+        if (offers.Count == 0 || equipmentOfferController == null) return;
 
-        if (offers.Count == 0)
-        {
-            // Aucun loot disponible — on laisse le joueur continuer directement
-            if (lootContinueButton != null) lootContinueButton.interactable = true;
-            return;
-        }
-
-        // Le bouton "Continuer" est toujours actif : le joueur peut ignorer le loot
-        if (lootContinueButton != null) lootContinueButton.interactable = true;
-
-        // Instancie une carte par offre
-        foreach (EquipmentData equip in offers)
-        {
-            if (lootCardPrefab == null || lootCardContainer == null) break;
-
-            GameObject go = Instantiate(lootCardPrefab, lootCardContainer);
-            LootCard card = go.GetComponent<LootCard>();
-            if (card == null) continue;
-
-            card.Setup(equip, OnLootCardChosen);
-            spawnedLootCards.Add(card);
-        }
+        // Délègue l'affichage et la résolution au controller partagé
+        // Callback null : "Continuer" était déjà actif, aucune action supplémentaire requise
+        equipmentOfferController.StartOffresSimultanées(offers, null);
     }
 
     /// <summary>
@@ -1324,110 +1292,6 @@ public class CombatManager : MonoBehaviour
             Log($"Consommable obtenu : {granted.consumableName}");
     }
 
-    /// <summary>
-    /// Appelé quand le joueur clique sur une carte de loot.
-    /// - Pièce non-bras : équipe immédiatement dans son slot.
-    /// - Pièce bras + au moins un slot libre : équipe dans le slot libre.
-    /// - Pièce bras + les deux slots occupés : affiche le sous-panel de choix.
-    /// </summary>
-    private void OnLootCardChosen(EquipmentData chosen)
-    {
-        // Mise à jour visuelle : sélectionne la carte cliquée, déselectionne les autres
-        foreach (LootCard card in spawnedLootCards)
-            card.SetSelected(card.Equipment == chosen);
-
-        pendingLootChoice = chosen;
-
-        bool isArm = chosen.equipmentType == EquipmentType.Arm;
-
-        if (!isArm)
-        {
-            // Slot unique (Tête, Torse, Jambes) → équipe directement dans le slot correspondant
-            FinalizeEquip(EquipmentTypeToSlot(chosen.equipmentType), chosen);
-        }
-        else
-        {
-            // Pièce de bras : cherche un slot libre en priorité
-            bool arm1Free = RunManager.Instance == null || RunManager.Instance.IsSlotFree(EquipmentSlot.Arm1);
-            bool arm2Free = RunManager.Instance == null || RunManager.Instance.IsSlotFree(EquipmentSlot.Arm2);
-
-            if (arm1Free)
-                FinalizeEquip(EquipmentSlot.Arm1, chosen);
-            else if (arm2Free)
-                FinalizeEquip(EquipmentSlot.Arm2, chosen);
-            else
-                ShowArmSelectionPanel(); // les deux bras sont occupés → demander au joueur
-        }
-    }
-
-    /// <summary>
-    /// Affiche le sous-panel permettant de choisir quel bras remplacer.
-    /// </summary>
-    private void ShowArmSelectionPanel()
-    {
-        if (armSelectionPanel == null) return;
-        armSelectionPanel.SetActive(true);
-
-        // Affiche le nom de la pièce actuellement équipée sur chaque bouton
-        if (armSelectArm1Button != null)
-        {
-            var label = armSelectArm1Button.GetComponentInChildren<TextMeshProUGUI>();
-            EquipmentData current1 = RunManager.Instance?.GetEquipped(EquipmentSlot.Arm1);
-            if (label != null)
-                label.text = $"Bras gauche\n({current1?.equipmentName ?? "vide"})";
-        }
-
-        if (armSelectArm2Button != null)
-        {
-            var label = armSelectArm2Button.GetComponentInChildren<TextMeshProUGUI>();
-            EquipmentData current2 = RunManager.Instance?.GetEquipped(EquipmentSlot.Arm2);
-            if (label != null)
-                label.text = $"Bras droit\n({current2?.equipmentName ?? "vide"})";
-        }
-    }
-
-    /// <summary>
-    /// Appelé quand le joueur choisit un slot de bras dans le sous-panel.
-    /// </summary>
-    private void ConfirmArmPlacement(EquipmentSlot slot)
-    {
-        if (pendingLootChoice == null) return;
-
-        if (armSelectionPanel != null) armSelectionPanel.SetActive(false);
-        FinalizeEquip(slot, pendingLootChoice);
-    }
-
-    /// <summary>
-    /// Convertit un EquipmentType (nature de la pièce) en EquipmentSlot (emplacement physique).
-    /// Ne doit pas être appelé pour EquipmentType.Arm — le slot bras est choisi par le joueur.
-    /// </summary>
-    private static EquipmentSlot EquipmentTypeToSlot(EquipmentType type)
-    {
-        return type switch
-        {
-            EquipmentType.Head  => EquipmentSlot.Head,
-            EquipmentType.Torso => EquipmentSlot.Torso,
-            EquipmentType.Legs  => EquipmentSlot.Legs,
-            _ => throw new System.ArgumentException($"Impossible de convertir {type} en slot unique.")
-        };
-    }
-
-    /// <summary>
-    /// Sauvegarde l'équipement dans le RunManager et active le bouton "Continuer".
-    /// </summary>
-    private void FinalizeEquip(EquipmentSlot slot, EquipmentData item)
-    {
-        RunManager.Instance?.EquipItem(slot, item);
-        pendingLootChoice = null;
-
-        // Verrouille toutes les cartes — le choix est définitif, on ne peut plus changer
-        foreach (LootCard card in spawnedLootCards)
-            card.SetInteractable(false);
-
-        if (lootContinueButton != null) lootContinueButton.interactable = true;
-
-        Log($"Équipement choisi : {item.equipmentName} → slot {slot}");
-    }
 
     // -----------------------------------------------
     // MISE À JOUR DE L'UI

@@ -1706,19 +1706,20 @@ MonoBehaviour:
     eventPool: {fileID: 0}
   - x: 11
     y: 9
-    cellType: 3
-    eventCellMode: 0
-    eventList: []
-    eventPool: {fileID: 0}
+    cellType: 4
+    eventCellMode: 1
+    eventList:
+    - {fileID: 0}
+    eventPool: {fileID: 11400000, guid: 060c2af15f1583544b2d071d909e44a1, type: 2}
   - x: 12
     y: 9
-    cellType: 3
-    eventCellMode: 0
+    cellType: 4
+    eventCellMode: 1
     eventList: []
-    eventPool: {fileID: 0}
+    eventPool: {fileID: 11400000, guid: 060c2af15f1583544b2d071d909e44a1, type: 2}
   - x: 13
     y: 9
-    cellType: 3
+    cellType: 4
     eventCellMode: 1
     eventList: []
     eventPool: {fileID: 11400000, guid: 060c2af15f1583544b2d071d909e44a1, type: 2}
@@ -1886,10 +1887,10 @@ MonoBehaviour:
     eventPool: {fileID: 0}
   - x: 11
     y: 10
-    cellType: 3
-    eventCellMode: 0
+    cellType: 4
+    eventCellMode: 1
     eventList: []
-    eventPool: {fileID: 0}
+    eventPool: {fileID: 11400000, guid: 060c2af15f1583544b2d071d909e44a1, type: 2}
   - x: 12
     y: 10
     cellType: 0
@@ -1898,10 +1899,11 @@ MonoBehaviour:
     eventPool: {fileID: 0}
   - x: 13
     y: 10
-    cellType: 3
-    eventCellMode: 0
-    eventList: []
-    eventPool: {fileID: 0}
+    cellType: 4
+    eventCellMode: 1
+    eventList:
+    - {fileID: 0}
+    eventPool: {fileID: 11400000, guid: 060c2af15f1583544b2d071d909e44a1, type: 2}
   - x: 14
     y: 10
     cellType: 5

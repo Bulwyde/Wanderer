@@ -14,29 +14,24 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::EventData
   eventID: event_equip_alea
   title: Event Equip Alea
-  description: "Un pr\xEAtre enchanteur vous fait face :\n\"J'ai encore assez d'\xE9nergie
-    pour vous aider aventurier. Mais je n'ai de force que pour un seul sort...\""
+  description: "Vous vous approchez d'une forge o\xF9 un homme bat le fer encore
+    bien chaud. Il vous lorgne du regard et d\xE9signe un tas de feraille du menton."
   backgroundImage: {fileID: 0}
   choices:
-  - choiceText: Lui demander de vous soigner (30 HP)
-    outcomeText: Vous vous sentez mieux.
+  - choiceText: Prendre une arme
+    outcomeText: Vous obtenez une arme.
     effects:
-    - type: 0
-      value: 30
-      consumableToGive: {fileID: 0}
-      gainModuleMode: 0
-      modulesToGive: []
-      moduleLootTable: {fileID: 0}
-      flagKey: 
-      flagValue: 0
-  - choiceText: Lui demander un petit soin (15 HP)
-    outcomeText: "Vous vous sentez l\xE9g\xE8rement mieux."
-    effects:
-    - type: 0
+    - type: 5
       value: 15
-      consumableToGive: {fileID: 0}
+      gainConsumableMode: 0
+      consumablesToGive: []
+      consumableLootTable: {fileID: 0}
       gainModuleMode: 0
       modulesToGive: []
       moduleLootTable: {fileID: 0}
+      gainEquipmentMode: 1
+      equipmentsToGive:
+      - {fileID: 0}
+      equipmentLootTable: {fileID: 11400000, guid: 303aefd091e676f45a030aa28e3a8418, type: 2}
       flagKey: 
       flagValue: 0

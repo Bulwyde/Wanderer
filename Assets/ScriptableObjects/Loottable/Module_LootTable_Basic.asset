@@ -10,7 +10,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 889f9fb495776c04da29e7f4c1240f22, type: 3}
-  m_Name: LootTable_Basic
+  m_Name: Module_LootTable_Basic
   m_EditorClassIdentifier: Assembly-CSharp::ModuleLootTable
   modules:
   - {fileID: 11400000, guid: 5cde169b0ced18c4c859df5369479675, type: 2}

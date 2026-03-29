@@ -14,29 +14,24 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::EventData
   eventID: event_equip_precis
   title: Event Equip Precis
-  description: "Un pr\xEAtre enchanteur vous fait face :\n\"J'ai encore assez d'\xE9nergie
-    pour vous aider aventurier. Mais je n'ai de force que pour un seul sort...\""
+  description: "Un homme se pr\xE9cipite sur vous et vous pose une armure dans les
+    bras."
   backgroundImage: {fileID: 0}
   choices:
-  - choiceText: Lui demander de vous soigner (30 HP)
-    outcomeText: Vous vous sentez mieux.
+  - choiceText: Ok ?
+    outcomeText: "Vous avez gagn\xE9 une armure."
     effects:
-    - type: 0
+    - type: 5
       value: 30
-      consumableToGive: {fileID: 0}
+      gainConsumableMode: 0
+      consumablesToGive: []
+      consumableLootTable: {fileID: 0}
       gainModuleMode: 0
       modulesToGive: []
       moduleLootTable: {fileID: 0}
-      flagKey: 
-      flagValue: 0
-  - choiceText: Lui demander un petit soin (15 HP)
-    outcomeText: "Vous vous sentez l\xE9g\xE8rement mieux."
-    effects:
-    - type: 0
-      value: 15
-      consumableToGive: {fileID: 0}
-      gainModuleMode: 0
-      modulesToGive: []
-      moduleLootTable: {fileID: 0}
+      gainEquipmentMode: 0
+      equipmentsToGive:
+      - {fileID: 11400000, guid: 7240fdddf83b30d4e95f7ccaf85c0b17, type: 2}
+      equipmentLootTable: {fileID: 0}
       flagKey: 
       flagValue: 0

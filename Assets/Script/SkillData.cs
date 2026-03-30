@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections.Generic;
 
 /// <summary>
 /// Définit une compétence active utilisable en combat.
@@ -41,6 +42,20 @@ public class SkillData : ScriptableObject
     // Tags internes pour la gestion et les interactions
     // Ex : "Physique", "Magie", "Soin", "Zone"
     public string[] tags;
+
+    // -----------------------------------------------
+    // COMPÉTENCE DE NAVIGATION (jambes)
+    // -----------------------------------------------
+
+    [Header("Compétence de navigation")]
+    // Si vrai, cette compétence s'utilise sur la carte de navigation (pas en combat).
+    // Typiquement réservé aux équipements de jambes.
+    // Les champs energyCost et cooldown sont ignorés hors combat.
+    public bool isNavigationSkill = false;
+
+    // Effets déclenchés quand la compétence est utilisée depuis la carte.
+    // Ignorés si isNavigationSkill = false ou si la liste est vide.
+    public List<NavEffect> navEffects = new List<NavEffect>();
 }
 
 /// <summary>

@@ -1,20 +1,37 @@
 using UnityEngine;
+using UnityEngine.UI;
 using System.Collections.Generic;
+using TMPro;
 
 /// <summary>
 /// Gère la navigation du joueur sur la carte.
 /// Calcule la visibilité des cases selon la position du joueur
 /// et les murs qui bloquent la ligne de vue.
+///
+/// Fournit aussi :
+///   - L'exécution des NavEffects (AppliquerEffetNav / AppliquerEffetsNav)
+///   - Le mode de sélection de zone par clic (RevealZoneChoice)
+///   - L'UI des consommables et compétences de jambes utilisables sur la carte
+///
+/// Setup scène recommandé :
+///   Canvas
+///   ├── mapContainer (RectTransform, déplacé par MapCameraController)
+///   └── NavigationHUD (enfant direct du Canvas)
+///       ├── HPText (TextMeshPro)
+///       ├── ConsommableContainer (HorizontalLayoutGroup) ← optionnel
+///       └── SkillContainer (HorizontalLayoutGroup)       ← optionnel
 /// </summary>
 public class NavigationManager : MonoBehaviour
 {
     [Header("Références")]
     public MapData mapData;
     public MapRenderer mapRenderer;
+    // Données du personnage en cours — fournit baseVisionRange et pourra fournir d'autres stats de navigation.
+    // Assigner le même CharacterData que celui utilisé dans CombatManager.
+    public CharacterData characterData;
 
     [Header("Visibilité")]
-    // Portée de vision du joueur en nombre de cases
-    public int visionRange = 1;
+    // La portée effective = characterData.baseVisionRange + RunManager.visionRangeBonus.
 
     // Position actuelle du joueur — accessibles par MapRenderer
     public int PlayerX { get; private set; }
@@ -28,6 +45,31 @@ public class NavigationManager : MonoBehaviour
 
     // Cases déjà vues — restent révélées même hors champ de vision
     private HashSet<Vector2Int> exploredCells = new HashSet<Vector2Int>();
+
+    // -----------------------------------------------
+    // MODE SÉLECTION DE ZONE (RevealZoneChoice)
+    // -----------------------------------------------
+
+    // Activé quand un effet RevealZoneChoice est en attente du clic du joueur.
+    // Les déplacements clavier sont bloqués pendant ce mode.
+    private bool modeSelectionZone = false;
+    private int selectionRayon = 1;
+
+    // -----------------------------------------------
+    // UI NAVIGATION
+    // -----------------------------------------------
+
+    [Header("UI — Consommables sur la carte")]
+    // Container des boutons de consommables (optionnel — si null, l'UI est ignorée)
+    public Transform consommableContainer;
+    // Prefab de bouton consommable — doit avoir un composant ConsumableButton
+    public GameObject consommablePrefab;
+
+    [Header("UI — Compétences de jambes")]
+    // Container des boutons de compétences de navigation (optionnel)
+    public Transform skillContainer;
+    // Prefab de bouton skill de navigation — doit avoir un Button + TextMeshProUGUI enfant
+    public GameObject navSkillPrefab;
 
     void Start()
     {
@@ -47,10 +89,20 @@ public class NavigationManager : MonoBehaviour
         UpdateVisibility();
         mapRenderer.RefreshMap();
         mapRenderer.CenterCameraOnPlayer();
+
+        // Génère les boutons UI (consommables + skills jambes)
+        RafraichirUINavigation();
     }
 
     void Update()
     {
+        // En mode sélection de zone : bloquer navigation clavier, attendre un clic
+        if (modeSelectionZone)
+        {
+            GererSelectionZone();
+            return;
+        }
+
         if (Input.GetKeyDown(KeyCode.UpArrow))    TryMove(0, -1);
         if (Input.GetKeyDown(KeyCode.DownArrow))  TryMove(0, 1);
         if (Input.GetKeyDown(KeyCode.LeftArrow))  TryMove(-1, 0);
@@ -148,35 +200,39 @@ public class NavigationManager : MonoBehaviour
     // VISIBILITÉ
     // -----------------------------------------------
 
-private void UpdateVisibility()
-{
-    visibleCells.Clear();
+    private int PorteeVisionEffective =>
+        (characterData != null ? characterData.baseVisionRange : 1) +
+        (RunManager.Instance != null ? RunManager.Instance.visionRangeBonus : 0);
 
-    for (int dy = -visionRange; dy <= visionRange; dy++)
+    private void UpdateVisibility()
     {
-        for (int dx = -visionRange; dx <= visionRange; dx++)
+        visibleCells.Clear();
+        int portee = PorteeVisionEffective;
+
+        for (int dy = -portee; dy <= portee; dy++)
         {
-            int checkX = PlayerX + dx;
-            int checkY = PlayerY + dy;
-
-            if (checkX < 0 || checkX >= mapData.width ||
-                checkY < 0 || checkY >= mapData.height)
-                continue;
-
-            // Distance de Tchebychev remplacée par distance euclidienne
-            // Une case diagonale à visionRange=1 aura distance ≈ 1.41 → non visible
-            float distance = Mathf.Sqrt(dx * dx + dy * dy);
-            if (distance > visionRange) continue;
-
-            if (HasClearLineOfSight(PlayerX, PlayerY, checkX, checkY))
+            for (int dx = -portee; dx <= portee; dx++)
             {
-                Vector2Int pos = new Vector2Int(checkX, checkY);
-                visibleCells.Add(pos);
-                exploredCells.Add(pos);
+                int checkX = PlayerX + dx;
+                int checkY = PlayerY + dy;
+
+                if (checkX < 0 || checkX >= mapData.width ||
+                    checkY < 0 || checkY >= mapData.height)
+                    continue;
+
+                // Distance euclidienne — les diagonales à portée = 1 auront distance ≈ 1.41 → non visibles
+                float distance = Mathf.Sqrt(dx * dx + dy * dy);
+                if (distance > portee) continue;
+
+                if (HasClearLineOfSight(PlayerX, PlayerY, checkX, checkY))
+                {
+                    Vector2Int pos = new Vector2Int(checkX, checkY);
+                    visibleCells.Add(pos);
+                    exploredCells.Add(pos);
+                }
             }
         }
     }
-}
 
     /// <summary>
     /// Vérifie si la ligne de vue entre deux cases est dégagée.
@@ -358,5 +414,319 @@ private void UpdateVisibility()
                 Debug.Log($"({PlayerX},{PlayerY}) — Case vide, pas de transition");
                 break;
         }
+    }
+
+    // -----------------------------------------------
+    // EFFETS DE NAVIGATION
+    // -----------------------------------------------
+
+    /// <summary>
+    /// Applique une liste d'effets de navigation dans l'ordre.
+    /// Si plusieurs effets sont présents, ils s'exécutent séquentiellement —
+    /// sauf RevealZoneChoice qui bloque jusqu'au clic du joueur.
+    /// </summary>
+    public void AppliquerEffetsNav(List<NavEffect> effects)
+    {
+        if (effects == null) return;
+        foreach (NavEffect effect in effects)
+            AppliquerEffetNav(effect);
+    }
+
+    /// <summary>
+    /// Applique un seul effet de navigation.
+    /// </summary>
+    public void AppliquerEffetNav(NavEffect effect)
+    {
+        if (effect == null) return;
+
+        switch (effect.type)
+        {
+            case NavEffectType.TeleportRandom:
+                AppliquerTeleportRandom(effect.allowedCellTypes);
+                break;
+
+            case NavEffectType.RevealZoneRandom:
+                AppliquerRevealZoneRandom(effect.value);
+                break;
+
+            case NavEffectType.RevealZoneChoice:
+                // Active le mode sélection — le joueur choisit la zone par clic
+                DemarrerSelectionZone(effect.value);
+                break;
+
+            case NavEffectType.IncreaseVisionRange:
+                AppliquerBonusVision(effect.value);
+                break;
+
+            case NavEffectType.IncrementCounter:
+                RunManager.Instance?.IncrementCounter(effect.counterKey, effect.value);
+                break;
+        }
+    }
+
+    // -----------------------------------------------
+    // IMPLÉMENTATION DES EFFETS
+    // -----------------------------------------------
+
+    /// <summary>
+    /// Téléporte le joueur vers une case aléatoire (filtrée par allowedCellTypes).
+    /// Si la liste est vide, toutes les cases navigables sont acceptées.
+    /// La case actuelle du joueur est exclue.
+    /// </summary>
+    private void AppliquerTeleportRandom(List<CellType> allowedTypes)
+    {
+        List<CellData> valides = new List<CellData>();
+        foreach (CellData cell in mapData.cells)
+        {
+            if (cell == null) continue;
+            if (cell.cellType == CellType.NonNavigable) continue;
+            // Filtre par types si une liste est fournie
+            if (allowedTypes != null && allowedTypes.Count > 0 &&
+                !allowedTypes.Contains(cell.cellType)) continue;
+            // Exclure la position actuelle
+            if (cell.x == PlayerX && cell.y == PlayerY) continue;
+            valides.Add(cell);
+        }
+
+        if (valides.Count == 0)
+        {
+            Debug.LogWarning("[Navigation] Téléportation impossible — aucune case valide trouvée.");
+            return;
+        }
+
+        CellData cible = valides[Random.Range(0, valides.Count)];
+        TeleporterJoueur(cible.x, cible.y);
+    }
+
+    /// <summary>
+    /// Révèle une zone autour d'une case choisie aléatoirement parmi les cases navigables.
+    /// </summary>
+    private void AppliquerRevealZoneRandom(int rayon)
+    {
+        List<CellData> navigables = new List<CellData>();
+        foreach (CellData cell in mapData.cells)
+        {
+            if (cell != null && cell.cellType != CellType.NonNavigable)
+                navigables.Add(cell);
+        }
+
+        if (navigables.Count == 0) return;
+
+        CellData centre = navigables[Random.Range(0, navigables.Count)];
+        RevelerZone(centre.x, centre.y, rayon);
+        Debug.Log($"[Navigation] Zone aléatoire révélée autour de ({centre.x},{centre.y}), rayon {rayon}.");
+    }
+
+    /// <summary>
+    /// Augmente la portée de vision du joueur de `delta` cases (permanent pour le run).
+    /// Met à jour la visibilité immédiatement.
+    /// </summary>
+    private void AppliquerBonusVision(int delta)
+    {
+        if (RunManager.Instance != null)
+            RunManager.Instance.visionRangeBonus += delta;
+
+        UpdateVisibility();
+        mapRenderer.RefreshMap();
+        Debug.Log($"[Navigation] Portée de vision +{delta} (effective : {PorteeVisionEffective}).");
+    }
+
+    // -----------------------------------------------
+    // TÉLÉPORTATION ET RÉVÉLATION
+    // -----------------------------------------------
+
+    /// <summary>
+    /// Téléporte le joueur vers la case (targetX, targetY) sans déclencher OnRoomEntered.
+    /// Met à jour la visibilité, l'affichage et centre la caméra.
+    /// </summary>
+    public void TeleporterJoueur(int targetX, int targetY)
+    {
+        PlayerX = targetX;
+        PlayerY = targetY;
+        visitedCells.Add(new Vector2Int(PlayerX, PlayerY));
+
+        UpdateVisibility();
+        mapRenderer.RefreshMap();
+        mapRenderer.CenterCameraOnPlayer();
+        Debug.Log($"[Navigation] Joueur téléporté en ({targetX}, {targetY}).");
+    }
+
+    /// <summary>
+    /// Révèle toutes les cases dans un carré (2*rayon+1)×(2*rayon+1) centré en (centreX, centreY).
+    /// Les cases révélées rejoignent exploredCells — elles restent visibles même hors vision directe.
+    /// </summary>
+    public void RevelerZone(int centreX, int centreY, int rayon)
+    {
+        for (int dy = -rayon; dy <= rayon; dy++)
+        {
+            for (int dx = -rayon; dx <= rayon; dx++)
+            {
+                int x = centreX + dx;
+                int y = centreY + dy;
+                if (x < 0 || x >= mapData.width || y < 0 || y >= mapData.height) continue;
+                exploredCells.Add(new Vector2Int(x, y));
+            }
+        }
+
+        mapRenderer.RefreshMap();
+        Debug.Log($"[Navigation] Zone {rayon * 2 + 1}x{rayon * 2 + 1} révélée autour de ({centreX},{centreY}).");
+    }
+
+    // -----------------------------------------------
+    // SÉLECTION DE ZONE PAR CLIC (RevealZoneChoice)
+    // -----------------------------------------------
+
+    /// <summary>
+    /// Active le mode sélection de zone.
+    /// Le joueur doit cliquer sur la carte pour choisir le centre de la révélation.
+    /// Les déplacements clavier sont bloqués jusqu'au clic.
+    /// </summary>
+    public void DemarrerSelectionZone(int rayon)
+    {
+        modeSelectionZone = true;
+        selectionRayon    = rayon;
+        Debug.Log($"[Navigation] Sélection de zone activée — cliquez sur la carte pour révéler " +
+                  $"une zone {rayon * 2 + 1}x{rayon * 2 + 1}.");
+    }
+
+    /// <summary>
+    /// Gère le clic du joueur en mode sélection de zone.
+    /// Convertit la position écran en coordonnées de case, puis révèle la zone.
+    /// </summary>
+    private void GererSelectionZone()
+    {
+        if (!Input.GetMouseButtonDown(0)) return;
+
+        // Convertit la position écran en position locale dans le mapContainer
+        RectTransform mapContainerRect = mapRenderer.mapContainer;
+        Canvas canvas = mapContainerRect.GetComponentInParent<Canvas>();
+        Camera canvasCamera = (canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay)
+            ? canvas.worldCamera : null;
+
+        if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(
+            mapContainerRect, Input.mousePosition, canvasCamera, out Vector2 localPos))
+            return;
+
+        // Convertit les coordonnées locales en indices de case
+        float step = mapRenderer.cellSize + mapRenderer.wallThickness;
+        int cellX = Mathf.FloorToInt((localPos.x - mapRenderer.wallThickness) / step);
+        int flippedY = Mathf.FloorToInt((localPos.y - mapRenderer.wallThickness) / step);
+        int cellY = mapData.height - 1 - flippedY;
+
+        // Vérifie que la case est dans les limites de la carte
+        if (cellX < 0 || cellX >= mapData.width ||
+            cellY < 0 || cellY >= mapData.height)
+        {
+            Debug.Log("[Navigation] Clic hors de la carte — veuillez cliquer sur une case valide.");
+            return;
+        }
+
+        // Quitte le mode sélection avant d'appliquer (évite toute réentrance)
+        modeSelectionZone = false;
+        RevelerZone(cellX, cellY, selectionRayon);
+        Debug.Log($"[Navigation] Case ({cellX},{cellY}) choisie — zone révélée.");
+    }
+
+    // -----------------------------------------------
+    // UI NAVIGATION (consommables + compétences jambes)
+    // -----------------------------------------------
+
+    /// <summary>
+    /// Recrée tous les boutons de l'UI de navigation.
+    /// Appelé au Start et après utilisation d'un consommable.
+    /// </summary>
+    public void RafraichirUINavigation()
+    {
+        SpawnConsommablesNav();
+        SpawnSkillsJambes();
+    }
+
+    /// <summary>
+    /// Génère les boutons pour les consommables utilisables sur la carte.
+    /// Un bouton est créé pour chaque consommable avec usableOnMap = true
+    /// et au moins un mapEffect défini.
+    /// </summary>
+    private void SpawnConsommablesNav()
+    {
+        if (consommableContainer == null || consommablePrefab == null) return;
+
+        foreach (Transform child in consommableContainer)
+            Destroy(child.gameObject);
+
+        if (RunManager.Instance == null) return;
+
+        foreach (ConsumableData conso in RunManager.Instance.GetConsumables())
+        {
+            if (!conso.usableOnMap) continue;
+            if (conso.mapEffects == null || conso.mapEffects.Count == 0) continue;
+
+            GameObject btn = Instantiate(consommablePrefab, consommableContainer);
+            ConsumableButton btnScript = btn.GetComponent<ConsumableButton>();
+            if (btnScript != null)
+            {
+                ConsumableData consoRef = conso; // capture pour le lambda
+                btnScript.Setup(conso, (c) => UtiliserConsommableNav(c));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Génère les boutons pour les compétences de navigation portées par les jambes.
+    /// Un bouton est créé pour chaque SkillData avec isNavigationSkill = true.
+    /// </summary>
+    private void SpawnSkillsJambes()
+    {
+        if (skillContainer == null || navSkillPrefab == null) return;
+
+        foreach (Transform child in skillContainer)
+            Destroy(child.gameObject);
+
+        if (RunManager.Instance == null) return;
+
+        EquipmentData jambes = RunManager.Instance.GetEquipped(EquipmentSlot.Legs);
+        if (jambes == null) return;
+
+        foreach (SkillData skill in jambes.skills)
+        {
+            if (!skill.isNavigationSkill) continue;
+            if (skill.navEffects == null || skill.navEffects.Count == 0) continue;
+
+            GameObject btn = Instantiate(navSkillPrefab, skillContainer);
+
+            // Affiche le nom du skill sur le bouton
+            TextMeshProUGUI label = btn.GetComponentInChildren<TextMeshProUGUI>();
+            if (label != null) label.text = skill.skillName;
+
+            // Branche le clic
+            Button btnComp = btn.GetComponent<Button>();
+            if (btnComp != null)
+            {
+                SkillData skillRef = skill; // capture pour le lambda
+                btnComp.onClick.AddListener(() => UtiliserSkillJambes(skillRef));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Utilise un consommable depuis la carte :
+    /// applique ses mapEffects, le retire de l'inventaire, rafraîchit l'UI.
+    /// </summary>
+    private void UtiliserConsommableNav(ConsumableData conso)
+    {
+        Debug.Log($"[Navigation] Consommable utilisé sur la carte : {conso.consumableName}");
+        AppliquerEffetsNav(conso.mapEffects);
+        RunManager.Instance?.RemoveConsumable(conso);
+        SpawnConsommablesNav(); // Rafraîchit les boutons après consommation
+    }
+
+    /// <summary>
+    /// Utilise une compétence de navigation des jambes :
+    /// applique ses navEffects.
+    /// Note : pas de cooldown géré hors combat pour l'instant.
+    /// </summary>
+    private void UtiliserSkillJambes(SkillData skill)
+    {
+        Debug.Log($"[Navigation] Compétence de jambes utilisée : {skill.skillName}");
+        AppliquerEffetsNav(skill.navEffects);
     }
 }

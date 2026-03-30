@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections.Generic;
 
 /// <summary>
 /// Définit un consommable — objet à usage unique utilisable en combat ou sur la carte.
@@ -49,4 +50,14 @@ public class ConsumableData : ScriptableObject
 
     // Peut être utilisé sur la carte (hors combat, depuis l'interface de navigation)
     public bool usableOnMap = true;
+
+    // -----------------------------------------------
+    // EFFETS DE NAVIGATION
+    // -----------------------------------------------
+
+    [Header("Effets sur la carte")]
+    // Effets déclenchés quand le consommable est utilisé depuis la carte (hors combat).
+    // Ignorés si usableOnMap = false ou si la liste est vide.
+    // Plusieurs effets peuvent être combinés (ex : téléporter ET révéler une zone).
+    public List<NavEffect> mapEffects = new List<NavEffect>();
 }

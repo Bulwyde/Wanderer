@@ -1,0 +1,35 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b76755a0a8a0b0741b5d7badea9590bb, type: 3}
+  m_Name: Legs_Test
+  m_EditorClassIdentifier: Assembly-CSharp::EquipmentData
+  equipmentID: 
+  equipmentName: 
+  icon: {fileID: 0}
+  description: 
+  keywords: []
+  equipmentType: 2
+  level: 1
+  bonusHP: 0
+  bonusAttack: 0
+  bonusDefense: 0
+  bonusCriticalChance: 0
+  bonusCriticalMultiplier: 0
+  bonusRegeneration: 0
+  bonusLifeSteal: 0
+  passiveEffects: []
+  skills:
+  - {fileID: 11400000, guid: 11f05c6619663f2438210d9349320125, type: 2}
+  - {fileID: 11400000, guid: 0e07e9cc610635c48a6438503244746f, type: 2}
+  tags: []
+  isUnique: 0
+  setID: 

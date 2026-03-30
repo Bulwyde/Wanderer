@@ -88,6 +88,11 @@ public class EventEffectDrawer : PropertyDrawer
                 height += step; // flagKey
                 height += step; // flagValue
                 break;
+
+            // -----------------------------------------------------------
+            case EventEffectType.TriggerNavEffect:
+                height += EditorGUI.GetPropertyHeight(property.FindPropertyRelative("navEffect"), true);
+                break;
         }
 
         return height;
@@ -198,6 +203,15 @@ public class EventEffectDrawer : PropertyDrawer
                 rect.height = lineH;
                 EditorGUI.PropertyField(rect, property.FindPropertyRelative("flagValue"));
                 break;
+
+            // -----------------------------------------------------------
+            case EventEffectType.TriggerNavEffect:
+            {
+                SerializedProperty navEffectProp = property.FindPropertyRelative("navEffect");
+                rect.height = EditorGUI.GetPropertyHeight(navEffectProp, true);
+                EditorGUI.PropertyField(rect, navEffectProp, new GUIContent("Effet de navigation"), true);
+                break;
+            }
         }
 
         EditorGUI.EndProperty();

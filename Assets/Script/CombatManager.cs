@@ -354,6 +354,8 @@ public class CombatManager : MonoBehaviour
         foreach (SkillData skill in availableSkills)
         {
             if (skill == null) continue;
+            // Les skills de navigation (jambes) n'ont pas de bouton en combat
+            if (skill.isNavigationSkill) continue;
 
             GameObject go = Instantiate(skillButtonPrefab, skillButtonContainer);
             SkillButton sb = go.GetComponent<SkillButton>();

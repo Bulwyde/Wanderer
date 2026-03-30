@@ -96,6 +96,9 @@ public class EventEffect
 
     [Tooltip("Valeur du flag (true/false).\nUtilisé par : SetEventFlag.")]
     public bool flagValue;
+
+    [Tooltip("Effet de navigation déclenché (téléportation, révélation de zone, compteur...).\nUtilisé par : TriggerNavEffect.")]
+    public NavEffect navEffect = new NavEffect();
 }
 
 /// <summary>
@@ -137,4 +140,5 @@ public enum EventEffectType
     GainModule,     // Donne un module (relique) — champs : gainModuleMode + (modulesToGive ou moduleLootTable)
     GainEquipment,  // Équipe une pièce d'équipement — champs : gainEquipmentMode + (equipmentsToGive ou equipmentLootTable)
     SetEventFlag,   // Pose un flag booléen dans RunManager — champs : flagKey + flagValue
+    TriggerNavEffect, // Déclenche un effet de navigation (téléportation, révélation, compteur...) — champ : navEffect
 }

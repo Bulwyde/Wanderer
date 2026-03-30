@@ -15,7 +15,7 @@ MonoBehaviour:
   effectID: 
   description: 
   keywords: []
-  trigger: 0
+  trigger: 1
   action: 0
   value: 3
   secondaryValue: 0

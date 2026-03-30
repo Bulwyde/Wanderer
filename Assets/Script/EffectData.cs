@@ -65,22 +65,26 @@ public class EffectData : ScriptableObject
 /// </summary>
 public enum EffectTrigger
 {
+    // Valeur par défaut — aucun déclenchement automatique.
+    // À utiliser pour les compétences et consommables (gérés implicitement par le code).
+    None = 0,
+
     // Combat
-    OnPlayerTurnStart,      // Début du tour joueur
-    OnPlayerTurnEnd,        // Fin du tour joueur
-    OnPlayerDamaged,        // Quand le joueur reçoit des dégâts
-    OnPlayerDealtDamage,    // Quand le joueur inflige des dégâts
-    OnEnemyDied,            // Quand un ennemi meurt
-    OnAllSkillsUsed,        // Quand toutes les compétences ont été utilisées ce tour
-    OnArmorDepleted,        // Quand le joueur perd toute son armure
-    OnSkillUsed,            // Quand la compétence liée est utilisée
+    OnPlayerTurnStart    = 1,   // Début du tour joueur
+    OnPlayerTurnEnd      = 2,   // Fin du tour joueur
+    OnPlayerDamaged      = 3,   // Quand le joueur reçoit des dégâts
+    OnPlayerDealtDamage  = 4,   // Quand le joueur inflige des dégâts
+    OnEnemyDied          = 5,   // Quand un ennemi meurt
+    OnAllSkillsUsed      = 6,   // Quand toutes les compétences ont été utilisées ce tour
+    OnArmorDepleted      = 7,   // Quand le joueur perd toute son armure
+    OnSkillUsed          = 8,   // Quand la compétence liée est utilisée
 
     // Début de combat
-    OnFightStart,           // Au premier tour du combat, après le reset d'armure initial
+    OnFightStart         = 9,   // Au premier tour du combat, après le reset d'armure initial
 
     // Navigation (hors combat)
-    OnChestOpened,          // Quand un coffre est ouvert
-    OnShopEntered,          // Quand le joueur entre chez un marchand
+    OnChestOpened        = 10,  // Quand un coffre est ouvert
+    OnShopEntered        = 11,  // Quand le joueur entre chez un marchand
 }
 
 /// <summary>

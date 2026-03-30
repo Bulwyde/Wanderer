@@ -19,4 +19,7 @@ MonoBehaviour:
   action: 4
   value: 20
   secondaryValue: 0
+  statusToApply: {fileID: 0}
+  scalingStatus: {fileID: 0}
+  consumeStacks: 0
   target: 0

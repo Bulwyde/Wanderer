@@ -39,6 +39,12 @@ public class CharacterData : ScriptableObject
     [Range(0f, 1f)]
     public float lifeSteal;
 
+    [Header("Navigation")]
+    // Portée de vision de base sur la carte (en cases).
+    // La portée effective = baseVisionRange + RunManager.visionRangeBonus.
+    // 1 = voit uniquement les cases adjacentes en ligne droite.
+    public int baseVisionRange = 1;
+
     [Header("Énergie")]
     // Énergie disponible chaque tour pour utiliser des compétences.
     // Quand le système d'équipement sera en place, cette valeur pourra être

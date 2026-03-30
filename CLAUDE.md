@@ -8,9 +8,14 @@
 
 ## Consignes pour Claude
 
+### Validation avant les gros chantiers
+- Avant tout chantier impliquant **3 fichiers ou plus**, ou une refonte d'architecture, **demander validation** à Elisyo avec un résumé de ce qui va être modifié et pourquoi — ne jamais partir directement dans l'implémentation.
+- Les petits fixes (1–2 fichiers, changement localisé) peuvent être faits directement.
+
 ### Niveau de détail attendu dans les explications
 - Quand une modification de code est faite, expliquer **pourquoi** (cause du problème, logique du fix) et pas seulement quoi.
 - Pour le setup Unity (Inspector, hiérarchie), donner les **noms exacts des champs, composants et valeurs** à saisir — pas de descriptions vagues.
+- Quand un setup Unity est demandé ou nécessaire après une modification de code, **toujours détailler les étapes complètes** : nom exact du GameObject à créer, composants à ajouter, valeurs à saisir dans chaque champ, position dans la hiérarchie (parent, enfant de quoi).
 - Quand quelque chose ne fonctionne pas, diagnostiquer la **cause racine** avant de proposer un fix.
 - Signaler les **pièges Unity spécifiques** au contexte (DontDestroyOnLoad, événements statiques vs instance, ordre d'initialisation, etc.).
 - Ne pas hardcoder de caractères Unicode spéciaux (emoji, symboles) dans les textes TMP — utiliser des mots ou une `Image` séparée.
@@ -86,12 +91,19 @@ SceneLoader.Instance.GoToMainMenu()
 ### Scène Navigation
 
 **`NavigationManager.cs`**
-- Gère les déplacements (flèches clavier), la visibilité (brouillard de guerre, `visionRange = 1`)
+- Gère les déplacements (flèches clavier), la visibilité (brouillard de guerre, `baseVisionRange = 1`)
+- Portée effective : `baseVisionRange + RunManager.visionRangeBonus` (propriété `PorteeVisionEffective`)
 - Trois sets : `visibleCells`, `visitedCells`, `exploredCells`
 - En quittant vers Combat/Event : appelle `RunManager.SaveNavigationState()` puis `RunManager.EnterRoom()`
 - Au retour d'une autre scène : restaure l'état depuis RunManager si `hasNavigationState == true`
 - `ChoisirEventAleatoire(CellData)` : dispatch selon `eventCellMode` (ManualList → `ChoisirDepuisListe()`, FromPool → `EventPool.GetRandom()`). Retourne `null` si tout est joué → salle ignorée sans transition
 - ⚠️ Après `EnterRoom()`, le code écrase `RunManager.Instance.currentSpecificEventID` avec l'ID de l'event tiré
+- **Effets de navigation** : `AppliquerEffetNav(NavEffect)` / `AppliquerEffetsNav(List<NavEffect>)` — exécute tous les `NavEffectType`
+- `TeleporterJoueur(x, y)` — téléportation sans déclencher `OnRoomEntered`
+- `RevelerZone(cx, cy, rayon)` — ajoute des cases à `exploredCells` et rafraîchit la carte
+- `DemarrerSelectionZone(rayon)` — active le mode clic ; `GererSelectionZone()` convertit le clic écran → coordonnées de case via `RectTransformUtility.ScreenPointToLocalPointInRectangle`
+- **UI Navigation** : `RafraichirUINavigation()` — recrée les boutons consommables (`consommableContainer`) et skills jambes (`skillContainer`). Tous les champs UI sont optionnels.
+- ⚠️ `baseVisionRange` remplace l'ancien `visionRange` (champ renommé) — penser à re-saisir la valeur dans l'Inspector après la mise à jour du script
 
 **`MapRenderer.cs`**
 - Affiche la carte (tiles) selon les sets de visibilité de NavigationManager
@@ -287,6 +299,7 @@ public bool flagValue;                         // SetEventFlag
 
 **`CharacterData.cs`**
 - Stats de base : `maxHP`, `attack`, `defense`, `criticalChance`, `criticalMultiplier`, `regeneration`, `lifeSteal`, `maxEnergy`
+- `baseVisionRange` : portée de vision de base sur la carte (portée effective = `baseVisionRange + RunManager.visionRangeBonus`)
 - `startingModule` : module donné au joueur au début de chaque run (seedé dans `ResolveEquipment()`)
 - `startingHead/Torso/Legs/Arm1/Arm2` : équipement initial
 - `startingConsumables` : consommables donnés au joueur au premier combat du run (une seule fois)
@@ -314,10 +327,13 @@ public StatusData scalingStatus;   // Statut dont les stacks amplifient l'effet
 public bool consumeStacks;
 ```
 
+**`EffectDataEditor`** (Assets/Editor) : `CustomEditor` sur `EffectData` — labels contextuels pour `value` et `secondaryValue` selon `action`. `secondaryValue` et `scalingStatus` masqués quand non pertinents (ex : `ApplyStatus`, `AddGold`). `consumeStacks` n'apparaît que si `scalingStatus` est assigné.
+
 **Règles de saisie du `trigger` dans l'Inspector :**
-- Compétences / Consommables → laisser sur `OnSkillUsed` (jamais lu par le code, géré implicitement)
+- Compétences / Consommables → laisser sur `None` (valeur par défaut, jamais lu par le code, géré implicitement)
 - Modules → choisir le trigger voulu (voir tableau ci-dessous)
 - `passiveEffects` d'équipement → `OnFightStart` pour un bonus de début de combat
+- ⚠️ `None = 0` est la **nouvelle valeur par défaut** — les assets existants dont le trigger était `OnPlayerTurnStart` (anciennement index 0) afficheront désormais `None` et devront être reconfigurés manuellement
 
 | Trigger | Quand | Contexte |
 |---|---|---|
@@ -358,6 +374,19 @@ public enum EquipmentSlot { Head, Torso, Legs, Arm1, Arm2 }
 - `consumableID`, `consumableName`, `icon`, `description`
 - `EffectData effect` — valeurs brutes à l'utilisation (sans stats ATK/DEF)
 - `bool usableInCombat`, `bool usableOnMap`
+
+**`NavEffect.cs`**
+- Classe sérialisable + enum `NavEffectType` — utilisée par consommables, skills de jambes, effets d'événements
+- Champs : `type`, `value`, `counterKey`, `allowedCellTypes`
+- `NavEffectDrawer` (Assets/Editor) : affiche uniquement les champs pertinents selon le type
+
+| Type | Champ(s) utilisé(s) |
+|---|---|
+| `TeleportRandom` | `allowedCellTypes` (si vide : toutes les cases navigables) |
+| `RevealZoneRandom` | `value` (rayon) |
+| `RevealZoneChoice` | `value` (rayon) — attend un clic du joueur |
+| `IncreaseVisionRange` | `value` (delta permanent) |
+| `IncrementCounter` | `counterKey` + `value` (delta, peut être négatif) |
 
 **`KeywordData.cs`** — défini mais pas encore utilisé activement
 
@@ -445,18 +474,21 @@ Canvas
 - **`GainEquipment`** dans `EventEffectType` : donne un équipement depuis une liste ou une loot table, avec auto-équipement si slot libre et proposition de remplacement sinon
 - **`EquipmentOfferController`** : logique d'offre d'équipement factorisée, partagée entre Combat (mode simultané) et Event (mode séquentiel)
 - **`EventEffectDrawer`** (`Assets/Editor`) : `CustomPropertyDrawer` sur `EventEffect` — masque les champs inutiles selon le type et le mode sélectionné dans l'Inspector
+- **Effets de navigation** : système complet — `NavEffectType` (TeleportRandom, RevealZoneRandom, RevealZoneChoice, IncreaseVisionRange, IncrementCounter), `NavEffect` (classe sérialisable), `NavEffectDrawer` (Inspector conditionnel). Branchés sur : consommables (`mapEffects`), skills de jambes (`isNavigationSkill` + `navEffects`), événements (`TriggerNavEffect`). `NavigationManager` exécute tout via `AppliquerEffetsNav()`. `RevealZoneChoice` bloque la navigation clavier et attend un clic sur la carte. Compteurs nommés dans `RunManager` (`IncrementCounter`, `GetCounter`, `SetCounter`). Bonus de vision via `RunManager.visionRangeBonus` (permanent pour le run).
+- **Skills de navigation exclus du combat** : `CombatManager.SpawnSkillButtons()` filtre les skills avec `isNavigationSkill = true` — ils n'apparaissent jamais en combat.
+- **`EffectTrigger.None`** : valeur par défaut (= 0) dans l'enum — les compétences et consommables laissent le trigger sur `None`, jamais lu par le code (géré implicitement).
+- **`EffectDataEditor`** (`Assets/Editor`) : `CustomEditor` sur `EffectData` — labels contextuels pour `value`/`secondaryValue` selon `action`, champs non pertinents masqués.
+- **`baseVisionRange` dans `CharacterData`** : portée de vision de base par personnage. `NavigationManager` lit `characterData.baseVisionRange` + `RunManager.visionRangeBonus` via la propriété `PorteeVisionEffective`. Champ `CharacterData characterData` à assigner dans l'Inspector de la scène Navigation.
+- Cases Event affichées en orange sur la carte (couleur configurable via `colorEvent` dans `MapRenderer`).
 
 ### En cours / À faire 🔧
-- **Loot tables consommables** : ✅ `ConsumableLootTable` ScriptableObject créé. `GainConsumable` supporte `FromList` et `FromLootTable`. ⚠️ Si inventaire plein : objet non donné (log console) — à terme, message joueur + jeter manuellement.
-- **Loot tables équipements** : ✅ `EquipmentLootTable` ScriptableObject créé. `GainEquipment` dans `EventEffectType`, modes `FromList` et `FromLootTable`. Auto-équipement si slot libre, sinon passage par `EquipmentOfferController`.
-- **`EquipmentOfferController`** : ✅ MonoBehaviour partagé Combat/Event pour l'affichage et la résolution des offres d'équipement. `CombatManager` et `EventManager` lui délèguent entièrement cette logique.
-- **Inspector conditionnel (`EventEffectDrawer`)** : ✅ `CustomPropertyDrawer` sur `EventEffect` — affiche uniquement les champs pertinents selon le type et le mode sélectionné.
+- **Scène MainMenu** (priorité avant toute autre fonctionnalité) : scène de démarrage obligatoire qui initialise correctement la run avant d'entrer en Navigation. Doit appeler `RunManager.StartNewRun(characterID, missionID)` et `SceneLoader.Instance.GoToNavigation()`. Sans elle, tester depuis la scène Navigation ne charge pas l'équipement de départ (les skills de jambes, modules, consommables de départ ne sont seedés que dans `CombatManager.ResolveEquipment()` — à terme, une partie du seeding devra être faite dès le MainMenu pour que la Navigation soit correcte dès le premier lancement).
 - `passiveEffects` sur `EquipmentData` : champ défini mais non branché dans `CombatManager` — à implémenter comme les modules (triggers + `ApplyModuleEffect`)
-- Scène MainMenu (sélection de personnage non branchée)
 - Effets de combat non implémentés : `ModifyStat`
 - `KeywordData` défini mais non utilisé activement
-- Consommables côté navigation (hors combat) : `usableOnMap` présent mais non intégré dans `NavigationManager`
+- **Cooldown des skills de navigation** : non géré hors combat pour l'instant (pas d'état de tour). À implémenter si besoin.
 - Boss, salles spéciales
+- **Icônes de cases (graphique)** : permettre d'assigner une image/sprite par type de case (`CellType`) directement dans l'Inspector du `MapRenderer`, au lieu de simples couleurs. Chaque case afficherait son sprite quand découverte. À faire après le boss, avant sons/animations.
 - Sons, animations, retours visuels
 - Inventaire (prévu dans RunManager, commentaire `// Futur`)
 
@@ -482,3 +514,5 @@ Canvas
 11. **`SetActive(true)` sur un enfant d'un GO inactif** : l'enfant ne devient pas visible — il faut activer tous les parents jusqu'au Canvas d'abord. `MontrerContinueButton()` dans `EventManager` illustre ce pattern (boucle sur `transform.parent` jusqu'au Canvas).
 12. **`interactable = true` ≠ visible** : sur un `Button`, `interactable = true` ne rend pas le GO actif. Toujours faire `gameObject.SetActive(true)` en plus si le GO peut être inactif.
 13. **`EquipmentOfferController` + bouton "Continuer"** : le controller se désactive lui-même via `Awake()`. Tout bouton "Continuer" doit être **frère** du GO `EquipmentOfferArea`, jamais enfant — sinon il disparaît avec le controller. En Combat, le `lootContinueButton` doit aussi être explicitement masqué dans `Start()` (il serait cliquable pendant le combat sinon).
+14. **`RevealZoneChoice` et clics simultanés** : en mode sélection de zone (`modeSelectionZone = true`), `Update()` bloque les déplacements clavier mais **pas** les clics sur les boutons de l'UI (consommables, skills). Un clic sur un bouton UI passe **aussi** par `Input.GetMouseButtonDown(0)`. Pour éviter de consommer involontairement le clic du bouton comme sélection de zone, utiliser `EventSystem.current.IsPointerOverGameObject()` avant de traiter le clic — à ajouter si des conflits sont observés.
+15. **`visionRange` renommé en `baseVisionRange`** : l'ancien champ public `visionRange` est maintenant `[SerializeField] private int baseVisionRange`. La valeur Inspector est réinitialisée à sa valeur par défaut (`1`) après la mise à jour du script — penser à la re-saisir manuellement dans la scène Navigation.

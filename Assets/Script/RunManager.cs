@@ -192,6 +192,51 @@ public class RunManager : MonoBehaviour
     private HashSet<string> clearedRooms = new HashSet<string>();
 
     // -----------------------------------------------
+    // COMPTEURS DE NAVIGATION
+    // -----------------------------------------------
+
+    // Compteurs nommés — usage libre pour les mécaniques de run.
+    // Ex : "cles" pour ouvrir des passages, "ferveur" pour un événement conditionnel.
+    // Accès via GetCounter / IncrementCounter / SetCounter.
+    private Dictionary<string, int> navigationCounters = new Dictionary<string, int>();
+
+    // Bonus de portée de vision accumulés pendant le run.
+    // S'ajoute au baseVisionRange défini dans NavigationManager.
+    public int visionRangeBonus = 0;
+
+    /// <summary>
+    /// Incrémente (ou décrémente) un compteur nommé de `delta`.
+    /// Crée le compteur s'il n'existe pas encore (valeur de départ : 0).
+    /// </summary>
+    public void IncrementCounter(string key, int delta)
+    {
+        if (string.IsNullOrEmpty(key)) return;
+        if (!navigationCounters.ContainsKey(key))
+            navigationCounters[key] = 0;
+        navigationCounters[key] += delta;
+        Debug.Log($"[RunManager] Compteur '{key}' : {navigationCounters[key]} ({(delta >= 0 ? "+" : "")}{delta})");
+    }
+
+    /// <summary>
+    /// Retourne la valeur actuelle d'un compteur nommé (0 si inexistant).
+    /// </summary>
+    public int GetCounter(string key)
+    {
+        return string.IsNullOrEmpty(key) ? 0 :
+               navigationCounters.TryGetValue(key, out int val) ? val : 0;
+    }
+
+    /// <summary>
+    /// Pose un compteur à une valeur absolue.
+    /// </summary>
+    public void SetCounter(string key, int value)
+    {
+        if (string.IsNullOrEmpty(key)) return;
+        navigationCounters[key] = value;
+        Debug.Log($"[RunManager] Compteur '{key}' fixé à {value}");
+    }
+
+    // -----------------------------------------------
     // ÉVÉNEMENTS JOUÉS
     // -----------------------------------------------
 
@@ -260,6 +305,8 @@ public class RunManager : MonoBehaviour
         consumables.Clear();
         maxConsumableSlots = 3;
         startingConsumablesSeeded = false;
+        navigationCounters.Clear();
+        visionRangeBonus = 0;
 
         // Réinitialise l'état de navigation : le joueur repart de la case de départ
         hasNavigationState = false;

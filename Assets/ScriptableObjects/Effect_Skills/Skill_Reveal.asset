@@ -25,6 +25,6 @@ MonoBehaviour:
   isNavigationSkill: 1
   navEffects:
   - type: 2
-    value: 3
+    value: 1
     counterKey: 
     allowedCellTypes: 

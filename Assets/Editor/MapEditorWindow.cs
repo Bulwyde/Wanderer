@@ -566,7 +566,7 @@ private Rect GetVerticalWallRect(Rect grid, int x, int y)
                 currentMap.cells.Add(new CellData
                 {
                     x = x, y = y,
-                    cellType = CellType.Empty
+                    cellType = CellType.NonNavigable
                 });
             }
         }

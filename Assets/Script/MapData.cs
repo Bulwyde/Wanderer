@@ -40,6 +40,26 @@ public class MapData : ScriptableObject
     }
 
     /// <summary>
+    /// Retourne true si au moins un des 8 voisins (cardinaux + diagonales) de la case (x, y)
+    /// est d'un type différent de NonNavigable.
+    /// Utilisé pour filtrer l'affichage et la révélation des cases NonNavigable isolées.
+    /// </summary>
+    public bool AUnVoisinNavigable(int x, int y)
+    {
+        for (int dy = -1; dy <= 1; dy++)
+        {
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                if (dx == 0 && dy == 0) continue;
+                CellData voisin = GetCell(x + dx, y + dy);
+                if (voisin != null && voisin.cellType != CellType.NonNavigable)
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
     /// Vérifie si un mur existe entre deux cases adjacentes.
     /// </summary>
     public bool HasWall(int x1, int y1, int x2, int y2)

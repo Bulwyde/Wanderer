@@ -18,4 +18,5 @@ MonoBehaviour:
   description: Vous soigne de 5 points de vie
   effect: {fileID: 11400000, guid: cfdbaf629480e15488da082a3b71f59c, type: 2}
   usableInCombat: 1
-  usableOnMap: 1
+  usableOnMap: 0
+  mapEffects: []

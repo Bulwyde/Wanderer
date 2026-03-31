@@ -25,9 +25,13 @@ public class MapRenderer : MonoBehaviour
     public Color colorNonNav  = new Color(0.1f, 0.1f, 0.1f);
     public Color colorWall    = new Color(0.9f, 0.7f, 0.1f);
     public Color colorPlayer  = Color.white;
+    public Color colorPreview = new Color(0.95f, 0.90f, 0.2f, 0.85f); // jaune vif semi-opaque
 
     // Références aux images des cases
     private Image[,] cellImages;
+
+    // Cases actuellement en surbrillance (mode sélection de zone RevealZoneChoice)
+    private HashSet<Vector2Int> cellsEnPreview = new HashSet<Vector2Int>();
 
     // Chaque mur stocké avec ses deux cases adjacentes
     private struct WallEntry
@@ -156,6 +160,14 @@ public class MapRenderer : MonoBehaviour
                     continue;
                 }
 
+                // Les cases NonNavigable sont toujours transparentes :
+                // elles ne participent pas au brouillard de guerre.
+                if (cell?.cellType == CellType.NonNavigable)
+                {
+                    cellImages[x, y].color = Color.clear;
+                    continue;
+                }
+
                 if (navigationManager.IsVisible(x, y))
                 {
                     // Si la salle a été complétée, on la montre comme vide
@@ -175,13 +187,102 @@ public class MapRenderer : MonoBehaviour
         }
 
         // Met à jour les murs
-        // Un mur est visible si au moins une de ses deux cases adjacentes est visible
         foreach (WallEntry entry in wallEntries)
         {
+            CellData mC1 = mapData.GetCell(entry.x1, entry.y1);
+            CellData mC2 = mapData.GetCell(entry.x2, entry.y2);
+            bool c1NonNav = mC1?.cellType == CellType.NonNavigable;
+            bool c2NonNav = mC2?.cellType == CellType.NonNavigable;
+
+            // Mur entre deux NonNavigable : transparent (zone sans intérêt)
+            if (c1NonNav && c2NonNav)
+            {
+                entry.image.color = Color.clear;
+                continue;
+            }
+
+            // Un mur n'apparaît que lorsqu'au moins une de ses cases adjacentes est visible.
+            // Non visible = transparent (pas colorHidden) pour ne pas trahir la présence du mur.
             bool cell1Visible = navigationManager.IsVisible(entry.x1, entry.y1);
             bool cell2Visible = navigationManager.IsVisible(entry.x2, entry.y2);
 
-            entry.image.color = (cell1Visible || cell2Visible) ? colorWall : colorHidden;
+            entry.image.color = (cell1Visible || cell2Visible) ? colorWall : Color.clear;
+        }
+    }
+
+    // -----------------------------------------------
+    // PREVIEW ZONE (RevealZoneChoice)
+    // -----------------------------------------------
+
+    /// <summary>
+    /// Affiche une surbrillance sur les cases de la zone centrée en (cx, cy).
+    /// Ignore les cases NonNavigable. Efface le preview précédent avant d'appliquer.
+    /// </summary>
+    public void PreviewZone(int cx, int cy, int rayon)
+    {
+        ClearPreview();
+
+        for (int dy = -rayon; dy <= rayon; dy++)
+        {
+            for (int dx = -rayon; dx <= rayon; dx++)
+            {
+                int x = cx + dx;
+                int y = cy + dy;
+                if (x < 0 || x >= mapData.width || y < 0 || y >= mapData.height) continue;
+
+                CellData cell = mapData.GetCell(x, y);
+                if (cell?.cellType == CellType.NonNavigable) continue;
+
+                cellImages[x, y].color = colorPreview;
+                cellsEnPreview.Add(new Vector2Int(x, y));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Supprime la surbrillance et restaure la couleur normale de chaque case en preview.
+    /// </summary>
+    public void ClearPreview()
+    {
+        foreach (Vector2Int pos in cellsEnPreview)
+            RefreshSingleCell(pos.x, pos.y);
+
+        cellsEnPreview.Clear();
+    }
+
+    /// <summary>
+    /// Recalcule et applique la couleur correcte d'une seule case.
+    /// Même logique que RefreshMap mais ciblée, pour éviter de tout reconstruire.
+    /// </summary>
+    private void RefreshSingleCell(int x, int y)
+    {
+        if (cellImages == null || cellImages[x, y] == null) return;
+
+        CellData cell = mapData.GetCell(x, y);
+
+        if (x == navigationManager.PlayerX && y == navigationManager.PlayerY)
+        {
+            cellImages[x, y].color = colorPlayer;
+            return;
+        }
+
+        if (cell?.cellType == CellType.NonNavigable)
+        {
+            cellImages[x, y].color = Color.clear;
+            return;
+        }
+
+        if (navigationManager.IsVisible(x, y))
+        {
+            bool cleared = RunManager.Instance != null &&
+                           RunManager.Instance.IsRoomCleared(x, y);
+            CellType displayType = cleared ? CellType.Empty
+                                           : (cell?.cellType ?? CellType.Empty);
+            cellImages[x, y].color = GetCellColor(displayType);
+        }
+        else
+        {
+            cellImages[x, y].color = colorHidden;
         }
     }
 

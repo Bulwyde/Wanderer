@@ -55,9 +55,16 @@ public class NavigationManager : MonoBehaviour
     private bool modeSelectionZone = false;
     private int selectionRayon = 1;
 
+    // Dernière case survolée en mode sélection — évite de recalculer le preview à chaque frame
+    private Vector2Int? derniereCellSurvol = null;
+
     // -----------------------------------------------
     // UI NAVIGATION
     // -----------------------------------------------
+
+    [Header("Fallback événements")]
+    // Pool de fallback par map — utilisé quand une salle Event n'a aucun event configurable
+    public RandomEvents randomEvents;
 
     [Header("UI — Consommables sur la carte")]
     // Container des boutons de consommables (optionnel — si null, l'UI est ignorée)
@@ -277,26 +284,54 @@ public class NavigationManager : MonoBehaviour
     /// <summary>
     /// Tire aléatoirement un EventData depuis le pool de la case,
     /// en excluant les events déjà joués pendant ce run.
-    /// Retourne null si le pool est vide ou tous les events ont été joués.
+    /// Si aucun event n'est disponible (liste vide, pool null ou épuisé),
+    /// tente un fallback via RandomEvents pour la MapData courante.
+    /// Retourne null si tout est épuisé.
     /// </summary>
     private EventData ChoisirEventAleatoire(CellData cell)
     {
+        EventData resultat = null;
+
         switch (cell.eventCellMode)
         {
             case EventCellMode.ManualList:
-                return ChoisirDepuisListe(cell);
+                resultat = ChoisirDepuisListe(cell);
+                break;
 
             case EventCellMode.FromPool:
                 if (cell.eventPool == null)
-                {
                     Debug.LogWarning($"[Navigation] Salle ({cell.x},{cell.y}) : mode FromPool mais aucun EventPool assigné.");
-                    return null;
-                }
-                return cell.eventPool.GetRandom();
-
-            default:
-                return null;
+                else
+                    resultat = cell.eventPool.GetRandom();
+                break;
         }
+
+        // Fallback : si aucun event disponible, cherche dans RandomEvents pour cette map
+        if (resultat == null)
+        {
+            if (randomEvents == null)
+            {
+                Debug.LogWarning($"[Navigation] Salle ({cell.x},{cell.y}) : aucun event disponible et aucun RandomEvents assigné.");
+                return null;
+            }
+
+            EventPool fallbackPool = randomEvents.GetPoolPourMap(mapData);
+
+            if (fallbackPool == null)
+            {
+                Debug.LogWarning($"[Navigation] Salle ({cell.x},{cell.y}) : aucun fallback RandomEvents pour la map '{mapData?.mapName}'.");
+                return null;
+            }
+
+            resultat = fallbackPool.GetRandom();
+
+            if (resultat != null)
+                Debug.Log($"[Navigation] Salle ({cell.x},{cell.y}) : fallback RandomEvents — event '{resultat.eventID}' tiré.");
+            else
+                Debug.LogWarning($"[Navigation] Salle ({cell.x},{cell.y}) : fallback RandomEvents aussi épuisé pour la map '{mapData?.mapName}'.");
+        }
+
+        return resultat;
     }
 
     /// <summary>
@@ -564,6 +599,16 @@ public class NavigationManager : MonoBehaviour
                 int x = centreX + dx;
                 int y = centreY + dy;
                 if (x < 0 || x >= mapData.width || y < 0 || y >= mapData.height) continue;
+
+                // Ne pas révéler les cases NonNavigable sans voisin navigable :
+                // elles sont en plein milieu d'une zone inutile, l'effet de révélation
+                // ne doit pas être "gaspillé" sur elles.
+                CellData cellReveler = mapData.GetCell(x, y);
+                if (cellReveler != null &&
+                    cellReveler.cellType == CellType.NonNavigable &&
+                    !mapData.AUnVoisinNavigable(x, y))
+                    continue;
+
                 exploredCells.Add(new Vector2Int(x, y));
             }
         }
@@ -590,38 +635,96 @@ public class NavigationManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Gère le clic du joueur en mode sélection de zone.
-    /// Convertit la position écran en coordonnées de case, puis révèle la zone.
+    /// Convertit la position de la souris en coordonnées de case sur la carte.
+    /// Retourne false si la souris est hors du mapContainer ou hors des limites de la carte.
     /// </summary>
-    private void GererSelectionZone()
+    private bool ObtenirCaseDepuisSouris(out int cellX, out int cellY)
     {
-        if (!Input.GetMouseButtonDown(0)) return;
+        cellX = cellY = -1;
 
-        // Convertit la position écran en position locale dans le mapContainer
         RectTransform mapContainerRect = mapRenderer.mapContainer;
         Canvas canvas = mapContainerRect.GetComponentInParent<Canvas>();
         Camera canvasCamera = (canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay)
             ? canvas.worldCamera : null;
 
         if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(
-            mapContainerRect, Input.mousePosition, canvasCamera, out Vector2 localPos))
-            return;
+                mapContainerRect, Input.mousePosition, canvasCamera, out Vector2 localPos))
+            return false;
 
-        // Convertit les coordonnées locales en indices de case
         float step = mapRenderer.cellSize + mapRenderer.wallThickness;
-        int cellX = Mathf.FloorToInt((localPos.x - mapRenderer.wallThickness) / step);
+        cellX = Mathf.FloorToInt((localPos.x - mapRenderer.wallThickness) / step);
         int flippedY = Mathf.FloorToInt((localPos.y - mapRenderer.wallThickness) / step);
-        int cellY = mapData.height - 1 - flippedY;
+        cellY = mapData.height - 1 - flippedY;
 
-        // Vérifie que la case est dans les limites de la carte
-        if (cellX < 0 || cellX >= mapData.width ||
-            cellY < 0 || cellY >= mapData.height)
+        return cellX >= 0 && cellX < mapData.width &&
+               cellY >= 0 && cellY < mapData.height;
+    }
+
+    /// <summary>
+    /// Met à jour la surbrillance de preview selon la position de la souris.
+    /// Appelée chaque frame en mode sélection de zone.
+    /// </summary>
+    private void ActualiserPreviewZone()
+    {
+        if (!ObtenirCaseDepuisSouris(out int cellX, out int cellY))
+        {
+            // Souris hors carte : effacer le preview
+            if (derniereCellSurvol.HasValue)
+            {
+                mapRenderer.ClearPreview();
+                derniereCellSurvol = null;
+            }
+            return;
+        }
+
+        CellData cellSurvol = mapData.GetCell(cellX, cellY);
+        if (cellSurvol == null || cellSurvol.cellType == CellType.NonNavigable)
+        {
+            // Case invalide : effacer le preview
+            if (derniereCellSurvol.HasValue)
+            {
+                mapRenderer.ClearPreview();
+                derniereCellSurvol = null;
+            }
+            return;
+        }
+
+        // Même case que le frame précédent : rien à faire
+        Vector2Int nouvellePos = new Vector2Int(cellX, cellY);
+        if (derniereCellSurvol == nouvellePos) return;
+
+        // Nouvelle case valide : mettre à jour le preview
+        derniereCellSurvol = nouvellePos;
+        mapRenderer.PreviewZone(cellX, cellY, selectionRayon);
+    }
+
+    /// <summary>
+    /// Gère le hover (preview) et le clic du joueur en mode sélection de zone.
+    /// </summary>
+    private void GererSelectionZone()
+    {
+        // Mise à jour du preview à chaque frame selon la position de la souris
+        ActualiserPreviewZone();
+
+        if (!Input.GetMouseButtonDown(0)) return;
+
+        if (!ObtenirCaseDepuisSouris(out int cellX, out int cellY))
         {
             Debug.Log("[Navigation] Clic hors de la carte — veuillez cliquer sur une case valide.");
             return;
         }
 
-        // Quitte le mode sélection avant d'appliquer (évite toute réentrance)
+        // Refuser les cases NonNavigable comme centre de révélation
+        CellData cellCible = mapData.GetCell(cellX, cellY);
+        if (cellCible == null || cellCible.cellType == CellType.NonNavigable)
+        {
+            Debug.Log("[Navigation] Clic sur une case non navigable — choisissez une case navigable.");
+            return; // Reste en mode sélection
+        }
+
+        // Clic valide : effacer le preview et confirmer la révélation
+        mapRenderer.ClearPreview();
+        derniereCellSurvol = null;
         modeSelectionZone = false;
         RevelerZone(cellX, cellY, selectionRayon);
         Debug.Log($"[Navigation] Case ({cellX},{cellY}) choisie — zone révélée.");

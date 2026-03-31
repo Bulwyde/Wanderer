@@ -725,6 +725,7 @@ MonoBehaviour:
   mapData: {fileID: 11400000, guid: df486ee24fbd1af4a9ee005cc3f83402, type: 2}
   mapRenderer: {fileID: 844053214}
   characterData: {fileID: 11400000, guid: 5d7cc6fa9416770409266c61a5550a2d, type: 2}
+  randomEvents: {fileID: 11400000, guid: f00872f1a1f8ecc41874a8b8908dd9ad, type: 2}
   consommableContainer: {fileID: 2051897069}
   consommablePrefab: {fileID: 7048912491923774506, guid: 8761e75a581df2642a8883058d518c79, type: 3}
   skillContainer: {fileID: 2013126123}

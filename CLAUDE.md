@@ -10,6 +10,11 @@
 
 ## Consignes pour Claude
 
+### Stratégie de travail optimisée
+- **Avant tout travail sur un script**, lire le fichier concerné (même brièvement) pour connaître l'état réel du code — ne jamais supposer depuis ce fichier seul.
+- **Avant de proposer une solution**, identifier la cause racine dans le code existant, pas seulement les symptômes.
+- **Pour tout nouveau système**, chercher d'abord si un mécanisme existant peut être étendu plutôt que recréé (ex : guards `IsSlotFree`, flags `seeded`, fallbacks Inspector).
+
 ### Validation avant les gros chantiers
 - Avant tout chantier impliquant **3 fichiers ou plus**, ou une refonte d'architecture, **demander validation** à Elisyo avec un résumé de ce qui va être modifié et pourquoi — ne jamais partir directement dans l'implémentation.
 - Les petits fixes (1–2 fichiers, changement localisé) peuvent être faits directement.
@@ -46,7 +51,7 @@ Le joueur explore une carte, tombe sur des salles (combat, événement, etc.), g
 
 | Scène | Rôle |
 |---|---|
-| `MainMenu` | Écran d'accueil / sélection personnage (non développé) |
+| `MainMenu` | Écran d'accueil — Continuer / Nouvelle Partie / Paramètres / Quitter |
 | `Navigation` | Carte du donjon — déplacement case par case |
 | `Combat` | Combat au tour par tour |
 | `Event` | Événement narratif avec choix |
@@ -59,7 +64,11 @@ Le joueur explore une carte, tombe sur des salles (combat, événement, etc.), g
 
 ### Singletons persistants (DontDestroyOnLoad)
 
-**`RunManager.cs`** — État central de la run (HP, personnage, position, équipement, modules, consommables, flags d'events, état nav sauvegardé). `AddModule()` appelle automatiquement `ModuleManager.NotifyModulesChanged()`.
+**`RunManager.cs`** — État central de la run. Stocke : `selectedCharacter` (CharacterData), `hasActiveRun`, HP, position, équipement, modules, consommables, flags d'events, état nav sauvegardé.
+- `StartNewRun(CharacterData, string)` : reset complet + appelle `SeedDonneesDepart()` → l'équipement, le module, les consommables de départ ET les stats (HP max/courant) sont initialisés **dès le lancement**, avant d'entrer en Navigation.
+- `EndRun()` : pose `hasActiveRun = false` — appelé par CombatManager sur défaite et MainMenuManager sur abandon.
+- `InitialiserStats()` : calcule `maxHP = characterData.maxHP + Σ bonusHP équipements`, pose `currentHP = maxHP`. Prévu pour accueillir les futures ressources (or, etc.).
+- `AddModule()` appelle automatiquement `ModuleManager.NotifyModulesChanged()`.
 - ⚠️ `EnterRoom(CellData)` ne set plus `currentSpecificEventID` — c'est `NavigationManager` qui l'assigne après le tirage aléatoire.
 
 **`SceneLoader.cs`** — Singleton simple, wrappe `SceneManager.LoadScene()`.
@@ -68,9 +77,39 @@ Le joueur explore une carte, tombe sur des salles (combat, événement, etc.), g
 
 ---
 
+### Scène MainMenu
+
+**`MainMenuManager.cs`** — Gère les 4 boutons du menu principal.
+- `Continuer` : actif seulement si `RunManager.hasActiveRun == true`.
+- `Nouvelle Partie` : si run en cours → popup de confirmation "Abandonner ?" (Oui appelle `EndRun()` puis `DemarrerNouvellePartie()`). Sinon → `DemarrerNouvellePartie()` directement.
+- `Paramètres` : placeholder (log), à implémenter.
+- `Quitter` : `Application.Quit()` + stop Play Mode en éditeur.
+- Champ Inspector `defaultCharacter` (CharacterData) : personnage par défaut jusqu'à l'implémentation de la sélection. **TODO** : remplacer par le résultat de `GoToCharacterSelection()`.
+- ⚠️ Si `defaultCharacter` n'est pas assigné dans l'Inspector, log warning et les stats/équipement ne seront pas chargés.
+
+**Layout scène :**
+```
+Canvas
+├── KeyArt          (Image, Stretch full screen, premier enfant = derrière tout)
+├── Logo            (Image/Panel, ancré haut-centre)
+├── ButtonPanel     (VerticalLayoutGroup, ancré gauche-centre)
+│   ├── ContinuerButton
+│   ├── NouvellePartieButton
+│   ├── ParamètresButton
+│   └── QuitterButton
+└── ConfirmationPopup (désactivé par défaut)
+    ├── DarkOverlay (Image full screen, noir semi-transparent)
+    └── PopupPanel
+        ├── MessageText
+        ├── OuiButton
+        └── NonButton
+```
+
+---
+
 ### Scène Navigation
 
-**`NavigationManager.cs`** — Déplacements clavier, brouillard de guerre, 3 sets (`visibleCells`, `visitedCells`, `exploredCells`). Portée effective = `baseVisionRange + RunManager.visionRangeBonus`. Gère les effets de navigation (`AppliquerEffetsNav`), la sélection de zone (`RevealZoneChoice`), et le tirage d'events aléatoires (`ChoisirEventAleatoire` avec fallback `RandomEvents`).
+**`NavigationManager.cs`** — Déplacements clavier, brouillard de guerre, 3 sets (`visibleCells`, `visitedCells`, `exploredCells`). Portée effective = `baseVisionRange + RunManager.visionRangeBonus`, lue depuis `RunManager.selectedCharacter` (fallback : champ Inspector local pour tests isolés). Gère les effets de navigation (`AppliquerEffetsNav`), la sélection de zone (`RevealZoneChoice`), et le tirage d'events aléatoires (`ChoisirEventAleatoire` avec fallback `RandomEvents`).
 - ⚠️ `baseVisionRange` remplace l'ancien `visionRange` — re-saisir la valeur dans l'Inspector après mise à jour du script.
 
 **`MapRenderer.cs`** — Affiche les tiles selon les sets de visibilité. Cases `NonNavigable` toujours `Color.clear`. Gère le preview hover `RevealZoneChoice` via `PreviewZone()` / `ClearPreview()` / `RefreshSingleCell()`.
@@ -85,9 +124,9 @@ Le joueur explore une carte, tombe sur des salles (combat, événement, etc.), g
 
 ### Scène Combat
 
-**`CombatManager.cs`** — Machine à états `PlayerTurn → EnemyTurn → Victory/Defeat`. Stats effectives calculées une fois au démarrage via `ResolveEquipment()`. Armure style StS (reset début de tour, ne bloque pas le poison). Modules `OnFightStart` appliqués après le reset d'armure initial (flag `isFirstTurn`). Loot délégué à `EquipmentOfferController.StartOffresSimultanées()`.
-- `ApplyStatus` : `toEnemy` déterminé par `effect.target` dans toutes les méthodes (plus hardcodé).
-- Consommables : `SetInteractable` respecte `usableInCombat` y compris à la réactivation en début de tour.
+**`CombatManager.cs`** — Machine à états `PlayerTurn → EnemyTurn → Victory/Defeat`. Stats effectives calculées une fois au démarrage via `ResolveEquipment()` — lit `RunManager.selectedCharacter` en priorité, fallback sur le champ Inspector local (tests isolés). Armure style StS (reset début de tour, ne bloque pas le poison). Modules `OnFightStart` appliqués après le reset d'armure initial (flag `isFirstTurn`). Loot délégué à `EquipmentOfferController.StartOffresSimultanées()`.
+- Le seeding de l'équipement/modules/consommables dans `ResolveEquipment()` est désormais un **no-op** en jeu normal (tout est déjà seedé par `RunManager.StartNewRun()`). Les guards (`IsSlotFree`, `HasModule`, `startingConsumablesSeeded`) le garantissent.
+- Sur défaite : `OnEndButtonClicked()` appelle `RunManager.EndRun()` avant `GoToMainMenu()`.
 - `victoireButton` (debug) à retirer en production.
 
 **`EnemyAI.cs`** — File d'actions circulaire.
@@ -180,9 +219,12 @@ Le joueur explore une carte, tombe sur des salles (combat, événement, etc.), g
 - Skills de navigation exclus du combat (`isNavigationSkill`)
 - Cases Event en orange sur la carte, cases NonNavigable transparentes
 - Editors custom : `EffectDataEditor`, `EventEffectDrawer`, `NavEffectDrawer`, `MapEditorWindow`
+- **Scène MainMenu** : Continuer / Nouvelle Partie (popup abandon) / Paramètres (placeholder) / Quitter. Key art plein écran derrière les boutons.
+- **CharacterData centralisé** : `RunManager.selectedCharacter` est la source unique. `CombatManager` et `NavigationManager` lisent depuis RunManager avec fallback Inspector pour les tests isolés.
+- **Seeding au lancement de la run** : équipement, module, consommables de départ ET stats (HP) initialisés dans `RunManager.StartNewRun()` — la Navigation affiche tout correctement dès l'entrée, sans attendre le premier combat.
 
 ### À faire 🔧
-- **Scène MainMenu** ← priorité : doit appeler `StartNewRun()` + `GoToNavigation()`. Sans elle, le seeding de départ (skills jambes, modules, consommables) ne se fait pas avant le premier combat.
+- **Scène de sélection de personnage** — `MainMenuManager.defaultCharacter` est le placeholder en attendant. Quand elle existera : passer le `CharacterData` choisi à `StartNewRun()` et appeler `GoToNavigation()`.
 - `passiveEffects` sur `EquipmentData` : champ défini, non branché dans `CombatManager`
 - `ModifyStat` (EffectAction non implémenté)
 - Boss, salles spéciales
@@ -191,6 +233,8 @@ Le joueur explore une carte, tombe sur des salles (combat, événement, etc.), g
 - Popup "Utiliser / Jeter" pour les consommables
 - Icône consommable grisée visuellement (après intégration sprites)
 - Cooldown des skills de navigation hors combat
+- Paramètres (panel à construire)
+- Ressources futures (or, etc.) : ajouter champ dans `RunManager` + ligne dans `InitialiserStats()`
 
 ### Localisation 🌍
 À implémenter après la première version jouable. Utiliser `com.unity.localization`. Ne jamais hardcoder du texte visible dans le code C#.
@@ -216,3 +260,5 @@ Le joueur explore une carte, tombe sur des salles (combat, événement, etc.), g
 15. **`baseVisionRange` (ex-`visionRange`)** : valeur réinitialisée à `1` après mise à jour du script — re-saisir manuellement dans la scène Navigation.
 16. **ConsumableButton.SetInteractable() + sizeDelta nul** : désactiver `ChildControlSize` sur le container, définir la taille dans le prefab.
 17. **ConsumableButton + callback null** : `Setup(data, null)` est valide (Event). Pas de crash, le clic ne fait rien.
+18. **CharacterData fallback Inspector** : `CombatManager` et `NavigationManager` ont chacun un champ `characterData` en Inspector qui sert uniquement pour les tests de scène isolée. En jeu normal, il est écrasé/ignoré au profit de `RunManager.selectedCharacter`. Ne pas s'étonner si le champ Inspector semble "ignoré" en jeu complet.
+19. **Seeding déjà fait à `StartNewRun()`** : le bloc de seeding de `CombatManager.ResolveEquipment()` est un no-op en jeu normal — tous les guards (`IsSlotFree`, `HasModule`, `startingConsumablesSeeded`) sont déjà vérifiés. Ne pas dupliquer la logique ailleurs.

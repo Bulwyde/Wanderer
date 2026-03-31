@@ -31,7 +31,9 @@ public class RunManager : MonoBehaviour
     // -----------------------------------------------
 
     [Header("Personnage")]
-    public string selectedCharacterID;
+    // Référence directe au ScriptableObject du personnage choisi.
+    // Assignée par MainMenuManager (ou la future scène de sélection) via StartNewRun().
+    public CharacterData selectedCharacter;
 
     [Header("État du joueur")]
     public int currentHP;
@@ -269,6 +271,9 @@ public class RunManager : MonoBehaviour
 
     // Indique si on a un état de navigation à restaurer.
     // Vaut false au démarrage d'un run (le joueur n'est pas encore parti en combat).
+    [Header("État de la run")]
+    public bool hasActiveRun = false;
+
     [Header("Navigation sauvegardée")]
     public bool hasNavigationState = false;
 
@@ -290,10 +295,10 @@ public class RunManager : MonoBehaviour
     /// <summary>
     /// Initialise une nouvelle run depuis zéro.
     /// </summary>
-    public void StartNewRun(string characterID, string missionID)
+    public void StartNewRun(CharacterData character, string missionID)
     {
-        selectedCharacterID = characterID;
-        currentMissionID    = missionID;
+        selectedCharacter = character;
+        currentMissionID  = missionID;
         currentRoomX        = 0;
         currentRoomY        = 0;
         difficultyModifier  = 1.0f;
@@ -313,7 +318,13 @@ public class RunManager : MonoBehaviour
         savedVisitedCells.Clear();
         savedExploredCells.Clear();
 
-        Debug.Log($"Nouveau run — Personnage : {characterID} | Mission : {missionID}");
+        hasActiveRun = true;
+
+        // Seed l'équipement, le module et les consommables de départ
+        // dès le lancement du run, pour que la Navigation les affiche immédiatement.
+        SeedDonneesDepart(character);
+
+        Debug.Log($"[RunManager] Nouveau run — Personnage : {character?.characterName ?? "inconnu"} | Mission : {missionID}");
     }
 
     /// <summary>
@@ -380,6 +391,88 @@ public class RunManager : MonoBehaviour
     public bool GetEventFlag(string key)
     {
         return eventFlags.ContainsKey(key) && eventFlags[key];
+    }
+
+    /// <summary>
+    /// Termine la run en cours (défaite ou abandon).
+    /// Remet hasActiveRun à false — le MainMenu désactivera "Continuer" en conséquence.
+    /// </summary>
+    /// <summary>
+    /// Seed l'équipement, le module et les consommables de départ du personnage.
+    /// Appelé depuis StartNewRun() — les guards (IsSlotFree, HasModule, startingConsumablesSeeded)
+    /// garantissent que CombatManager ne re-seedera rien lors du premier combat.
+    /// </summary>
+    private void SeedDonneesDepart(CharacterData character)
+    {
+        if (character == null) return;
+
+        // Équipement de départ — un slot par slot, seulement si vide
+        SeedSlotSiVide(EquipmentSlot.Head,  character.startingHead);
+        SeedSlotSiVide(EquipmentSlot.Torso, character.startingTorso);
+        SeedSlotSiVide(EquipmentSlot.Legs,  character.startingLegs);
+        SeedSlotSiVide(EquipmentSlot.Arm1,  character.startingArm1);
+        SeedSlotSiVide(EquipmentSlot.Arm2,  character.startingArm2);
+
+        // Module de départ
+        if (character.startingModule != null && !HasModule(character.startingModule))
+            AddModule(character.startingModule);
+
+        // Consommables de départ (une seule fois par run)
+        if (character.startingConsumables != null && !startingConsumablesSeeded)
+        {
+            foreach (ConsumableData consumable in character.startingConsumables)
+            {
+                if (consumable != null)
+                    AddConsumable(consumable);
+            }
+            startingConsumablesSeeded = true;
+        }
+
+        // Stats de départ — calculées après le seeding de l'équipement
+        // pour inclure les bonus des pièces de départ dans le total.
+        InitialiserStats(character);
+
+        Debug.Log($"[RunManager] Données de départ seedées pour {character.characterName}.");
+    }
+
+    /// <summary>
+    /// Calcule les stats de départ (HP, et à terme toutes les ressources)
+    /// à partir du CharacterData et des bonus d'équipement déjà seedés.
+    /// Appelé depuis SeedDonneesDepart(), après le seeding de l'équipement.
+    /// </summary>
+    private void InitialiserStats(CharacterData character)
+    {
+        // HP max = base + bonus de chaque slot équipé
+        int hpMax = character.maxHP;
+        foreach (EquipmentSlot slot in System.Enum.GetValues(typeof(EquipmentSlot)))
+        {
+            EquipmentData equip = GetEquipped(slot);
+            if (equip != null)
+                hpMax += equip.bonusHP;
+        }
+
+        maxHP     = Mathf.Max(1, hpMax);
+        currentHP = maxHP;
+
+        // -----------------------------------------------
+        // RESSOURCES FUTURES (or, mana, etc.)
+        // Ajouter ici quand CharacterData exposera des valeurs de départ.
+        // Exemple : gold = character.startingGold;
+        // -----------------------------------------------
+
+        Debug.Log($"[RunManager] Stats initialisées — HP : {currentHP}/{maxHP}");
+    }
+
+    private void SeedSlotSiVide(EquipmentSlot slot, EquipmentData starting)
+    {
+        if (starting != null && IsSlotFree(slot))
+            EquipItem(slot, starting);
+    }
+
+    public void EndRun()
+    {
+        hasActiveRun = false;
+        Debug.Log("[RunManager] Run terminée.");
     }
 
     public void AddDifficultyModifier(float delta)

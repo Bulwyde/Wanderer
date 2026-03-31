@@ -26,8 +26,8 @@ public class NavigationManager : MonoBehaviour
     [Header("Références")]
     public MapData mapData;
     public MapRenderer mapRenderer;
-    // Données du personnage en cours — fournit baseVisionRange et pourra fournir d'autres stats de navigation.
-    // Assigner le même CharacterData que celui utilisé dans CombatManager.
+    // Fallback CharacterData pour les tests de la scène Navigation en isolation.
+    // En jeu normal, le CharacterData vient de RunManager.selectedCharacter.
     public CharacterData characterData;
 
     [Header("Visibilité")]
@@ -207,9 +207,18 @@ public class NavigationManager : MonoBehaviour
     // VISIBILITÉ
     // -----------------------------------------------
 
-    private int PorteeVisionEffective =>
-        (characterData != null ? characterData.baseVisionRange : 1) +
-        (RunManager.Instance != null ? RunManager.Instance.visionRangeBonus : 0);
+    private int PorteeVisionEffective
+    {
+        get
+        {
+            // Priorité : CharacterData issu de RunManager (run en cours)
+            // Fallback : champ Inspector local (tests en isolation)
+            CharacterData cd = RunManager.Instance?.selectedCharacter ?? characterData;
+            int baseRange = cd != null ? cd.baseVisionRange : 1;
+            int bonus     = RunManager.Instance != null ? RunManager.Instance.visionRangeBonus : 0;
+            return baseRange + bonus;
+        }
+    }
 
     private void UpdateVisibility()
     {

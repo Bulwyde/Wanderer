@@ -165,6 +165,13 @@ public class CombatManager : MonoBehaviour
 
     void Start()
     {
+        // Résoudre le CharacterData depuis RunManager si une run est en cours.
+        // Fallback sur le champ Inspector pour les tests de la scène Combat en isolation.
+        if (RunManager.Instance?.selectedCharacter != null)
+            characterData = RunManager.Instance.selectedCharacter;
+        else
+            Debug.Log("[Combat] Pas de CharacterData dans RunManager — utilisation du champ Inspector local.");
+
         if (endTurnButton      != null) endTurnButton.onClick.AddListener(OnEndTurn);
         if (endButton          != null) endButton.onClick.AddListener(OnEndButtonClicked);
         if (victoireButton     != null) victoireButton.onClick.AddListener(OnVictoireCheat);
@@ -1211,6 +1218,9 @@ public class CombatManager : MonoBehaviour
     {
         if (battleState == BattleState.Defeat)
         {
+            // Signaler au RunManager que la run est terminée
+            // pour que le MainMenu grise correctement "Continuer"
+            RunManager.Instance?.EndRun();
             SceneLoader.Instance.GoToMainMenu();
         }
     }

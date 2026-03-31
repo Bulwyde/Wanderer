@@ -389,13 +389,15 @@ public class CombatManager : MonoBehaviour
 
         foreach (ConsumableData consumable in consumables)
         {
-            if (consumable == null || !consumable.usableInCombat) continue;
+            if (consumable == null) continue;
 
             GameObject go = Instantiate(consumableButtonPrefab, consumableButtonContainer);
             ConsumableButton cb = go.GetComponent<ConsumableButton>();
             if (cb == null) continue;
 
             cb.Setup(consumable, UseConsumable);
+            // Non utilisable en combat = affiché mais grisé et réduit
+            cb.SetInteractable(consumable.usableInCombat);
             spawnedConsumableButtons.Add(cb);
         }
     }
@@ -444,9 +446,9 @@ public class CombatManager : MonoBehaviour
 
         UpdateSkillButtons();
 
-        // Réactive les boutons de consommables (bloqués pendant le tour ennemi)
+        // Réactive uniquement les consommables utilisables en combat (les autres restent grisés)
         foreach (ConsumableButton cb in spawnedConsumableButtons)
-            cb.SetInteractable(true);
+            cb.SetInteractable(cb.Consumable != null && cb.Consumable.usableInCombat);
 
         UpdateUI();
 

@@ -760,16 +760,18 @@ public class NavigationManager : MonoBehaviour
 
         foreach (ConsumableData conso in RunManager.Instance.GetConsumables())
         {
-            if (!conso.usableOnMap) continue;
-            if (conso.mapEffects == null || conso.mapEffects.Count == 0) continue;
-
             GameObject btn = Instantiate(consommablePrefab, consommableContainer);
             ConsumableButton btnScript = btn.GetComponent<ConsumableButton>();
-            if (btnScript != null)
-            {
-                ConsumableData consoRef = conso; // capture pour le lambda
-                btnScript.Setup(conso, (c) => UtiliserConsommableNav(c));
-            }
+            if (btnScript == null) continue;
+
+            ConsumableData consoRef = conso; // capture pour le lambda
+            btnScript.Setup(conso, (c) => UtiliserConsommableNav(c));
+
+            // Utilisable sur la carte uniquement si usableOnMap et au moins un mapEffect défini
+            bool utilisable = conso.usableOnMap &&
+                              conso.mapEffects != null &&
+                              conso.mapEffects.Count > 0;
+            btnScript.SetInteractable(utilisable);
         }
     }
 

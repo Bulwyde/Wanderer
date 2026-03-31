@@ -103,11 +103,20 @@ SceneLoader.Instance.GoToMainMenu()
 - `RevelerZone(cx, cy, rayon)` — ajoute des cases à `exploredCells` et rafraîchit la carte
 - `DemarrerSelectionZone(rayon)` — active le mode clic ; `GererSelectionZone()` convertit le clic écran → coordonnées de case via `RectTransformUtility.ScreenPointToLocalPointInRectangle`
 - **UI Navigation** : `RafraichirUINavigation()` — recrée les boutons consommables (`consommableContainer`) et skills jambes (`skillContainer`). Tous les champs UI sont optionnels.
+- **Consommables en navigation** : `SpawnConsommablesNav()` affiche **tous** les consommables. `SetInteractable(false)` sur ceux avec `usableOnMap = false` ou sans `mapEffects` — ils sont visibles mais grisés et réduits d'un tiers.
+- **Fallback événements** : champ `randomEvents` (RandomEvents ScriptableObject) dans l'Inspector. `ChoisirEventAleatoire()` tente d'abord le mode normal (ManualList / FromPool), puis cherche dans `RandomEvents` le pool associé à la `MapData` courante si aucun event n'est disponible.
+- **`RevelerZone()`** : filtre les cases NonNavigable sans voisin navigable (`AUnVoisinNavigable` = false) — elles ne sont pas ajoutées à `exploredCells` (évite de gaspiller la révélation).
+- **`GererSelectionZone()`** : refuse les clics sur les cases NonNavigable (reste en mode sélection). Appelle `ActualiserPreviewZone()` chaque frame pour le hover.
+- **`ObtenirCaseDepuisSouris(out int cellX, out int cellY)`** : helper partagé — convertit la position souris en coordonnées de case. Utilisé par hover et clic.
+- **`ActualiserPreviewZone()`** : met à jour le preview `MapRenderer` à chaque frame selon la case survolée. `derniereCellSurvol` (Vector2Int?) évite de recalculer si la case n'a pas changé.
 - ⚠️ `baseVisionRange` remplace l'ancien `visionRange` (champ renommé) — penser à re-saisir la valeur dans l'Inspector après la mise à jour du script
 
 **`MapRenderer.cs`**
 - Affiche la carte (tiles) selon les sets de visibilité de NavigationManager
 - La carte est dans un `mapContainer` (RectTransform) déplacé/zoomé par `MapCameraController`
+- **Cases NonNavigable** : toujours `Color.clear` (transparentes, jamais soumises au brouillard)
+- **Murs** : `Color.clear` si entre deux NonNavigable ; `Color.clear` si non encore visibles (ne trahissent pas leur présence) ; `colorWall` dès qu'au moins une case adjacente est dans `IsVisible()`
+- **Preview hover `RevealZoneChoice`** : `PreviewZone(cx, cy, rayon)` colorie les cases cibles en `colorPreview` (jaune vif configurable Inspector). `ClearPreview()` restaure les couleurs via `RefreshSingleCell()` sans refaire toute la grille. Les cases NonNavigable sont exclues du preview.
 
 **`MapCameraController.cs`**
 - Déplace/zoome le `mapContainer` (RectTransform) — ce n'est **pas** une vraie caméra Unity
@@ -125,6 +134,7 @@ SceneLoader.Instance.GoToMainMenu()
 
 **`MapData.cs`**
 - ScriptableObject — grille de `CellData[]`
+- `AUnVoisinNavigable(int x, int y)` : retourne `true` si au moins un des 8 voisins (cardinaux + diagonales) est différent de `NonNavigable`. Utilisé par `MapRenderer` (preview) et `NavigationManager` (`RevelerZone`).
 
 ```csharp
 public enum CellType { Empty, Start, Boss, Classic, Event, NonNavigable }
@@ -142,6 +152,7 @@ public enum EventCellMode { ManualList, FromPool }
 - Les cases de type `Event` utilisent `eventCellMode` pour choisir entre liste manuelle et pool prédéfini
 - `NavigationManager.ChoisirEventAleatoire()` dispatch selon le mode, filtre les events déjà joués, retourne `null` si tout est joué (salle ignorée sans transition)
 - ⚠️ Éditeur de carte : `MapEditorWindow` (Assets/Editor) — le panneau "Événements" apparaît uniquement pour les cases de type `Event`
+- **Case par défaut** : `InitializeCells()` crée toutes les cases en `NonNavigable` (au lieu de `Empty`). Le level designer peint les cases navigables par-dessus au clic droit.
 
 ---
 
@@ -161,7 +172,7 @@ public enum EventCellMode { ManualList, FromPool }
   - `ApplyEnemyEffect` (skill ennemi) : `toEnemy = effect.target == EffectTarget.Self` (logique inversée — "Self" pour l'ennemi = l'ennemi lui-même)
   - `ApplyConsumableEffect` : même logique que `ApplyEffect`
 - **Loot** : tirage aléatoire Fisher-Yates dans `EnemyData.lootPool`, délégué à `EquipmentOfferController.StartOffresSimultanées()`. `lootContinueButton` affiché via `SetActive(true)` dans `ShowLootPanel()` et masqué dans `Start()`.
-- **Consommables en combat** : `SpawnConsumableButtons()` génère les boutons depuis `RunManager.GetConsumables()`. Boutons bloqués pendant le tour ennemi / fin de combat.
+- **Consommables en combat** : `SpawnConsumableButtons()` affiche **tous** les consommables. `SetInteractable` selon `usableInCombat` — les non-utilisables sont grisés et réduits. La réactivation en début de tour joueur respecte aussi `usableInCombat` (plus de `SetInteractable(true)` global). Boutons bloqués pendant le tour ennemi / fin de combat.
 - **Modules en combat** :
   - `isFirstTurn` (bool) : vrai jusqu'au premier `StartPlayerTurn()`. Permet d'appliquer les modules `OnFightStart` **après** le reset d'armure initial.
   - `ApplyModuleEffect(EffectData, string moduleName)` : méthode publique appelée par `ModuleManager`. Respecte `effect.target` (Self → joueur, sinon ennemi). Dégâts bruts (pas d'ATK ajoutée).
@@ -224,6 +235,7 @@ EquipmentOfferArea        ← ce composant (EquipmentOfferController)
 - Si aucun équipement en attente → `MontrerContinueButton()` directement
 - `MontrerContinueButton()` : remonte toute la hiérarchie jusqu'au Canvas et active chaque parent avant d'activer le bouton (protège contre les panels désactivés)
 - "Continuer" → `RunManager.MarkEventPlayed(eventID)` → `RunManager.ClearCurrentRoom()` → `GoToNavigation()`
+- **Consommables en event** : `consumableContainer` (Transform) + `consumableButtonPrefab` (GameObject) à assigner dans l'Inspector. `SpawnConsumableButtons()` affiche tous les consommables, tous non interactables (lecture seule pendant un événement). Setup scène : ajouter un container avec HorizontalLayoutGroup, le même prefab `ConsumableButton` que les autres scènes.
 - ⚠️ Système d'effets propre (`EventEffect` / `EventEffectType`) — indépendant de `EffectData`
 
 **`EventData.cs`**
@@ -282,6 +294,13 @@ public bool flagValue;                         // SetEventFlag
 - ScriptableObject réutilisable (`RPG → Module Loot Table`) — `List<ModuleData> modules`
 - `GetRandom()` : exclut les modules déjà possédés (`RunManager.HasModule`) et tire au sort
 - Retourne `null` si tout est possédé
+
+**`RandomEvents.cs`**
+- ScriptableObject (`RPG → Random Events`) — fallback pour les salles Event sans événement configuré
+- `List<EntreeFallback>` : chaque entrée lie une `MapData` à un `EventPool` de fallback
+- `GetPoolPourMap(MapData)` : retourne le pool correspondant, ou `null` si aucune entrée ne correspond
+- Champ `randomEvents` à assigner dans l'Inspector de `NavigationManager`
+- Comportement : si `ChoisirEventAleatoire()` ne trouve rien (liste vide, pool null ou épuisé), tente ce pool de fallback. Log d'avertissement explicite si le fallback est aussi absent ou épuisé.
 
 **`ConsumableLootTable.cs`**
 - ScriptableObject (`RPG → Consumable Loot Table`) — `List<ConsumableData> consumables`
@@ -399,8 +418,17 @@ public enum EquipmentSlot { Head, Torso, Legs, Arm1, Arm2 }
 | `ChoiceButton`         | Boutons de choix dans la scène Event            |
 | `SkillButtonPrefab`    | Boutons de compétences dans la scène Combat     |
 | `LootCard`             | Cartes d'équipement affichées après victoire    |
-| `ConsumableButton`     | Bouton icône (tooltip prévu au survol)          |
+| `ConsumableButton`     | Bouton icône — affiché dans les 3 scènes (combat, navigation, event) |
 | `ModuleIcon`           | Icône de module dans le HUD (48×48 px, Image + script `ModuleIcon`) |
+
+### ConsumableButton — comportement interactivité
+- `Setup(data, callback)` : configure l'icône et le callback. Callback peut être `null` (bouton non interactable de toute façon).
+- `SetInteractable(false)` : grise le bouton (Unity Button ColorBlock) **et** réduit la taille d'un tiers via `sizeDelta` + `LayoutElement.preferredSize`. `tailleNormale` est lue depuis le prefab dans `Awake()` (fallback 50×50 si sizeDelta = 0).
+- **À terme** : remplacer le clic direct par un popup "Utiliser / Jeter". Seule l'option "Utiliser" sera non interactable selon le contexte — pas le bouton entier.
+- Contextes d'utilisation :
+  - **Navigation** : interactable si `usableOnMap = true` ET `mapEffects` non vide
+  - **Combat** : interactable si `usableInCombat = true` (grisé aussi pendant le tour ennemi)
+  - **Event** : toujours non interactable
 
 ### ChoiceButton — configuration importante
 - Taille : **360×65 px**
@@ -480,6 +508,12 @@ Canvas
 - **`EffectDataEditor`** (`Assets/Editor`) : `CustomEditor` sur `EffectData` — labels contextuels pour `value`/`secondaryValue` selon `action`, champs non pertinents masqués.
 - **`baseVisionRange` dans `CharacterData`** : portée de vision de base par personnage. `NavigationManager` lit `characterData.baseVisionRange` + `RunManager.visionRangeBonus` via la propriété `PorteeVisionEffective`. Champ `CharacterData characterData` à assigner dans l'Inspector de la scène Navigation.
 - Cases Event affichées en orange sur la carte (couleur configurable via `colorEvent` dans `MapRenderer`).
+- **MapEditor case par défaut NonNavigable** : `InitializeCells()` initialise toutes les cases en `NonNavigable` — le level designer dessine les zones navigables par-dessus.
+- **Rendu carte — NonNavigable transparent** : cases `NonNavigable` toujours `Color.clear` (pas de brouillard). Murs entre deux NonNavigable : `Color.clear`. Murs non visités : `Color.clear` (ne trahissent pas leur présence avant d'être découverts).
+- **`MapData.AUnVoisinNavigable(x, y)`** : helper utilisé par `RevelerZone()` pour ne pas gaspiller la révélation sur des NonNavigable totalement isolées.
+- **Preview hover RevealZoneChoice** : surbrillance jaune (`colorPreview` configurable) sur la zone qui serait révélée au survol. `PreviewZone()` / `ClearPreview()` / `RefreshSingleCell()` dans `MapRenderer`. `ActualiserPreviewZone()` + `ObtenirCaseDepuisSouris()` dans `NavigationManager`. Clic sur NonNavigable = rejeté, mode sélection maintenu.
+- **`RandomEvents`** : ScriptableObject de fallback (`RPG → Random Events`). Lie chaque `MapData` à un `EventPool` générique. Utilisé automatiquement par `NavigationManager.ChoisirEventAleatoire()` quand aucun event n'est disponible pour une salle.
+- **Consommables affichés dans les 3 scènes** : tous visibles partout. Non utilisables = grisés + réduits d'un tiers (`ConsumableButton.SetInteractable(false)`). Règle : Navigation → `usableOnMap`, Combat → `usableInCombat`, Event → toujours non interactable.
 
 ### En cours / À faire 🔧
 - **Scène MainMenu** (priorité avant toute autre fonctionnalité) : scène de démarrage obligatoire qui initialise correctement la run avant d'entrer en Navigation. Doit appeler `RunManager.StartNewRun(characterID, missionID)` et `SceneLoader.Instance.GoToNavigation()`. Sans elle, tester depuis la scène Navigation ne charge pas l'équipement de départ (les skills de jambes, modules, consommables de départ ne sont seedés que dans `CombatManager.ResolveEquipment()` — à terme, une partie du seeding devra être faite dès le MainMenu pour que la Navigation soit correcte dès le premier lancement).
@@ -491,6 +525,8 @@ Canvas
 - **Icônes de cases (graphique)** : permettre d'assigner une image/sprite par type de case (`CellType`) directement dans l'Inspector du `MapRenderer`, au lieu de simples couleurs. Chaque case afficherait son sprite quand découverte. À faire après le boss, avant sons/animations.
 - Sons, animations, retours visuels
 - Inventaire (prévu dans RunManager, commentaire `// Futur`)
+- **Consommables — popup "Utiliser / Jeter"** : à terme, le clic sur un consommable ouvre un choix. "Utiliser" sera grisé selon le contexte (pas `usableOnMap`, pas `usableInCombat`, ou scène Event). "Jeter" sera toujours disponible. Refactoring de `ConsumableButton.SetInteractable()` en conséquence.
+- **Icône consommable grisée** : quand un consommable est non interactable, l'image de l'icône (`iconImage`) devrait aussi se griser. Pas encore implémenté — à faire quand les sprites seront intégrés.
 
 ### Localisation 🌍
 - **À implémenter après la première version jouable de bout en bout**
@@ -516,3 +552,5 @@ Canvas
 13. **`EquipmentOfferController` + bouton "Continuer"** : le controller se désactive lui-même via `Awake()`. Tout bouton "Continuer" doit être **frère** du GO `EquipmentOfferArea`, jamais enfant — sinon il disparaît avec le controller. En Combat, le `lootContinueButton` doit aussi être explicitement masqué dans `Start()` (il serait cliquable pendant le combat sinon).
 14. **`RevealZoneChoice` et clics simultanés** : en mode sélection de zone (`modeSelectionZone = true`), `Update()` bloque les déplacements clavier mais **pas** les clics sur les boutons de l'UI (consommables, skills). Un clic sur un bouton UI passe **aussi** par `Input.GetMouseButtonDown(0)`. Pour éviter de consommer involontairement le clic du bouton comme sélection de zone, utiliser `EventSystem.current.IsPointerOverGameObject()` avant de traiter le clic — à ajouter si des conflits sont observés.
 15. **`visionRange` renommé en `baseVisionRange`** : l'ancien champ public `visionRange` est maintenant `[SerializeField] private int baseVisionRange`. La valeur Inspector est réinitialisée à sa valeur par défaut (`1`) après la mise à jour du script — penser à la re-saisir manuellement dans la scène Navigation.
+16. **`ConsumableButton.SetInteractable()` + sizeDelta nul** : si le prefab a `sizeDelta = (0,0)` (Layout Group `ChildControlSize` actif), `tailleNormale` tombe en fallback 50×50. Pour éviter ça, désactiver `ChildControlSize` sur le container de consommables et définir la taille directement dans le prefab. `LayoutElement.preferredSize` est ajouté dynamiquement uniquement quand `interactable = false` — pas besoin de le mettre à la main dans le prefab.
+17. **`ConsumableButton` + callback null** : `Setup(data, null)` est valide (scène Event). Si `SetInteractable` passe à `true` par erreur alors que le callback est null, le clic ne fait rien (guard `onUse?.Invoke`). Pas de crash, mais vérifier la cohérence lors du futur refactoring "Utiliser / Jeter".

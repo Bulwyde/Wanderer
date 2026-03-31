@@ -76,6 +76,17 @@ public class EventManager : MonoBehaviour
     public EquipmentOfferController equipmentOfferController;
 
     // -----------------------------------------------
+    // UI — CONSOMMABLES
+    // -----------------------------------------------
+
+    [Header("UI — Consommables")]
+    // Conteneur où les icônes de consommables seront affichées (lecture seule en event)
+    public Transform consumableContainer;
+
+    // Préfab d'un bouton de consommable — même prefab que combat/navigation
+    public GameObject consumableButtonPrefab;
+
+    // -----------------------------------------------
     // ÉTAT INTERNE
     // -----------------------------------------------
 
@@ -97,6 +108,7 @@ public class EventManager : MonoBehaviour
         }
 
         LoadAndDisplayEvent();
+        SpawnConsumableButtons();
     }
 
     /// <summary>
@@ -146,6 +158,32 @@ public class EventManager : MonoBehaviour
         if (descriptionText != null) descriptionText.text = currentEvent.description;
 
         SpawnChoiceButtons();
+    }
+
+    /// <summary>
+    /// Affiche tous les consommables du joueur en lecture seule.
+    /// Tous les boutons sont non interactables en scène Event :
+    /// le joueur peut voir son inventaire mais pas l'utiliser pendant un événement.
+    /// </summary>
+    private void SpawnConsumableButtons()
+    {
+        if (consumableContainer == null || consumableButtonPrefab == null) return;
+        if (RunManager.Instance == null) return;
+
+        foreach (Transform child in consumableContainer)
+            Destroy(child.gameObject);
+
+        foreach (ConsumableData conso in RunManager.Instance.GetConsumables())
+        {
+            if (conso == null) continue;
+
+            GameObject go = Instantiate(consumableButtonPrefab, consumableContainer);
+            ConsumableButton cb = go.GetComponent<ConsumableButton>();
+            if (cb == null) continue;
+
+            cb.Setup(conso, null);
+            cb.SetInteractable(false); // Jamais utilisable pendant un événement
+        }
     }
 
     /// <summary>

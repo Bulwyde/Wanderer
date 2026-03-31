@@ -18,7 +18,7 @@ public class SkillButton : MonoBehaviour
     // Affiché uniquement quand la compétence est en cooldown
     public TextMeshProUGUI cooldownText;
 
-    // La compétence associée à ce bouton
+    // La compétence associée à ce bouton (null pour les boutons passifs)
     private SkillData skill;
 
     // -----------------------------------------------
@@ -80,4 +80,34 @@ public class SkillButton : MonoBehaviour
 
     // Accesseur pour que CombatManager puisse retrouver la compétence liée
     public SkillData Skill => skill;
+
+    // -----------------------------------------------
+    // BOUTON PASSIF (effet d'équipement)
+    // -----------------------------------------------
+
+    /// <summary>
+    /// Configure le bouton en mode "effet passif" :
+    /// affiche le nom de l'effet (displayName ou effectID en fallback),
+    /// remplace le coût en énergie par "Passif",
+    /// désactive le bouton (toujours grisé — non cliquable).
+    /// </summary>
+    public void SetupPassif(EffectData effet)
+    {
+        skill = null;
+
+        string nom = (!string.IsNullOrEmpty(effet.displayName)) ? effet.displayName : effet.effectID;
+
+        if (skillNameText != null)
+            skillNameText.text = nom;
+
+        if (energyCostText != null)
+            energyCostText.text = "Passif";
+
+        // Aucun cooldown à afficher sur un passif
+        SetCooldown(0);
+
+        // Supprime tout listener existant et désactive le bouton
+        button.onClick.RemoveAllListeners();
+        SetInteractable(false);
+    }
 }

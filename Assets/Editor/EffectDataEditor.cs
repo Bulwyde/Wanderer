@@ -46,6 +46,8 @@ public class EffectDataEditor : Editor
 
         EditorGUILayout.LabelField("Identité", EditorStyles.boldLabel);
         EditorGUILayout.PropertyField(serializedObject.FindProperty("effectID"));
+        EditorGUILayout.PropertyField(serializedObject.FindProperty("displayName"),
+            new GUIContent("Nom affiché", "Nom court sur les boutons passifs. Si vide, effectID est utilisé."));
         EditorGUILayout.PropertyField(serializedObject.FindProperty("description"));
         EditorGUILayout.PropertyField(serializedObject.FindProperty("keywords"));
 

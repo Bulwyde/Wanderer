@@ -353,11 +353,14 @@ public class CombatManager : MonoBehaviour
     /// Instancie un bouton par compétence dans le skillButtonContainer.
     /// On génère les boutons une seule fois à l'initialisation —
     /// on les met à jour (grisés, cooldown) à chaque changement d'état.
+    /// Après les compétences actives, génère également un bouton passif grisé
+    /// pour chaque passiveEffect des pièces de bras (Arm1, Arm2).
     /// </summary>
     private void SpawnSkillButtons()
     {
         if (skillButtonPrefab == null || skillButtonContainer == null) return;
 
+        // Compétences actives (non-navigation)
         foreach (SkillData skill in availableSkills)
         {
             if (skill == null) continue;
@@ -370,6 +373,46 @@ public class CombatManager : MonoBehaviour
 
             sb.Setup(skill, UseSkill);
             spawnedSkillButtons.Add(sb);
+        }
+
+        // Effets passifs des bras — boutons grisés, non cliquables
+        SpawnPassifsBras();
+    }
+
+    /// <summary>
+    /// Génère un bouton passif grisé pour chaque passiveEffect des pièces Arm1 et Arm2.
+    /// Les boutons sont ajoutés à la suite des compétences actives dans le même container.
+    /// </summary>
+    private void SpawnPassifsBras()
+    {
+        EquipmentData bras1 = RunManager.Instance?.GetEquipped(EquipmentSlot.Arm1)
+                              ?? characterData?.startingArm1;
+        EquipmentData bras2 = RunManager.Instance?.GetEquipped(EquipmentSlot.Arm2)
+                              ?? characterData?.startingArm2;
+
+        SpawnPassifsEquipement(bras1);
+        SpawnPassifsEquipement(bras2);
+    }
+
+    /// <summary>
+    /// Instancie un bouton passif grisé pour chaque EffectData dans passiveEffects de la pièce.
+    /// </summary>
+    private void SpawnPassifsEquipement(EquipmentData equip)
+    {
+        if (equip == null || equip.passiveEffects == null) return;
+
+        foreach (EffectData effet in equip.passiveEffects)
+        {
+            if (effet == null) continue;
+
+            GameObject go = Instantiate(skillButtonPrefab, skillButtonContainer);
+            SkillButton sb = go.GetComponent<SkillButton>();
+            if (sb == null) continue;
+
+            sb.SetupPassif(effet);
+            // Les boutons passifs ne sont pas trackés dans spawnedSkillButtons :
+            // ils sont toujours grisés, jamais mis à jour par UpdateSkillButtons().
+            Debug.Log($"[Combat] Bouton passif généré : {effet.displayName ?? effet.effectID} ({equip.equipmentName})");
         }
     }
 

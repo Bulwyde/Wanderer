@@ -12,7 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5713ebea065ef3643a7749f10079cbca, type: 3}
   m_Name: Effect_Adrenaline
   m_EditorClassIdentifier: Assembly-CSharp::EffectData
-  effectID: 
+  effectID: effect_adrenaline
+  displayName: "Adr\xE9naline"
   description: 
   keywords: []
   trigger: 4

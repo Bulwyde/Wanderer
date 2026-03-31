@@ -92,23 +92,22 @@ public class ModuleManager : MonoBehaviour
     // -----------------------------------------------
 
     /// <summary>
-    /// Déclenche l'effet de tous les modules dont l'EffectData.trigger correspond.
-    /// Également appelé par CombatManager pour les modules Passive au démarrage du combat.
+    /// Déclenche les effets de tous les modules ET les passiveEffects d'équipements
+    /// dont l'EffectData.trigger correspond au trigger demandé.
+    /// Également appelé par CombatManager pour les triggers OnFightStart.
     /// </summary>
     public void ApplyModulesWithTrigger(EffectTrigger trigger)
     {
         if (isApplyingModule) return;
         if (RunManager.Instance == null) return;
 
-        List<ModuleData> modules = RunManager.Instance.GetModules();
-        if (modules.Count == 0) return;
-
         CombatManager combat = FindFirstObjectByType<CombatManager>();
 
         isApplyingModule = true;
         try
         {
-            foreach (ModuleData module in modules)
+            // --- Modules ---
+            foreach (ModuleData module in RunManager.Instance.GetModules())
             {
                 if (module == null || module.effect == null) continue;
                 if (module.effect.trigger != trigger) continue;
@@ -119,6 +118,27 @@ public class ModuleManager : MonoBehaviour
                     combat.ApplyModuleEffect(module.effect, module.moduleName);
                 else
                     ApplyEffectOutOfCombat(module.effect, module.moduleName);
+            }
+
+            // --- Passifs d'équipement ---
+            foreach (EquipmentSlot slot in System.Enum.GetValues(typeof(EquipmentSlot)))
+            {
+                EquipmentData equip = RunManager.Instance.GetEquipped(slot);
+                if (equip == null || equip.passiveEffects == null) continue;
+
+                foreach (EffectData effet in equip.passiveEffects)
+                {
+                    if (effet == null) continue;
+                    if (effet.trigger != trigger) continue;
+
+                    string nom = $"{equip.equipmentName} — {(string.IsNullOrEmpty(effet.displayName) ? effet.effectID : effet.displayName)}";
+                    Debug.Log($"[Équipement passif] '{nom}' déclenché ({trigger})");
+
+                    if (combat != null)
+                        combat.ApplyModuleEffect(effet, nom);
+                    else
+                        ApplyEffectOutOfCombat(effet, nom);
+                }
             }
         }
         finally

@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: Effect_Explo_Conso
   m_EditorClassIdentifier: Assembly-CSharp::EffectData
   effectID: effect_explo_conso
+  displayName: Bombe
   description: 
   keywords: []
   trigger: 0

@@ -11,6 +11,10 @@ public class EffectData : ScriptableObject
     // Identifiant unique de l'effet
     public string effectID;
 
+    // Nom court affiché sur les boutons passifs (ex : "Empoisonnement au contact").
+    // Si vide, le bouton utilise effectID comme fallback.
+    public string displayName;
+
     // Description affichée au joueur avec balises de mots-clés
     // Ex : "Inflige 5 de {$weakness} à la cible."
     [TextArea(2, 5)]

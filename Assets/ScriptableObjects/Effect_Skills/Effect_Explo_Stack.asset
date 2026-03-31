@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: Effect_Explo_Stack
   m_EditorClassIdentifier: Assembly-CSharp::EffectData
   effectID: effect_explo_stack
+  displayName: Stack
   description: 
   keywords: []
   trigger: 0

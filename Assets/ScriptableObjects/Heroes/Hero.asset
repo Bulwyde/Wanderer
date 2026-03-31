@@ -25,8 +25,8 @@ MonoBehaviour:
   lifeSteal: 0
   baseVisionRange: 1
   maxEnergy: 3
-  startingModule: {fileID: 11400000, guid: 5cde169b0ced18c4c859df5369479675, type: 2}
-  startingHead: {fileID: 0}
+  startingModule: {fileID: 11400000, guid: 0cc8e728129508249a25ec4d87a48a4e, type: 2}
+  startingHead: {fileID: 11400000, guid: 22ae26ffd4aaba74cab76a4106bf6700, type: 2}
   startingTorso: {fileID: 0}
   startingLegs: {fileID: 11400000, guid: 06b4ecbeaf8fb144bb69ac9fbd707739, type: 2}
   startingArm1: {fileID: 11400000, guid: 00bfed72720722c4a87df02eb7371be4, type: 2}

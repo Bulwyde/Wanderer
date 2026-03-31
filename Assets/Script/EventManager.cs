@@ -79,6 +79,11 @@ public class EventManager : MonoBehaviour
     // UI — CONSOMMABLES
     // -----------------------------------------------
 
+    [Header("UI — HP")]
+    // Optionnel — affiche les HP courants du joueur dans la scène Event.
+    // Mis à jour au Start() et après chaque choix (les effets peuvent modifier les HP).
+    public TextMeshProUGUI hpText;
+
     [Header("UI — Consommables")]
     // Conteneur où les icônes de consommables seront affichées (lecture seule en event)
     public Transform consumableContainer;
@@ -109,6 +114,7 @@ public class EventManager : MonoBehaviour
 
         LoadAndDisplayEvent();
         SpawnConsumableButtons();
+        RefreshHP();
     }
 
     /// <summary>
@@ -146,6 +152,16 @@ public class EventManager : MonoBehaviour
     // -----------------------------------------------
     // AFFICHAGE
     // -----------------------------------------------
+
+    /// <summary>
+    /// Met à jour l'affichage des HP si un hpText est assigné dans l'Inspector.
+    /// Appelé au Start() et après chaque ApplyEffects() pour refléter les changements.
+    /// </summary>
+    private void RefreshHP()
+    {
+        if (hpText == null || RunManager.Instance == null) return;
+        hpText.text = $"HP : {RunManager.Instance.currentHP} / {RunManager.Instance.maxHP}";
+    }
 
     private void DisplayEvent()
     {
@@ -225,6 +241,7 @@ public class EventManager : MonoBehaviour
         pendingEquipmentOffers.Clear();
 
         ApplyEffects(choice.effects);
+        RefreshHP();
 
         // Remplace la description par le texte de résultat
         if (descriptionText != null)

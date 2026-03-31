@@ -84,7 +84,9 @@ public class ConsumableButton : MonoBehaviour
         Vector2 taille = interactable ? tailleNormale : tailleNormale * (2f / 3f);
 
         // sizeDelta pour les cas hors layout group
-        rectTransform.sizeDelta = taille;
+        // Guard null : Awake() peut ne pas encore avoir tourné si le container parent est inactif
+        if (rectTransform != null)
+            rectTransform.sizeDelta = taille;
 
         // LayoutElement pour les conteneurs avec Layout Group (preferredSize prime sur sizeDelta)
         LayoutElement le = GetComponent<LayoutElement>();

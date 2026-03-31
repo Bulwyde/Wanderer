@@ -13,10 +13,14 @@ MonoBehaviour:
   m_Name: Effect_HeavyAttack
   m_EditorClassIdentifier: Assembly-CSharp::EffectData
   effectID: heavyattack_basic
+  displayName: Attaque lourde
   description: 
   keywords: []
   trigger: 0
   action: 0
   value: 20
   secondaryValue: 0
+  statusToApply: {fileID: 0}
+  scalingStatus: {fileID: 0}
+  consumeStacks: 0
   target: 1

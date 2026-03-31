@@ -751,6 +751,7 @@ public class NavigationManager : MonoBehaviour
     {
         SpawnConsommablesNav();
         SpawnSkillsJambes();
+        SpawnPassifsJambes();
     }
 
     /// <summary>
@@ -842,5 +843,37 @@ public class NavigationManager : MonoBehaviour
     {
         Debug.Log($"[Navigation] Compétence de jambes utilisée : {skill.skillName}");
         AppliquerEffetsNav(skill.navEffects);
+    }
+
+    /// <summary>
+    /// Génère les boutons passifs grisés pour les passiveEffects des jambes équipées.
+    /// Ajoutés à la suite des compétences actives dans le même skillContainer.
+    /// Utilise le même navSkillPrefab (Button + TextMeshProUGUI), avec le bouton désactivé.
+    /// </summary>
+    private void SpawnPassifsJambes()
+    {
+        if (skillContainer == null || navSkillPrefab == null) return;
+        if (RunManager.Instance == null) return;
+
+        EquipmentData jambes = RunManager.Instance.GetEquipped(EquipmentSlot.Legs);
+        if (jambes == null || jambes.passiveEffects == null) return;
+
+        foreach (EffectData effet in jambes.passiveEffects)
+        {
+            if (effet == null) continue;
+
+            GameObject btn = Instantiate(navSkillPrefab, skillContainer);
+
+            // Affiche le nom de l'effet (displayName ou effectID en fallback)
+            string nom = (!string.IsNullOrEmpty(effet.displayName)) ? effet.displayName : effet.effectID;
+            TextMeshProUGUI label = btn.GetComponentInChildren<TextMeshProUGUI>();
+            if (label != null) label.text = $"{nom} (Passif)";
+
+            // Désactive le bouton — passif, non cliquable
+            Button btnComp = btn.GetComponent<Button>();
+            if (btnComp != null) btnComp.interactable = false;
+
+            Debug.Log($"[Navigation] Bouton passif jambes généré : {nom} ({jambes.equipmentName})");
+        }
     }
 }

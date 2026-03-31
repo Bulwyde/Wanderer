@@ -13,10 +13,14 @@ MonoBehaviour:
   m_Name: Effect_Heal
   m_EditorClassIdentifier: Assembly-CSharp::EffectData
   effectID: heal_basic
+  displayName: Soin
   description: 
   keywords: []
   trigger: 0
   action: 1
   value: 5
   secondaryValue: 0
+  statusToApply: {fileID: 0}
+  scalingStatus: {fileID: 0}
+  consumeStacks: 0
   target: 0

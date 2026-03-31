@@ -83,6 +83,38 @@ public class RunManager : MonoBehaviour
     {
         equippedItems[slot] = item;
         Debug.Log($"[RunManager] Équipement — {slot} : {item?.equipmentName ?? "aucun"}");
+
+        // Recalcule le maxHP si les stats ont déjà été initialisées (post-SeedDonneesDepart).
+        // Pendant le seeding initial, maxHP vaut 0 → on laisse InitialiserStats() faire son travail.
+        if (selectedCharacter != null && maxHP > 0)
+            RecalculerMaxHP();
+    }
+
+    /// <summary>
+    /// Recalcule maxHP à partir de characterData.maxHP + bonus de chaque pièce équipée.
+    /// Ajuste currentHP du même delta pour que le joueur "ressente" le gain (style StS).
+    /// Appelé automatiquement par EquipItem() pendant la run (hors seeding initial).
+    /// </summary>
+    public void RecalculerMaxHP()
+    {
+        if (selectedCharacter == null) return;
+
+        int nouveauMax = selectedCharacter.maxHP;
+        foreach (EquipmentSlot slot in System.Enum.GetValues(typeof(EquipmentSlot)))
+        {
+            EquipmentData equip = GetEquipped(slot);
+            if (equip != null) nouveauMax += equip.bonusHP;
+        }
+        nouveauMax = Mathf.Max(1, nouveauMax);
+
+        int delta = nouveauMax - maxHP;
+        maxHP = nouveauMax;
+
+        if (delta != 0)
+        {
+            currentHP = Mathf.Clamp(currentHP + delta, 1, maxHP);
+            Debug.Log($"[RunManager] MaxHP recalculé — delta : {delta:+#;-#;0} → HP : {currentHP}/{maxHP}");
+        }
     }
 
     /// <summary>

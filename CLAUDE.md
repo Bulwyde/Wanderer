@@ -222,10 +222,14 @@ Canvas
 - **Scène MainMenu** : Continuer / Nouvelle Partie (popup abandon) / Paramètres (placeholder) / Quitter. Key art plein écran derrière les boutons.
 - **CharacterData centralisé** : `RunManager.selectedCharacter` est la source unique. `CombatManager` et `NavigationManager` lisent depuis RunManager avec fallback Inspector pour les tests isolés.
 - **Seeding au lancement de la run** : équipement, module, consommables de départ ET stats (HP) initialisés dans `RunManager.StartNewRun()` — la Navigation affiche tout correctement dès l'entrée, sans attendre le premier combat.
+- **Boutons passifs d'équipement** : `EffectData` a un champ `displayName` (fallback `effectID`). `SkillButton.SetupPassif(EffectData)` affiche "Passif" au lieu d'un coût énergie et grise le bouton. `CombatManager.SpawnPassifsBras()` génère ces boutons pour Arm1/Arm2. `NavigationManager.SpawnPassifsJambes()` fait de même pour les Legs, avec le `navSkillPrefab` et le label `"(Passif)"` suffixé.
+- **Déclenchement des passifs d'équipement** : `ModuleManager.ApplyModulesWithTrigger()` itère aussi sur les `passiveEffects` de toutes les pièces équipées (tous slots), même pattern que les modules. Torse et tête : pas de bouton d'affichage pour l'instant, mais les effets se déclenchent déjà.
+- **RecalculerMaxHP** : `RunManager.EquipItem()` appelle automatiquement `RecalculerMaxHP()` si les stats sont déjà initialisées (`maxHP > 0`). Recalcule maxHP = base + Σ bonusHP équipements, et ajuste currentHP du même delta (gain d'équipement = gain de HP courant, style StS). Pendant le seeding initial (`maxHP == 0`), l'appel est ignoré — `InitialiserStats()` prend le relai.
+- **EventManager HP** : `EventManager` a un champ optionnel `hpText` (TMP) mis à jour au `Start()` et après chaque `ApplyEffects()`. À assigner dans l'Inspector si un affichage HP existe dans la scène Event.
 
 ### À faire 🔧
 - **Scène de sélection de personnage** — `MainMenuManager.defaultCharacter` est le placeholder en attendant. Quand elle existera : passer le `CharacterData` choisi à `StartNewRun()` et appeler `GoToNavigation()`.
-- `passiveEffects` sur `EquipmentData` : champ défini, non branché dans `CombatManager`
+- `passiveEffects` torse et tête : effets déclenchés, mais pas de bouton d'affichage pour l'instant.
 - `ModifyStat` (EffectAction non implémenté)
 - Boss, salles spéciales
 - Icônes graphiques par type de case (`CellType`) dans `MapRenderer`
@@ -258,7 +262,9 @@ Canvas
 13. **EquipmentOfferController + bouton "Continuer"** : le controller se désactive via `Awake()`. Bouton "Continuer" doit être frère, jamais enfant. `lootContinueButton` masqué dans `Start()`.
 14. **RevealZoneChoice + clics UI simultanés** : `Input.GetMouseButtonDown(0)` capte aussi les clics sur boutons UI. Utiliser `EventSystem.current.IsPointerOverGameObject()` si conflits.
 15. **`baseVisionRange` (ex-`visionRange`)** : valeur réinitialisée à `1` après mise à jour du script — re-saisir manuellement dans la scène Navigation.
-16. **ConsumableButton.SetInteractable() + sizeDelta nul** : désactiver `ChildControlSize` sur le container, définir la taille dans le prefab.
+16. **ConsumableButton.SetInteractable() + sizeDelta nul** : désactiver `ChildControlSize` sur le container, définir la taille dans le prefab. `rectTransform` peut être null si le container parent est inactif au moment de l'instantiation (Awake différé) — guard null ajouté dans `SetInteractable()`.
 17. **ConsumableButton + callback null** : `Setup(data, null)` est valide (Event). Pas de crash, le clic ne fait rien.
 18. **CharacterData fallback Inspector** : `CombatManager` et `NavigationManager` ont chacun un champ `characterData` en Inspector qui sert uniquement pour les tests de scène isolée. En jeu normal, il est écrasé/ignoré au profit de `RunManager.selectedCharacter`. Ne pas s'étonner si le champ Inspector semble "ignoré" en jeu complet.
 19. **Seeding déjà fait à `StartNewRun()`** : le bloc de seeding de `CombatManager.ResolveEquipment()` est un no-op en jeu normal — tous les guards (`IsSlotFree`, `HasModule`, `startingConsumablesSeeded`) sont déjà vérifiés. Ne pas dupliquer la logique ailleurs.
+20. **`EquipItem()` appelle `RecalculerMaxHP()` automatiquement** : mid-run, équiper une pièce met à jour maxHP et currentHP immédiatement. Pendant le seeding, `maxHP == 0` bloque l'appel — `InitialiserStats()` fait le calcul une seule fois après. Ne pas appeler `RecalculerMaxHP()` manuellement sauf cas exceptionnel.
+21. **`EffectDataEditor` custom** : tout nouveau champ ajouté à `EffectData` doit aussi être ajouté dans `EffectDataEditor.cs` (section Identité ou Valeurs selon le champ), sinon il n'apparaît pas dans l'Inspector.

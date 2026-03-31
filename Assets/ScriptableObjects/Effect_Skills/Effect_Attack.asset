@@ -13,10 +13,14 @@ MonoBehaviour:
   m_Name: Effect_Attack
   m_EditorClassIdentifier: Assembly-CSharp::EffectData
   effectID: attack_basic
+  displayName: Attaque
   description: 
   keywords: []
   trigger: 0
   action: 0
   value: 8
   secondaryValue: 0
+  statusToApply: {fileID: 0}
+  scalingStatus: {fileID: 0}
+  consumeStacks: 0
   target: 1

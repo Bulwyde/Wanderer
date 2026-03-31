@@ -12,7 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5713ebea065ef3643a7749f10079cbca, type: 3}
   m_Name: Effect_Armor
   m_EditorClassIdentifier: Assembly-CSharp::EffectData
-  effectID: heal_basic
+  effectID: armor_basic
+  displayName: Armure
   description: 
   keywords: []
   trigger: 0

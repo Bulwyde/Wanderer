@@ -30,9 +30,10 @@ public class SkillData : ScriptableObject
     // Nombre de tours avant de pouvoir réutiliser cette compétence (0 = pas de cooldown)
     public int cooldown;
 
-    [Header("Effet")]
-    // L'effet déclenché quand la compétence est utilisée
-    public EffectData effect;
+    [Header("Effets")]
+    // Effets déclenchés quand la compétence est utilisée — appliqués dans l'ordre de la liste.
+    // Permet de combiner plusieurs effets sur un même skill (ex : DealDamage + ApplyStatus).
+    public List<EffectData> effects = new List<EffectData>();
 
     [Header("Ciblage")]
     // Comment la compétence sélectionne sa cible

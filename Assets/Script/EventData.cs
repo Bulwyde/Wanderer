@@ -99,6 +99,12 @@ public class EventEffect
 
     [Tooltip("Effet de navigation déclenché (téléportation, révélation de zone, compteur...).\nUtilisé par : TriggerNavEffect.")]
     public NavEffect navEffect = new NavEffect();
+
+    [Tooltip("Stat à modifier de façon permanente pour le run.\nUtilisé par : ModifyStat.")]
+    public StatType statToModify;
+
+    [Tooltip("Valeur à ajouter à la stat (positif = augmentation, négatif = réduction).\nExemple : +1 pour gagner +1 Attaque, -0.1 pour perdre 10% de chance de critique.\nUtilisé par : ModifyStat.")]
+    public float statValue;
 }
 
 /// <summary>
@@ -141,4 +147,5 @@ public enum EventEffectType
     GainEquipment,  // Équipe une pièce d'équipement — champs : gainEquipmentMode + (equipmentsToGive ou equipmentLootTable)
     SetEventFlag,   // Pose un flag booléen dans RunManager — champs : flagKey + flagValue
     TriggerNavEffect, // Déclenche un effet de navigation (téléportation, révélation, compteur...) — champ : navEffect
+    ModifyStat,     // Modifie une stat du joueur de façon permanente pour le run — champs : statToModify + statValue
 }

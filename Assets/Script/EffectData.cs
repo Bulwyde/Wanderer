@@ -62,6 +62,12 @@ public class EffectData : ScriptableObject
 
     [Header("Cible")]
     public EffectTarget target;
+
+    [Header("Modification de stat (pour ModifyStat)")]
+    // Stat ciblée par cet effet — uniquement utilisé si action == ModifyStat.
+    // Pour les modules et passifs : bonus permanent sur le run (via RunManager).
+    // Pour les skills et consommables en combat : bonus temporaire jusqu'à la fin du combat.
+    public StatType statToModify;
 }
 
 /// <summary>
@@ -101,9 +107,34 @@ public enum EffectAction
     ApplyStatus,            // Applique un statut (Faiblesse, Poison...)
     ModifyStat,             // Modifie une stat (attaque, défense...)
     AddArmor,               // Ajoute de l'armure
+    GainEnergy,             // Restaure de l'énergie courante (plafonné à l'énergie max du tour)
     AddGold,                // Ajoute des pièces
     RevealRoom,             // Révèle une salle sur la carte
     DisableEnemyPart,       // Désactive une partie d'un ennemi
+}
+
+/// <summary>
+/// Stat ciblée par un effet ModifyStat ou un statut de type ModifyStat.
+/// Partagée entre EffectData, StatusData, EventData et RunManager.
+/// </summary>
+public enum StatType
+{
+    MaxHP,               // Points de vie maximum
+    Attack,              // Attaque
+    Defense,             // Défense
+    CriticalChance,      // Probabilité de critique [0..1]
+    CriticalMultiplier,  // Multiplicateur de dégâts sur un critique
+    LifeSteal,           // Fraction des dégâts convertie en soins [0..1]
+    MaxEnergy,           // Énergie maximale par tour
+}
+
+/// <summary>
+/// Type de modificateur pour ModifyStat : plat ou pourcentage.
+/// </summary>
+public enum StatModifierType
+{
+    Flat,       // Valeur additive (ex : +10 → attaque + 10)
+    Percentage, // Valeur multiplicative (ex : -0.5 → stat × 0,5 ; +0.2 → stat × 1,2)
 }
 
 /// <summary>

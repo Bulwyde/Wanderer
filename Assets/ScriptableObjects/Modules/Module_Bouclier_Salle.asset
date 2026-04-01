@@ -17,7 +17,6 @@ MonoBehaviour:
   icon: {fileID: 3423692955083361472, guid: e28c2cbc76b2abf41a66581cb2d5bfbe, type: 3}
   description: "Vous gagnez 10 armures en d\xE9but de combat."
   keywords: []
-  trigger: 6
-  effect: {fileID: 11400000, guid: dbd87b8fd5e56f041bdcba98edbf25ad, type: 2}
+  effects:
+  - {fileID: 11400000, guid: dbd87b8fd5e56f041bdcba98edbf25ad, type: 2}
   tags: []
-  isStartingModule: 1

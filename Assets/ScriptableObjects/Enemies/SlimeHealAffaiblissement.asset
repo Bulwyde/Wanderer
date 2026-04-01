@@ -10,20 +10,20 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: c13b9ef6d09b5344b85cee60eda85826, type: 3}
-  m_Name: SlimeBasic
+  m_Name: SlimeHealAffaiblissement
   m_EditorClassIdentifier: Assembly-CSharp::EnemyData
-  enemyID: slime_basic
-  enemyName: Slime
+  enemyID: slime_support
+  enemyName: Soigneur Debuff
   portrait: {fileID: 0}
   maxHP: 2000
   attack: 5
   defense: 0
   actions:
-  - skill: {fileID: 11400000, guid: f77538bbcb40ec5428470b863f721111, type: 2}
+  - skill: {fileID: 11400000, guid: 18dbf0fbd3d56da4cb736fe301e2f88c, type: 2}
     maxUses: 0
-  - skill: {fileID: 11400000, guid: 8a838b7f076feea4a98507067eb21226, type: 2}
+  - skill: {fileID: 11400000, guid: 78e77d56eedde5543a2432d1098947b4, type: 2}
     maxUses: 0
-  - skill: {fileID: 11400000, guid: 9de6836a04603bf499a97c1a54e2453e, type: 2}
+  - skill: {fileID: 11400000, guid: 78e77d56eedde5543a2432d1098947b4, type: 2}
     maxUses: 0
   - skill: {fileID: 11400000, guid: 78e77d56eedde5543a2432d1098947b4, type: 2}
     maxUses: 0

@@ -10,24 +10,16 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: c13b9ef6d09b5344b85cee60eda85826, type: 3}
-  m_Name: SlimeBasic
+  m_Name: SlimePoison
   m_EditorClassIdentifier: Assembly-CSharp::EnemyData
-  enemyID: slime_basic
-  enemyName: Slime
+  enemyID: slime_poison
+  enemyName: Poison
   portrait: {fileID: 0}
   maxHP: 2000
   attack: 5
   defense: 0
   actions:
-  - skill: {fileID: 11400000, guid: f77538bbcb40ec5428470b863f721111, type: 2}
-    maxUses: 0
-  - skill: {fileID: 11400000, guid: 8a838b7f076feea4a98507067eb21226, type: 2}
-    maxUses: 0
-  - skill: {fileID: 11400000, guid: 9de6836a04603bf499a97c1a54e2453e, type: 2}
-    maxUses: 0
-  - skill: {fileID: 11400000, guid: 78e77d56eedde5543a2432d1098947b4, type: 2}
-    maxUses: 0
-  - skill: {fileID: 11400000, guid: 78e77d56eedde5543a2432d1098947b4, type: 2}
+  - skill: {fileID: 11400000, guid: 9c9666361562e55498dc31655fa61747, type: 2}
     maxUses: 0
   lootPool:
   - {fileID: 11400000, guid: 00bfed72720722c4a87df02eb7371be4, type: 2}

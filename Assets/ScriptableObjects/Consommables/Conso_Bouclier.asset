@@ -16,6 +16,8 @@ MonoBehaviour:
   consumableName: Bouclier
   icon: {fileID: 0}
   description: Gagnez 10 points d'armure.
-  effect: {fileID: 11400000, guid: 1059e634690376c42a0ffe6fe72e4cb2, type: 2}
+  effects:
+  - {fileID: 11400000, guid: 1059e634690376c42a0ffe6fe72e4cb2, type: 2}
   usableInCombat: 1
   usableOnMap: 0
+  mapEffects: []

@@ -273,8 +273,11 @@ public class NavigationManager : MonoBehaviour
 
         while (currentX != x2 || currentY != y2)
         {
-            int nextX = currentX + stepX;
-            int nextY = currentY + stepY;
+            // On ne fait avancer un axe que s'il n'a pas encore atteint sa cible.
+            // Sans ce garde, un chemin non carré (ex : dx=2, dy=1) ferait dépasser
+            // l'un des axes, rendant la condition de sortie inatteignable → boucle infinie.
+            int nextX = (currentX == x2) ? currentX : currentX + stepX;
+            int nextY = (currentY == y2) ? currentY : currentY + stepY;
 
             if (mapData.HasWall(currentX, currentY, nextX, nextY))
                 return false;

@@ -19,6 +19,9 @@ MonoBehaviour:
   keywords: []
   energyCost: 1
   cooldown: 0
-  effect: {fileID: 11400000, guid: 6120d21701fab4e40b05330779678f1d, type: 2}
+  effects:
+  - {fileID: 11400000, guid: 6120d21701fab4e40b05330779678f1d, type: 2}
   targetType: 0
   tags: []
+  isNavigationSkill: 0
+  navEffects: []

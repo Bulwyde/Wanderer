@@ -158,6 +158,11 @@ public class CombatManager : MonoBehaviour
     private Dictionary<StatusData, int> playerStatuses = new Dictionary<StatusData, int>();
     private Dictionary<StatusData, int> enemyStatuses  = new Dictionary<StatusData, int>();
 
+    // Modificateurs de stats temporaires ce combat — appliqués par les skills et consommables.
+    // Viennent s'ajouter à effectiveX après les bonus de run (eux-mêmes dans ResolveEquipment).
+    // Les statuts de type ModifyStat sont calculés dynamiquement dans GetPlayerStatModifiers().
+    private Dictionary<StatType, float> combatStatModifiers = new Dictionary<StatType, float>();
+
 
     // -----------------------------------------------
     // INITIALISATION
@@ -186,6 +191,9 @@ public class CombatManager : MonoBehaviour
 
     private void InitializeCombat()
     {
+        // Reset des modificateurs temporaires de combat
+        combatStatModifiers.Clear();
+
         // Résout l'équipement en premier — les stats effectives et availableSkills
         // sont nécessaires pour tout le reste de l'initialisation
         ResolveEquipment();
@@ -325,7 +333,19 @@ public class CombatManager : MonoBehaviour
             }
         }
 
-        // Plafonne la chance de critique entre 0 et 1 (les bonus d'équipement peuvent dépasser)
+        // Bonus de stats permanents du run (events, modules, etc.) — lus depuis RunManager
+        if (RunManager.Instance != null)
+        {
+            effectiveMaxHP              += Mathf.RoundToInt(RunManager.Instance.GetStatBonus(StatType.MaxHP));
+            effectiveAttack             += Mathf.RoundToInt(RunManager.Instance.GetStatBonus(StatType.Attack));
+            effectiveDefense            += Mathf.RoundToInt(RunManager.Instance.GetStatBonus(StatType.Defense));
+            effectiveCriticalChance     += RunManager.Instance.GetStatBonus(StatType.CriticalChance);
+            effectiveCriticalMultiplier += RunManager.Instance.GetStatBonus(StatType.CriticalMultiplier);
+            effectiveLifeSteal          += RunManager.Instance.GetStatBonus(StatType.LifeSteal);
+            effectiveMaxEnergy          += Mathf.RoundToInt(RunManager.Instance.GetStatBonus(StatType.MaxEnergy));
+        }
+
+        // Plafonne la chance de critique entre 0 et 1 (les bonus d'équipement et de run peuvent dépasser)
         effectiveCriticalChance = Mathf.Clamp01(effectiveCriticalChance);
 
         Debug.Log($"[Combat] Équipement résolu — HP: {effectiveMaxHP}, ATK: {effectiveAttack}, " +
@@ -460,8 +480,8 @@ public class CombatManager : MonoBehaviour
     {
         battleState = BattleState.PlayerTurn;
 
-        // Réinitialise l'énergie au maximum effectif (base + bonus équipement)
-        currentEnergy = effectiveMaxEnergy;
+        // Réinitialise l'énergie au maximum effectif (base + bonus équipement + modificateurs actifs)
+        currentEnergy = GetCurrentMaxEnergy();
 
         // L'armure du joueur se remet à 0 au début de son tour (comme dans Slay the Spire)
         currentPlayerArmor = 0;
@@ -474,8 +494,11 @@ public class CombatManager : MonoBehaviour
             ModuleManager.Instance?.ApplyModulesWithTrigger(EffectTrigger.OnFightStart);
         }
 
-        // Statuts sur le joueur : effets automatiques + décroissance
-        ProcessPerTurnStatuses(forEnemy: false);
+        // Statuts sur le joueur : effets automatiques (poison, etc.) en début de tour,
+        // puis décroissance des statuts dont le timing est OnTurnStart.
+        // Les statuts OnTurnEnd décroissent dans OnEndTurn(), après que le joueur a agi.
+        ApplyPerTurnEffects(forEnemy: false);
+        DecayStatuses(forEnemy: false, StatusDecayTiming.OnTurnStart);
 
         // Régénération : soigne le joueur au début de son tour (plafonné aux HP max)
         if (effectiveRegeneration > 0)
@@ -529,9 +552,10 @@ public class CombatManager : MonoBehaviour
     {
         yield return new WaitForSeconds(EnemyActionDelay);
 
-        // Statuts sur l'ennemi : effets automatiques (poison, etc.) + décroissance
-        // Appelé avant l'action ennemie pour que les dégâts de statut soient visibles d'abord
-        ProcessPerTurnStatuses(forEnemy: true);
+        // Statuts sur l'ennemi : effets automatiques (poison, etc.) en début de tour,
+        // puis décroissance OnTurnStart. Les statuts OnTurnEnd décroissent après l'action ennemie.
+        ApplyPerTurnEffects(forEnemy: true);
+        DecayStatuses(forEnemy: true, StatusDecayTiming.OnTurnStart);
         UpdateUI();
 
         // Si l'ennemi est mort à cause de ses propres statuts, on ne va pas plus loin
@@ -547,10 +571,11 @@ public class CombatManager : MonoBehaviour
             ? enemyAI.GetAndAdvanceAction()
             : null;
 
-        if (nextSkill != null && nextSkill.effect != null)
+        if (nextSkill != null && nextSkill.effects != null && nextSkill.effects.Count > 0)
         {
-            // L'ennemi utilise son skill — on applique l'effet depuis son point de vue
-            ApplyEnemyEffect(nextSkill.effect, nextSkill.skillName);
+            // L'ennemi utilise son skill — on applique les effets depuis son point de vue
+            foreach (EffectData eff in nextSkill.effects)
+                if (eff != null) ApplyEnemyEffect(eff, nextSkill.skillName);
         }
         else
         {
@@ -577,6 +602,9 @@ public class CombatManager : MonoBehaviour
             yield break;
         }
 
+        // Décroissance en fin de tour de l'ennemi (debuffs OnTurnEnd sur l'ennemi)
+        DecayStatuses(forEnemy: true, StatusDecayTiming.OnTurnEnd);
+
         StartPlayerTurn();
     }
 
@@ -591,6 +619,10 @@ public class CombatManager : MonoBehaviour
     {
         if (battleState != BattleState.PlayerTurn) return;
         Log($"{GetPlayerName()} termine son tour.");
+
+        // Décroissance en fin de tour du joueur (debuffs OnTurnEnd comme Affaiblissement)
+        // Placé ici pour que les 3 tours annoncés soient 3 tours complets d'action
+        DecayStatuses(forEnemy: false, StatusDecayTiming.OnTurnEnd);
 
         // Notifie les modules abonnés à la fin du tour joueur
         GameEvents.TriggerPlayerTurnEnded();
@@ -627,9 +659,12 @@ public class CombatManager : MonoBehaviour
         if (skill.cooldown > 0)
             skillCooldowns[skill] = skill.cooldown;
 
-        // Applique l'effet
-        if (skill.effect != null)
-            ApplyEffect(skill.effect, skill.skillName);
+        // Applique les effets dans l'ordre
+        if (skill.effects != null && skill.effects.Count > 0)
+        {
+            foreach (EffectData eff in skill.effects)
+                if (eff != null) ApplyEffect(eff, skill.skillName);
+        }
         else
             Log($"{GetPlayerName()} utilise {skill.skillName} — (aucun effet défini)");
 
@@ -654,8 +689,11 @@ public class CombatManager : MonoBehaviour
         if (battleState != BattleState.PlayerTurn) return;
         if (consumable == null || !consumable.usableInCombat) return;
 
-        if (consumable.effect != null)
-            ApplyConsumableEffect(consumable.effect, consumable.consumableName);
+        if (consumable.effects != null && consumable.effects.Count > 0)
+        {
+            foreach (EffectData eff in consumable.effects)
+                if (eff != null) ApplyConsumableEffect(eff, consumable.consumableName);
+        }
         else
             Log($"{GetPlayerName()} utilise {consumable.consumableName} — (aucun effet défini)");
 
@@ -689,9 +727,11 @@ public class CombatManager : MonoBehaviour
         {
             case EffectAction.DealDamage:
             {
-                // Formule : dégâts = valeur du coup + attaque du lanceur - défense de la cible
+                // Formule : (valeur du coup + attaque + modificateurs plats) × multiplicateurs - défense ennemie
+                // La valeur de compétence est incluse dans la multiplication pour que les malus
+                // de stat (ex : Affaiblissement en %) s'appliquent aussi aux dégâts de base.
                 int enemyDef  = enemyData != null ? enemyData.defense : 0;
-                int rawDamage = Mathf.Max(1, Mathf.RoundToInt(effect.value) + effectiveAttack - enemyDef);
+                int rawDamage = Mathf.Max(1, CalculerDegatsJoueur(effect.value) - enemyDef);
 
                 // Mise à l'échelle par stacks (optionnel) — bonus appliqué avant le calcul du critique
                 // secondaryValue = bonus de dégâts par stack du scalingStatus sur la cible (l'ennemi ici)
@@ -713,10 +753,11 @@ public class CombatManager : MonoBehaviour
                     }
                 }
 
-                // Coup critique : tirage aléatoire contre la chance de critique effective
-                bool isCrit = effectiveCriticalChance > 0f && Random.value < effectiveCriticalChance;
+                // Coup critique : tirage aléatoire contre la chance de critique effective (avec modificateurs actifs)
+                float critChance = GetCurrentCritChance();
+                bool isCrit = critChance > 0f && Random.value < critChance;
                 if (isCrit)
-                    rawDamage = Mathf.RoundToInt(rawDamage * effectiveCriticalMultiplier);
+                    rawDamage = Mathf.RoundToInt(rawDamage * GetCurrentCritMultiplier());
 
                 // Sécurité : les dégâts ne peuvent pas dépasser 9999 ni être négatifs
                 rawDamage = Mathf.Clamp(rawDamage, 0, 9999);
@@ -740,9 +781,10 @@ public class CombatManager : MonoBehaviour
 
                 // Vol de vie : soigne le joueur d'une fraction des HP réellement infligés à l'ennemi
                 // On ne vole que les HP perdus par l'ennemi, pas les dégâts absorbés par l'armure
-                if (effectiveLifeSteal > 0f && hpDamage > 0)
+                float lifeSteal = GetCurrentLifeSteal();
+                if (lifeSteal > 0f && hpDamage > 0)
                 {
-                    int stolen = Mathf.Max(1, Mathf.RoundToInt(hpDamage * effectiveLifeSteal));
+                    int stolen = Mathf.Max(1, Mathf.RoundToInt(hpDamage * lifeSteal));
                     stolen = Mathf.Min(stolen, GetPlayerMaxHP() - currentPlayerHP);
                     if (stolen > 0)
                     {
@@ -786,6 +828,28 @@ public class CombatManager : MonoBehaviour
                 break;
             }
 
+            case EffectAction.ModifyStat:
+            {
+                // Modificateur temporaire pour ce combat — s'accumule dans combatStatModifiers
+                float val = effect.value;
+                if (!combatStatModifiers.ContainsKey(effect.statToModify))
+                    combatStatModifiers[effect.statToModify] = 0f;
+                combatStatModifiers[effect.statToModify] += val;
+                Log($"{GetPlayerName()} utilise {sourceName} — {effect.statToModify} " +
+                    $"{(val >= 0 ? "+" : "")}{val:F1} (ce combat)");
+                break;
+            }
+
+            case EffectAction.GainEnergy:
+            {
+                int gain     = Mathf.Max(0, Mathf.RoundToInt(effect.value));
+                int maxEnerg = GetCurrentMaxEnergy();
+                int gained   = Mathf.Min(gain, maxEnerg - currentEnergy);
+                currentEnergy = Mathf.Min(currentEnergy + gain, maxEnerg);
+                Log($"{GetPlayerName()} utilise {sourceName} — +{gained} énergie → {currentEnergy}/{maxEnerg}");
+                break;
+            }
+
             default:
                 Log($"{GetPlayerName()} utilise {sourceName} — Effet '{effect.action}' non encore implémenté.");
                 break;
@@ -803,9 +867,9 @@ public class CombatManager : MonoBehaviour
         {
             case EffectAction.DealDamage:
             {
-                // Formule : dégâts = valeur du coup + attaque du lanceur - défense de la cible
+                // Formule : dégâts = valeur du coup + attaque ennemie - défense effective du joueur (avec modificateurs actifs)
                 int enemyAtk  = enemyData != null ? enemyData.attack : 5;
-                int rawDamage = Mathf.Max(1, Mathf.RoundToInt(effect.value) + enemyAtk - effectiveDefense);
+                int rawDamage = Mathf.Max(1, Mathf.RoundToInt(effect.value) + enemyAtk - GetCurrentDefense());
 
                 // Mise à l'échelle par stacks (optionnel) — stacks lus sur le joueur (la cible ici)
                 string stackInfo = "";
@@ -944,6 +1008,28 @@ public class CombatManager : MonoBehaviour
                 break;
             }
 
+            case EffectAction.ModifyStat:
+            {
+                // Modificateur temporaire pour ce combat
+                float val = effect.value;
+                if (!combatStatModifiers.ContainsKey(effect.statToModify))
+                    combatStatModifiers[effect.statToModify] = 0f;
+                combatStatModifiers[effect.statToModify] += val;
+                Log($"{GetPlayerName()} utilise {sourceName} — {effect.statToModify} " +
+                    $"{(val >= 0 ? "+" : "")}{val:F1} (ce combat)");
+                break;
+            }
+
+            case EffectAction.GainEnergy:
+            {
+                int gain     = Mathf.Max(0, Mathf.RoundToInt(effect.value));
+                int maxEnerg = GetCurrentMaxEnergy();
+                int gained   = Mathf.Min(gain, maxEnerg - currentEnergy);
+                currentEnergy = Mathf.Min(currentEnergy + gain, maxEnerg);
+                Log($"{GetPlayerName()} utilise {sourceName} — +{gained} énergie → {currentEnergy}/{maxEnerg}");
+                break;
+            }
+
             default:
                 Log($"{GetPlayerName()} utilise {sourceName} — Effet '{effect.action}' non encore implémenté.");
                 break;
@@ -1040,6 +1126,39 @@ public class CombatManager : MonoBehaviour
                 break;
             }
 
+            case EffectAction.GainEnergy:
+            {
+                int gain     = Mathf.Max(0, Mathf.RoundToInt(effect.value));
+                int maxEnerg = GetCurrentMaxEnergy();
+                int gained   = Mathf.Min(gain, maxEnerg - currentEnergy);
+                currentEnergy = Mathf.Min(currentEnergy + gain, maxEnerg);
+                Log($"{source} — +{gained} énergie → {currentEnergy}/{maxEnerg}");
+                break;
+            }
+
+            case EffectAction.ModifyStat:
+            {
+                // Les modules ajoutent un bonus PERMANENT sur le run (via RunManager)
+                // Le bonus sera intégré aux stats effectives au prochain ResolveEquipment()
+                if (RunManager.Instance != null)
+                {
+                    RunManager.Instance.AddStatBonus(effect.statToModify, effect.value);
+                    // Applique aussi immédiatement à la stat effective de ce combat
+                    switch (effect.statToModify)
+                    {
+                        case StatType.Attack:             effectiveAttack             += Mathf.RoundToInt(effect.value); break;
+                        case StatType.Defense:            effectiveDefense            += Mathf.RoundToInt(effect.value); break;
+                        case StatType.MaxHP:              effectiveMaxHP              += Mathf.RoundToInt(effect.value); break;
+                        case StatType.CriticalChance:     effectiveCriticalChance     = Mathf.Clamp01(effectiveCriticalChance + effect.value); break;
+                        case StatType.CriticalMultiplier: effectiveCriticalMultiplier += effect.value; break;
+                        case StatType.LifeSteal:          effectiveLifeSteal          = Mathf.Clamp01(effectiveLifeSteal + effect.value); break;
+                        case StatType.MaxEnergy:          effectiveMaxEnergy          += Mathf.RoundToInt(effect.value); break;
+                    }
+                    Log($"{source} — {effect.statToModify} {(effect.value >= 0 ? "+" : "")}{effect.value:F1} (permanent run)");
+                }
+                break;
+            }
+
             default:
                 Log($"{source} — Effet '{effect.action}' non encore implémenté pour les modules.");
                 break;
@@ -1091,19 +1210,17 @@ public class CombatManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Exécute les effets automatiques (PerTurnStart) des statuts actifs sur une entité,
-    /// puis applique la décroissance des stacks (decayPerTurn).
-    /// À appeler au début du tour de l'entité concernée.
+    /// Exécute les effets automatiques de comportement PerTurnStart (poison, soin par tour, etc.)
+    /// pour une entité. N'applique PAS la décroissance — voir DecayStatuses().
     ///
-    /// Règle importante : les statuts StackOnly sont ignorés ici — ils n'ont pas d'effet
-    /// automatique, ils sont uniquement consultés par d'autres effets.
+    /// Les statuts StackOnly et ModifyStat sont ignorés ici : ils n'ont pas d'effet automatique,
+    /// ils sont consultés à la demande (StackOnly) ou calculés dynamiquement (ModifyStat).
     /// </summary>
-    private void ProcessPerTurnStatuses(bool forEnemy)
+    private void ApplyPerTurnEffects(bool forEnemy)
     {
         Dictionary<StatusData, int> statuses = forEnemy ? enemyStatuses : playerStatuses;
         if (statuses.Count == 0) return;
 
-        // On itère sur une copie des clés pour pouvoir modifier le dictionnaire en cours de boucle
         List<StatusData> keys = new List<StatusData>(statuses.Keys);
 
         foreach (StatusData status in keys)
@@ -1111,75 +1228,186 @@ public class CombatManager : MonoBehaviour
             if (!statuses.ContainsKey(status)) continue;
             int stacks = statuses[status];
             if (stacks <= 0) continue;
+            if (status.behavior != StatusBehavior.PerTurnStart) continue;
 
-            // --- Effet automatique (PerTurnStart) ---
-            if (status.behavior == StatusBehavior.PerTurnStart)
+            float totalEffect = status.effectPerStack * stacks;
+            string entityName = forEnemy ? GetEnemyName() : GetPlayerName();
+
+            switch (status.perTurnAction)
             {
-                float totalEffect = status.effectPerStack * stacks;
-                string entityName = forEnemy ? GetEnemyName() : GetPlayerName();
-
-                switch (status.perTurnAction)
+                case EffectAction.DealDamage:
                 {
-                    case EffectAction.DealDamage:
-                    {
-                        // Le statut inflige des dégâts bruts, sans passer par l'armure
-                        // (comportement type poison dans Slay the Spire)
-                        int dmg = Mathf.Max(1, Mathf.RoundToInt(totalEffect));
-                        if (forEnemy)
-                            currentEnemyHP = Mathf.Max(0, currentEnemyHP - dmg);
-                        else
-                            currentPlayerHP = Mathf.Max(0, currentPlayerHP - dmg);
+                    // Dégâts bruts — ignorent l'armure (comportement type poison dans Slay the Spire)
+                    int dmg = Mathf.Max(1, Mathf.RoundToInt(totalEffect));
+                    if (forEnemy)
+                        currentEnemyHP = Mathf.Max(0, currentEnemyHP - dmg);
+                    else
+                        currentPlayerHP = Mathf.Max(0, currentPlayerHP - dmg);
 
-                        Log($"{entityName} subit {dmg} dégâts de {status.statusName} " +
-                            $"({stacks} stack(s))");
-                        break;
-                    }
-
-                    case EffectAction.Heal:
-                    {
-                        int healed;
-                        if (forEnemy)
-                        {
-                            healed = Mathf.Min(Mathf.RoundToInt(totalEffect),
-                                               GetEnemyMaxHP() - currentEnemyHP);
-                            currentEnemyHP += healed;
-                        }
-                        else
-                        {
-                            healed = Mathf.Min(Mathf.RoundToInt(totalEffect),
-                                               GetPlayerMaxHP() - currentPlayerHP);
-                            currentPlayerHP += healed;
-                        }
-                        Log($"{entityName} récupère {healed} HP grâce à {status.statusName} " +
-                            $"({stacks} stack(s))");
-                        break;
-                    }
-
-                    default:
-                        Log($"{status.statusName} — action automatique '{status.perTurnAction}' " +
-                            $"non implémentée.");
-                        break;
+                    Log($"{entityName} subit {dmg} dégâts de {status.statusName} ({stacks} stack(s))");
+                    break;
                 }
+
+                case EffectAction.Heal:
+                {
+                    int healed;
+                    if (forEnemy)
+                    {
+                        healed = Mathf.Min(Mathf.RoundToInt(totalEffect), GetEnemyMaxHP() - currentEnemyHP);
+                        currentEnemyHP += healed;
+                    }
+                    else
+                    {
+                        healed = Mathf.Min(Mathf.RoundToInt(totalEffect), GetPlayerMaxHP() - currentPlayerHP);
+                        currentPlayerHP += healed;
+                    }
+                    Log($"{entityName} récupère {healed} HP grâce à {status.statusName} ({stacks} stack(s))");
+                    break;
+                }
+
+                default:
+                    Log($"{status.statusName} — action automatique '{status.perTurnAction}' non implémentée.");
+                    break;
             }
+        }
+    }
 
-            // --- Décroissance des stacks ---
-            if (status.decayPerTurn > 0)
+    /// <summary>
+    /// Applique la décroissance (decayPerTurn) des statuts d'une entité dont le timing
+    /// correspond au paramètre. Appelé deux fois par cycle complet :
+    ///   - En début de tour (timing OnTurnStart) : comportement par défaut — pour le poison, etc.
+    ///   - En fin de tour  (timing OnTurnEnd)    : pour les debuffs qui durent le nombre de tours annoncé.
+    ///
+    /// La durée effective d'un statut OnTurnEnd appliqué au tour T est T, T+1, T+2 ... complets.
+    /// </summary>
+    private void DecayStatuses(bool forEnemy, StatusDecayTiming timing)
+    {
+        Dictionary<StatusData, int> statuses = forEnemy ? enemyStatuses : playerStatuses;
+        if (statuses.Count == 0) return;
+
+        List<StatusData> keys = new List<StatusData>(statuses.Keys);
+
+        foreach (StatusData status in keys)
+        {
+            if (!statuses.ContainsKey(status)) continue;
+            if (status.decayPerTurn <= 0) continue;
+            if (status.decayTiming != timing) continue;
+
+            int stacks = statuses[status];
+            if (stacks <= 0) continue;
+
+            statuses[status] = Mathf.Max(0, stacks - status.decayPerTurn);
+            if (statuses[status] == 0)
             {
-                statuses[status] = Mathf.Max(0, stacks - status.decayPerTurn);
-                if (statuses[status] == 0)
-                {
-                    string entityName = forEnemy ? GetEnemyName() : GetPlayerName();
-                    Log($"{entityName} n'a plus de {status.statusName}");
-                }
+                string entityName = forEnemy ? GetEnemyName() : GetPlayerName();
+                Log($"{entityName} n'a plus de {status.statusName}");
             }
         }
 
-        // Nettoie les entrées à 0 stacks pour garder les dictionnaires propres
+        // Nettoie les entrées à 0 stacks
         List<StatusData> toRemove = new List<StatusData>();
         foreach (var kvp in statuses)
             if (kvp.Value <= 0) toRemove.Add(kvp.Key);
         foreach (StatusData key in toRemove)
             statuses.Remove(key);
+    }
+
+    // -----------------------------------------------
+    // STATS DYNAMIQUES (effectives + modificateurs actifs)
+    // -----------------------------------------------
+
+    /// <summary>
+    /// Calcule les dégâts bruts du joueur (avant défense ennemie et critique) en incluant
+    /// la valeur de compétence dans le calcul multiplicatif.
+    ///
+    /// Formule : (skillValue + effectiveAttack + modificateurs plats) × (1 + modificateurs %)
+    ///
+    /// Inclure skillValue dans la multiplication garantit que les malus en pourcentage
+    /// (ex : Affaiblissement −50%) s'appliquent aussi aux dégâts de base de la compétence,
+    /// et pas uniquement au bonus d'attaque.
+    /// </summary>
+    private int CalculerDegatsJoueur(float skillValue)
+    {
+        var (flat, pct) = GetPlayerStatModifiers(StatType.Attack);
+        return Mathf.Max(0, Mathf.RoundToInt((skillValue + effectiveAttack + flat) * (1f + pct)));
+    }
+
+    /// <summary>
+    /// Calcule les modificateurs plats et en pourcentage actifs pour une stat du joueur.
+    /// Somme les combatStatModifiers (skills/consommables) ET les statuts ModifyStat actifs.
+    /// </summary>
+    private (float flat, float pct) GetPlayerStatModifiers(StatType stat)
+    {
+        float flat = 0f, pct = 0f;
+
+        // Modificateurs directs (skills, consommables en combat)
+        if (combatStatModifiers.TryGetValue(stat, out float directMod))
+            flat += directMod;
+
+        // Statuts actifs de type ModifyStat sur le joueur
+        foreach (var kvp in playerStatuses)
+        {
+            StatusData status = kvp.Key;
+            int stacks = kvp.Value;
+            if (stacks <= 0 || status == null) continue;
+            if (status.behavior != StatusBehavior.ModifyStat) continue;
+            if (status.statToModify != stat) continue;
+
+            // valueScalesWithStacks = true  → valeur variable (cas 3)
+            // valueScalesWithStacks = false → valeur fixe, stacks = durée (cas 2)
+            float amount = status.valueScalesWithStacks
+                ? status.effectPerStack * stacks
+                : status.effectPerStack;
+
+            if (status.statModifierType == StatModifierType.Percentage)
+                pct += amount;
+            else
+                flat += amount;
+        }
+
+        return (flat, pct);
+    }
+
+    /// <summary>Attaque effective incluant les modificateurs actifs du combat.</summary>
+    private int GetCurrentAttack()
+    {
+        var (flat, pct) = GetPlayerStatModifiers(StatType.Attack);
+        return Mathf.Max(0, Mathf.RoundToInt((effectiveAttack + flat) * (1f + pct)));
+    }
+
+    /// <summary>Défense effective incluant les modificateurs actifs du combat.</summary>
+    private int GetCurrentDefense()
+    {
+        var (flat, pct) = GetPlayerStatModifiers(StatType.Defense);
+        return Mathf.Max(0, Mathf.RoundToInt((effectiveDefense + flat) * (1f + pct)));
+    }
+
+    /// <summary>Chance de critique effective incluant les modificateurs actifs du combat.</summary>
+    private float GetCurrentCritChance()
+    {
+        var (flat, pct) = GetPlayerStatModifiers(StatType.CriticalChance);
+        return Mathf.Clamp01((effectiveCriticalChance + flat) * (1f + pct));
+    }
+
+    /// <summary>Multiplicateur de critique effectif incluant les modificateurs actifs du combat.</summary>
+    private float GetCurrentCritMultiplier()
+    {
+        var (flat, pct) = GetPlayerStatModifiers(StatType.CriticalMultiplier);
+        return Mathf.Max(1f, (effectiveCriticalMultiplier + flat) * (1f + pct));
+    }
+
+    /// <summary>Vol de vie effectif incluant les modificateurs actifs du combat.</summary>
+    private float GetCurrentLifeSteal()
+    {
+        var (flat, pct) = GetPlayerStatModifiers(StatType.LifeSteal);
+        return Mathf.Clamp01((effectiveLifeSteal + flat) * (1f + pct));
+    }
+
+    /// <summary>Énergie max effective incluant les modificateurs actifs du combat.</summary>
+    private int GetCurrentMaxEnergy()
+    {
+        var (flat, pct) = GetPlayerStatModifiers(StatType.MaxEnergy);
+        return Mathf.Max(1, Mathf.RoundToInt((effectiveMaxEnergy + flat) * (1f + pct)));
     }
 
     // -----------------------------------------------
@@ -1371,7 +1599,7 @@ public class CombatManager : MonoBehaviour
             ? $"Armure : {currentEnemyArmor}"
             : "";
 
-        if (energyText != null) energyText.text = $"Énergie : {currentEnergy} / {effectiveMaxEnergy}";
+        if (energyText != null) energyText.text = $"Énergie : {currentEnergy} / {GetCurrentMaxEnergy()}";
     }
 
     /// <summary>

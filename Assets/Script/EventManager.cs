@@ -430,6 +430,16 @@ public class EventManager : MonoBehaviour
 
                 // -----------------------------------------------------------
 
+                // -----------------------------------------------------------
+                // MODIFICATION DE STAT PERMANENTE
+                // -----------------------------------------------------------
+
+                case EventEffectType.ModifyStat:
+                    RunManager.Instance.AddStatBonus(effect.statToModify, effect.statValue);
+                    Debug.Log($"[Event] ModifyStat — {effect.statToModify} " +
+                              $"{(effect.statValue >= 0 ? "+" : "")}{effect.statValue}");
+                    break;
+
                 default:
                     Debug.LogWarning($"[Event] Effet '{effect.type}' non reconnu.");
                     break;

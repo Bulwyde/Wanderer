@@ -54,12 +54,47 @@ public class StatusData : ScriptableObject
     // -----------------------------------------------
 
     [Header("Durée & Décroissance")]
-    // Nombre de stacks perdus automatiquement à chaque tick (fin de traitement du tour)
-    // 0 = les stacks ne diminuent jamais d'eux-mêmes (retrait uniquement par effet)
+    // Nombre de stacks perdus automatiquement à chaque tour (0 = les stacks ne diminuent jamais)
     public int decayPerTurn;
+
+    // Quand la décroissance a lieu dans le tour de l'entité affectée :
+    //   OnTurnStart : au début du tour, avant que l'entité agisse (comportement par défaut — cohérent avec le poison)
+    //   OnTurnEnd   : à la fin du tour, après que l'entité a agi (utile pour les debuffs qui durent
+    //                 le nombre de tours annoncé — ex. "Affaiblissement 3 tours" = 3 tours complets)
+    public StatusDecayTiming decayTiming;
 
     // Plafond de stacks accumulables sur une même entité (0 = illimité)
     public int maxStacks;
+
+    // -----------------------------------------------
+    // MODIFICATION DE STAT (behavior == ModifyStat)
+    // -----------------------------------------------
+
+    [Header("Modification de stat (behavior = ModifyStat uniquement)")]
+    // Stat ciblée par ce statut
+    public StatType statToModify;
+
+    // Type de modification : plat (+10 attaque) ou pourcentage (-0.5 = -50% attaque)
+    public StatModifierType statModifierType;
+
+    // Si true  : modificateur = effectPerStack x stacks (cas 3 — valeur variable, durée infinie)
+    //   Exemple : Force × 5 stacks avec effectPerStack = 10 → +50 attaque
+    // Si false : modificateur = effectPerStack fixe, les stacks = durée (cas 2 — valeur constante)
+    //   Exemple : Affaiblissement × 3 stacks avec effectPerStack = -0.5 → -50% attaque pendant 3 tours
+    public bool valueScalesWithStacks;
+}
+
+/// <summary>
+/// Quand la décroissance des stacks a lieu dans le tour de l'entité affectée.
+/// </summary>
+public enum StatusDecayTiming
+{
+    // Au début du tour, avant que l'entité agisse (défaut — cohérent avec le poison et les effets automatiques)
+    OnTurnStart,
+
+    // À la fin du tour, après que l'entité a agi
+    // Un Affaiblissement de 3 tours posé au tour T durera T, T+1, T+2 complets
+    OnTurnEnd,
 }
 
 /// <summary>
@@ -75,4 +110,11 @@ public enum StatusBehavior
     // Déclenche perTurnAction au début du tour de l'entité affectée
     // Exemple : Poison, Brûlure
     PerTurnStart,
+
+    // Modifie une stat tant que le statut est actif — aucun effet automatique par tour.
+    // Le modificateur est lu dynamiquement par CombatManager à chaque calcul de dégâts.
+    // Deux modes (voir valueScalesWithStacks) :
+    //   false → valeur fixe (effectPerStack), stacks = durée (decayPerTurn > 0)
+    //   true  → valeur = effectPerStack × stacks, durée infinie (decayPerTurn = 0)
+    ModifyStat,
 }

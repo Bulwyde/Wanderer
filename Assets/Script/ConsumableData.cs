@@ -33,12 +33,12 @@ public class ConsumableData : ScriptableObject
     // EFFET
     // -----------------------------------------------
 
-    [Header("Effet")]
-    // Effet appliqué quand le consommable est utilisé.
+    [Header("Effets")]
+    // Effets appliqués quand le consommable est utilisé — dans l'ordre de la liste.
     // Utilise le même système qu'une compétence (EffectData).
     // Attention : certains effets n'ont de sens qu'en combat (DealDamage)
     // — s'assurer que usableInCombat / usableOnMap sont correctement configurés.
-    public EffectData effect;
+    public List<EffectData> effects = new List<EffectData>();
 
     // -----------------------------------------------
     // CONTEXTE D'UTILISATION

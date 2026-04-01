@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections.Generic;
 
 /// <summary>
 /// Définit un module — effet passif ou déclenché que le joueur
@@ -30,9 +31,11 @@ public class ModuleData : ScriptableObject
     // Mots-clés référencés dans la description
     public KeywordData[] keywords;
 
-    [Header("Effet")]
-    // Trigger, action, valeur et cible sont tous définis dans l'EffectData
-    public EffectData effect;
+    [Header("Effets")]
+    // Effets déclenchés quand le module s'active — appliqués dans l'ordre de la liste.
+    // Chaque EffectData porte son propre trigger : un module peut avoir des effets
+    // déclenchés à des moments différents (ex : OnFightStart + OnPlayerTurnStart).
+    public List<EffectData> effects = new List<EffectData>();
 
     [Header("Tags")]
     // Tags pour la gestion du loot et les interactions entre modules

@@ -109,15 +109,20 @@ public class ModuleManager : MonoBehaviour
             // --- Modules ---
             foreach (ModuleData module in RunManager.Instance.GetModules())
             {
-                if (module == null || module.effect == null) continue;
-                if (module.effect.trigger != trigger) continue;
+                if (module == null || module.effects == null) continue;
 
-                Debug.Log($"[Module] '{module.moduleName}' déclenché ({trigger})");
+                foreach (EffectData effet in module.effects)
+                {
+                    if (effet == null) continue;
+                    if (effet.trigger != trigger) continue;
 
-                if (combat != null)
-                    combat.ApplyModuleEffect(module.effect, module.moduleName);
-                else
-                    ApplyEffectOutOfCombat(module.effect, module.moduleName);
+                    Debug.Log($"[Module] '{module.moduleName}' déclenché ({trigger})");
+
+                    if (combat != null)
+                        combat.ApplyModuleEffect(effet, module.moduleName);
+                    else
+                        ApplyEffectOutOfCombat(effet, module.moduleName);
+                }
             }
 
             // --- Passifs d'équipement ---
@@ -171,6 +176,15 @@ public class ModuleManager : MonoBehaviour
                     Debug.Log($"[Module] {moduleName} — Soin hors combat : +{healed} HP " +
                               $"→ {RunManager.Instance.currentHP}/{maxHP}");
                 }
+                break;
+            }
+
+            case EffectAction.ModifyStat:
+            {
+                // Hors combat, ModifyStat ajoute un bonus permanent sur le run
+                RunManager.Instance.AddStatBonus(effect.statToModify, effect.value);
+                Debug.Log($"[Module] {moduleName} — ModifyStat hors combat : {effect.statToModify} " +
+                          $"{(effect.value >= 0 ? "+" : "")}{effect.value}");
                 break;
             }
 

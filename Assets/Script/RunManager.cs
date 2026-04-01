@@ -105,6 +105,8 @@ public class RunManager : MonoBehaviour
             EquipmentData equip = GetEquipped(slot);
             if (equip != null) nouveauMax += equip.bonusHP;
         }
+        // Inclut le bonus de run accumulé (events, modules, etc.)
+        nouveauMax += Mathf.RoundToInt(GetStatBonus(StatType.MaxHP));
         nouveauMax = Mathf.Max(1, nouveauMax);
 
         int delta = nouveauMax - maxHP;
@@ -238,6 +240,55 @@ public class RunManager : MonoBehaviour
     // S'ajoute au baseVisionRange défini dans NavigationManager.
     public int visionRangeBonus = 0;
 
+    // -----------------------------------------------
+    // BONUS DE STATS DE RUN
+    // -----------------------------------------------
+
+    // Modificateurs de stats permanents accumulés pendant le run (events, modules, etc.).
+    // Lus par CombatManager.ResolveEquipment() pour les intégrer aux stats effectives.
+    // MaxHP est traité séparément : il met aussi à jour maxHP et currentHP directement.
+    private Dictionary<StatType, float> runStatBonuses = new Dictionary<StatType, float>();
+
+    /// <summary>
+    /// Ajoute un bonus permanent à une stat pour le reste du run.
+    /// Pour MaxHP : met aussi à jour maxHP et currentHP immédiatement (style StS).
+    /// </summary>
+    public void AddStatBonus(StatType stat, float value)
+    {
+        if (!runStatBonuses.ContainsKey(stat))
+            runStatBonuses[stat] = 0f;
+        runStatBonuses[stat] += value;
+
+        // MaxHP : synchronise les champs maxHP et currentHP en plus du dictionnaire
+        if (stat == StatType.MaxHP)
+        {
+            int delta    = Mathf.RoundToInt(value);
+            int newMax   = Mathf.Max(1, maxHP + delta);
+            int actualDelta = newMax - maxHP;
+            maxHP = newMax;
+            // Gain de maxHP → même gain sur les HP courants (style Slay the Spire)
+            if (actualDelta > 0)
+                currentHP = Mathf.Min(currentHP + actualDelta, maxHP);
+            else
+                currentHP = Mathf.Min(currentHP, maxHP);
+            Debug.Log($"[RunManager] Bonus run — MaxHP {(value >= 0 ? "+" : "")}{value} " +
+                      $"→ maxHP : {maxHP}, HP : {currentHP}");
+        }
+        else
+        {
+            Debug.Log($"[RunManager] Bonus run — {stat} {(value >= 0 ? "+" : "")}{value} " +
+                      $"→ total : {runStatBonuses[stat]}");
+        }
+    }
+
+    /// <summary>
+    /// Retourne le bonus de run accumulé pour une stat donnée (0 si aucun).
+    /// </summary>
+    public float GetStatBonus(StatType stat)
+    {
+        return runStatBonuses.TryGetValue(stat, out float bonus) ? bonus : 0f;
+    }
+
     /// <summary>
     /// Incrémente (ou décrémente) un compteur nommé de `delta`.
     /// Crée le compteur s'il n'existe pas encore (valeur de départ : 0).
@@ -344,6 +395,7 @@ public class RunManager : MonoBehaviour
         startingConsumablesSeeded = false;
         navigationCounters.Clear();
         visionRangeBonus = 0;
+        runStatBonuses.Clear();
 
         // Réinitialise l'état de navigation : le joueur repart de la case de départ
         hasNavigationState = false;

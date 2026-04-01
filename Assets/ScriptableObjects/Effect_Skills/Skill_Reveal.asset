@@ -19,7 +19,7 @@ MonoBehaviour:
   keywords: []
   energyCost: 0
   cooldown: 0
-  effect: {fileID: 0}
+  effects: []
   targetType: 0
   tags: []
   isNavigationSkill: 1

@@ -141,12 +141,28 @@ public class EffectDataEditor : Editor
             case EffectAction.ModifyStat:
             {
                 EditorGUILayout.PropertyField(
-                    serializedObject.FindProperty("value"),
-                    new GUIContent("Valeur de modification"));
-                // secondaryValue affiché — son usage dépendra de l'implémentation future
+                    serializedObject.FindProperty("statToModify"),
+                    new GUIContent("Stat ciblee"));
                 EditorGUILayout.PropertyField(
-                    serializedObject.FindProperty("secondaryValue"),
-                    new GUIContent("Valeur secondaire"));
+                    serializedObject.FindProperty("value"),
+                    new GUIContent("Valeur (plate)"));
+                EditorGUILayout.HelpBox(
+                    "Modules / passifs : bonus permanent sur le run.\n" +
+                    "Skills / consommables : bonus temporaire ce combat.",
+                    MessageType.None);
+                break;
+            }
+
+            // -----------------------------------------------------------
+            case EffectAction.GainEnergy:
+            {
+                EditorGUILayout.PropertyField(
+                    serializedObject.FindProperty("value"),
+                    new GUIContent("Energie restauree"));
+                EditorGUILayout.HelpBox(
+                    "Restaure de l'energie courante du joueur, plafonnee a son max du tour.\n" +
+                    "Uniquement utile en combat (ignoree hors combat).",
+                    MessageType.None);
                 break;
             }
 

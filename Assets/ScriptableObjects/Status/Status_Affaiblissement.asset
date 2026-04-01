@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7e42231eca85dd24eac4c3b5a2342760, type: 3}
+  m_Name: Status_Affaiblissement
+  m_EditorClassIdentifier: Assembly-CSharp::StatusData
+  statusID: 
+  statusName: 
+  description: 
+  icon: {fileID: 0}
+  behavior: 2
+  perTurnAction: 3
+  effectPerStack: -0.5
+  decayPerTurn: 1
+  maxStacks: 0
+  statToModify: 1
+  statModifierType: 1
+  valueScalesWithStacks: 0

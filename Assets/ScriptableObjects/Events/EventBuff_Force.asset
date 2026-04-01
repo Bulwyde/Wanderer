@@ -1,0 +1,42 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2d9e59739edeec740b98c00d8c052605, type: 3}
+  m_Name: EventBuff_Force
+  m_EditorClassIdentifier: Assembly-CSharp::EventData
+  eventID: event_buff_force
+  title: "Am\xE9lioration Force"
+  description: 'Un gym bro s''approche de vous et vous tend des prots : +100 attaque'
+  backgroundImage: {fileID: 0}
+  choices:
+  - choiceText: C'est oui
+    outcomeText: Vos biceps sont aussi gros que ceux d'Alda
+    effects:
+    - type: 8
+      value: 0
+      gainConsumableMode: 0
+      consumablesToGive: []
+      consumableLootTable: {fileID: 0}
+      gainModuleMode: 0
+      modulesToGive: []
+      moduleLootTable: {fileID: 0}
+      gainEquipmentMode: 0
+      equipmentsToGive: []
+      equipmentLootTable: {fileID: 0}
+      flagKey: 
+      flagValue: 0
+      navEffect:
+        type: 0
+        value: 0
+        counterKey: 
+        allowedCellTypes: 
+      statToModify: 1
+      statValue: 100

@@ -609,7 +609,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b67b582b85e3ba546b961efb29d5e0f3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RunManager
-  selectedCharacterID: 
+  selectedCharacter: {fileID: 0}
   currentHP: 0
   maxHP: 0
   currentMissionID: 
@@ -623,6 +623,8 @@ MonoBehaviour:
     values: 
   maxConsumableSlots: 3
   startingConsumablesSeeded: 0
+  visionRangeBonus: 0
+  hasActiveRun: 0
   hasNavigationState: 0
   savedPlayerX: 0
   savedPlayerY: 0
@@ -688,7 +690,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CombatManager
   characterData: {fileID: 11400000, guid: 5d7cc6fa9416770409266c61a5550a2d, type: 2}
-  enemyData: {fileID: 11400000, guid: 68c13da0aa4d4074e8240a674d9b9b9e, type: 2}
+  enemyData: {fileID: 11400000, guid: 7c906a44287ea6c4b808ba33aeaf5398, type: 2}
   playerNameText: {fileID: 1264719201}
   playerHPText: {fileID: 447927619}
   playerArmorText: {fileID: 890051565}

@@ -93,6 +93,12 @@ public class EventEffectDrawer : PropertyDrawer
             case EventEffectType.TriggerNavEffect:
                 height += EditorGUI.GetPropertyHeight(property.FindPropertyRelative("navEffect"), true);
                 break;
+
+            // -----------------------------------------------------------
+            case EventEffectType.ModifyStat:
+                height += step; // statToModify
+                height += step; // statValue
+                break;
         }
 
         return height;
@@ -212,6 +218,16 @@ public class EventEffectDrawer : PropertyDrawer
                 EditorGUI.PropertyField(rect, navEffectProp, new GUIContent("Effet de navigation"), true);
                 break;
             }
+
+            // -----------------------------------------------------------
+            case EventEffectType.ModifyStat:
+                EditorGUI.PropertyField(rect, property.FindPropertyRelative("statToModify"),
+                    new GUIContent("Stat ciblee"));
+                rect.y += step;
+                rect.height = lineH;
+                EditorGUI.PropertyField(rect, property.FindPropertyRelative("statValue"),
+                    new GUIContent("Valeur (positif = gain, negatif = perte)"));
+                break;
         }
 
         EditorGUI.EndProperty();

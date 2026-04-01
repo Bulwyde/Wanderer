@@ -10,14 +10,15 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: d730bac26e8d4204ba7d5b3416a8b789, type: 3}
-  m_Name: Conso_Potion
+  m_Name: Conso_Max_Energy
   m_EditorClassIdentifier: Assembly-CSharp::ConsumableData
-  consumableID: potion
-  consumableName: Potion
+  consumableID: conso_max_energy
+  consumableName: Max Energy
   icon: {fileID: 0}
-  description: Vous soigne de 5 points de vie
+  description: 
   effects:
-  - {fileID: 11400000, guid: cfdbaf629480e15488da082a3b71f59c, type: 2}
+  - {fileID: 11400000, guid: 03d601ec625a0fa4c92da3e761b9ebb2, type: 2}
+  - {fileID: 11400000, guid: 03144ba564ddc4745abe42297eae4074, type: 2}
   usableInCombat: 1
   usableOnMap: 0
   mapEffects: []

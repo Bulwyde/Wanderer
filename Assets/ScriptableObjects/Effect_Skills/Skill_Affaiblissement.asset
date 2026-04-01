@@ -10,17 +10,17 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a78710460ccc06149a964161e638fc8a, type: 3}
-  m_Name: Skill_Attack
+  m_Name: Skill_Affaiblissement
   m_EditorClassIdentifier: Assembly-CSharp::SkillData
-  skillID: attack
-  skillName: Attaque
+  skillID: skill_affaiblissement
+  skillName: Affaiblissement
   icon: {fileID: 0}
   description: 
   keywords: []
-  energyCost: 1
+  energyCost: 0
   cooldown: 0
   effects:
-  - {fileID: 11400000, guid: dc95c9397d2297047a6eb27713f2b391, type: 2}
+  - {fileID: 11400000, guid: 94521ef4ff8b724479ddddfcedd691c6, type: 2}
   targetType: 0
   tags: []
   isNavigationSkill: 0

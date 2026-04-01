@@ -17,7 +17,6 @@ MonoBehaviour:
   icon: {fileID: 7162193755672658714, guid: 7ddd7c08f07da7f4da28c9efc6d19931, type: 3}
   description: Soigne de 15 points de vie quand vous tuez un ennemi.
   keywords: []
-  trigger: 5
-  effect: {fileID: 11400000, guid: 1ea4413310a856949bacfe42c06a5411, type: 2}
+  effects:
+  - {fileID: 11400000, guid: 1ea4413310a856949bacfe42c06a5411, type: 2}
   tags: []
-  isStartingModule: 1

@@ -299,7 +299,14 @@ public class MapEditorWindow : EditorWindow
         Rect gridRect = new Rect(0f, headerEndY, position.width, gridHeight);
 
         if (Event.current.type == EventType.Repaint)
-            DrawCells(gridRect);
+        {
+            // BeginClip restreint le rendu à la zone grille :
+            // les cases ne peuvent plus déborder au-dessus des contrôles header.
+            // À l'intérieur du clip les coordonnées sont locales (0,0 = coin haut-gauche du gridRect).
+            GUI.BeginClip(gridRect);
+            DrawCells(new Rect(0f, 0f, gridRect.width, gridRect.height));
+            GUI.EndClip();
+        }
 
         HandleMouseEvents(gridRect);
     }

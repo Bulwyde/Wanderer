@@ -252,38 +252,70 @@ public class NavigationManager : MonoBehaviour
 
     /// <summary>
     /// Vérifie si la ligne de vue entre deux cases est dégagée.
-    /// Pour l'instant, vérifie uniquement les murs directs entre cases adjacentes.
+    ///
+    /// Algorithme DDA (Digital Differential Analyzer) :
+    /// le rayon part du centre de (x1,y1) vers le centre de (x2,y2) et avance
+    /// une frontière de grille à la fois — jamais en diagonale d'un seul coup.
+    /// À chaque pas, seul le mur cardinal correspondant est vérifié (HasWall
+    /// ne connaît que les murs entre cases adjacentes en X ou en Y).
+    ///
+    /// Cas particulier : si le rayon passe exactement par un coin de grille
+    /// (frontières X et Y atteintes simultanément), la vision est bloquée
+    /// si l'un ou l'autre des deux murs adjacents est présent.
     /// </summary>
     private bool HasClearLineOfSight(int x1, int y1, int x2, int y2)
     {
         // La case du joueur est toujours visible
         if (x1 == x2 && y1 == y2) return true;
 
-        // Pour les cases adjacentes, on vérifie juste le mur direct
-        if (Mathf.Abs(x2 - x1) + Mathf.Abs(y2 - y1) == 1)
-            return !mapData.HasWall(x1, y1, x2, y2);
+        int dx    = x2 - x1;
+        int dy    = y2 - y1;
+        int stepX = dx > 0 ? 1 : dx < 0 ? -1 : 0;
+        int stepY = dy > 0 ? 1 : dy < 0 ? -1 : 0;
 
-        // Pour les cases plus lointaines, on trace un chemin case par case
-        // et on vérifie les murs à chaque étape
-        int stepX = (x2 > x1) ? 1 : (x2 < x1) ? -1 : 0;
-        int stepY = (y2 > y1) ? 1 : (y2 < y1) ? -1 : 0;
+        // tDelta : distance en t entre deux frontières successives sur chaque axe
+        // tMax   : t auquel le rayon atteint sa première frontière sur chaque axe
+        // On part du centre de la case → distance initiale jusqu'à la frontière = 0.5 case
+        float tDeltaX = stepX == 0 ? float.MaxValue : 1f / Mathf.Abs(dx);
+        float tDeltaY = stepY == 0 ? float.MaxValue : 1f / Mathf.Abs(dy);
+        float tMaxX   = stepX == 0 ? float.MaxValue : 0.5f / Mathf.Abs(dx);
+        float tMaxY   = stepY == 0 ? float.MaxValue : 0.5f / Mathf.Abs(dy);
 
-        int currentX = x1;
-        int currentY = y1;
+        int curX = x1, curY = y1;
 
-        while (currentX != x2 || currentY != y2)
+        while (curX != x2 || curY != y2)
         {
-            // On ne fait avancer un axe que s'il n'a pas encore atteint sa cible.
-            // Sans ce garde, un chemin non carré (ex : dx=2, dy=1) ferait dépasser
-            // l'un des axes, rendant la condition de sortie inatteignable → boucle infinie.
-            int nextX = (currentX == x2) ? currentX : currentX + stepX;
-            int nextY = (currentY == y2) ? currentY : currentY + stepY;
+            float diff = tMaxX - tMaxY;
 
-            if (mapData.HasWall(currentX, currentY, nextX, nextY))
-                return false;
-
-            currentX = nextX;
-            currentY = nextY;
+            if (Mathf.Abs(diff) < 1e-6f)
+            {
+                // Le rayon passe exactement par un coin de grille :
+                // frontières X et Y atteintes simultanément.
+                // Bloque si l'un ou l'autre des murs adjacents est présent.
+                if (mapData.HasWall(curX, curY, curX + stepX, curY) ||
+                    mapData.HasWall(curX, curY, curX, curY + stepY))
+                    return false;
+                curX  += stepX;
+                curY  += stepY;
+                tMaxX += tDeltaX;
+                tMaxY += tDeltaY;
+            }
+            else if (tMaxX < tMaxY)
+            {
+                // Frontière verticale atteinte en premier : vérifie le mur en X
+                if (mapData.HasWall(curX, curY, curX + stepX, curY))
+                    return false;
+                curX  += stepX;
+                tMaxX += tDeltaX;
+            }
+            else
+            {
+                // Frontière horizontale atteinte en premier : vérifie le mur en Y
+                if (mapData.HasWall(curX, curY, curX, curY + stepY))
+                    return false;
+                curY  += stepY;
+                tMaxY += tDeltaY;
+            }
         }
 
         return true;

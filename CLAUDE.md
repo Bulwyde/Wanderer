@@ -150,13 +150,13 @@ Canvas
 | Script | Rôle |
 |---|---|
 | `CharacterData` | Stats de base, équipement/module/consommables de départ, `baseVisionRange` |
-| `EnemyData` | Stats ennemis, file d'actions IA, lootPool, consumableLootPool |
+| `EnemyData` | Stats ennemis, file d'actions IA, lootPool, consumableLootPool, `creditsLoot` (int — crédits donnés à la mort) |
 | `SkillData` | Compétence (nom, coût énergie, cooldown, `EffectData`) |
 | `EffectData` | Effet universel (trigger, action, target, value). Utilisé par skills, consommables, modules, passiveEffects |
 | `StatusData` | Statut (behavior, perTurnAction, decayPerTurn, maxStacks) |
 | `EquipmentData` | Équipement (slot, bonus stats, skills, passiveEffects — **non branché**) |
 | `ModuleData` | Module (moduleID, effect avec trigger) — tracké dans `RunManager.activeModules` |
-| `ConsumableData` | Consommable (effect, usableInCombat, usableOnMap) |
+| `ConsumableData` | Consommable (effects, usableInCombat, usableOnMap, usableInEvents — tous `false` par défaut) |
 | `EventData` | Event narratif (eventID, title, choices avec effects) |
 | `NavEffect` | Effet de navigation (TeleportRandom, RevealZoneRandom/Choice, IncreaseVisionRange, IncrementCounter) |
 | `EventPool` | Pool d'events aléatoires (filtre déjà joués) |
@@ -236,18 +236,25 @@ Canvas
 - **StatusDecayTiming** : champ `decayTiming` sur `StatusData` (`OnTurnStart` par défaut / `OnTurnEnd`). `ProcessPerTurnStatuses` est remplacé par `ApplyPerTurnEffects` (effets seulement) + `DecayStatuses(bool, StatusDecayTiming)` (décroissance filtrée par timing). Les statuts `OnTurnEnd` du joueur décroissent dans `OnEndTurn()` ; ceux de l'ennemi avant `StartPlayerTurn()` en fin de `EnemyTurnRoutine()`.
 - **Effets multiples** : `SkillData`, `ConsumableData` et `ModuleData` ont désormais `List<EffectData> effects` (au lieu d'un seul `effect`). Les effets sont appliqués dans l'ordre. Pour les modules, chaque `EffectData` porte son propre `trigger` — un module peut déclencher des effets à des moments différents. ⚠️ Les assets existants doivent être reconfigurés : le champ `effect` n'existe plus, réassigner dans `effects[0]`.
 - **GainEnergy** : nouvelle `EffectAction`. Restaure de l'énergie courante du joueur, plafonnée à `GetCurrentMaxEnergy()`. Implémentée dans `ApplyEffect`, `ApplyConsumableEffect` et `ApplyModuleEffect`. Ignorée hors combat (pas de sens en navigation/event).
+- **Map editor — clipping de la grille** : `MapEditorWindow.DrawGrid()` enveloppe le dessin dans `GUI.BeginClip(gridRect)` / `GUI.EndClip()`. `DrawCells` reçoit un rect local `(0, 0, w, h)`. Empêche la grille de déborder par-dessus les contrôles header quand on pan vers le haut.
+- **LOS DDA** : `HasClearLineOfSight` remplacé par un algorithme DDA.
+- **Crédits** : ressource run persistante. `RunManager.credits` (public int), reset à 0 dans `StartNewRun()`, initialisé depuis `CharacterData.startingCredits` dans `InitialiserStats()`. `AddCredits(int)` gère gain et dépense (plancher à 0). `HasEnoughCredits(int)` pour les vérifications de coût. `EffectAction.AddCredits` branché dans `CombatManager` (skills, consommables, modules) et `ModuleManager.ApplyEffectOutOfCombat`. `EventEffectType.ModifyCredits` + champ `creditValue` (int) dans `EventEffect` — `EventManager` désactive automatiquement un bouton de choix si le joueur n'a pas assez de crédits et suffixe le texte `[Cout : X credits]`. `NavigationHUD` et `EventManager` ont un champ optionnel `creditsText` (TMP) à assigner dans l'Inspector. Le rayon va du centre de (x1,y1) au centre de (x2,y2) et traverse une frontière de grille à la fois — jamais en diagonal pur. `tMaxX`/`tMaxY` déterminent quelle frontière est atteinte en premier ; seul le mur cardinal correspondant est vérifié. Coin exact (frontières X et Y simultanées) : bloque si l'un ou l'autre des murs adjacents est présent. L'ancien code avançait en diagonal et appelait `HasWall` entre cases diagonales → toujours `false` → aucun mur ne bloquait la vue sur les rayons obliques.
+- **`EnemyData.creditsLoot`** : champ `int` sur `EnemyData` — crédits accordés au joueur à la mort de l'ennemi. Traité dans `CombatManager` via `EffectAction.AddCredits` (ou directement selon implémentation). Valeur par défaut `0`.
+- **`ConsumableData.usableInEvents`** : troisième flag de contexte (avec `usableInCombat` et `usableOnMap`). Tous les trois sont `false` par défaut. `EventManager.SpawnConsomableButtons()` affiche tous les consommables — ceux avec `usableInEvents = false` sont grisés et non cliquables, le container est activé automatiquement au spawn.
 
 ### À faire 🔧
 - **Scène de sélection de personnage** — `MainMenuManager.defaultCharacter` est le placeholder en attendant. Quand elle existera : passer le `CharacterData` choisi à `StartNewRun()` et appeler `GoToNavigation()`.
 - `passiveEffects` torse et tête : effets déclenchés, mais pas de bouton d'affichage pour l'instant.
-- Boss, salles spéciales
 - Icônes graphiques par type de case (`CellType`) dans `MapRenderer`
 - Sons, animations, retours visuels
 - Popup "Utiliser / Jeter" pour les consommables
 - Icône consommable grisée visuellement (après intégration sprites)
 - Cooldown des skills de navigation hors combat
 - Paramètres (panel à construire)
-- Ressources futures (or, etc.) : ajouter champ dans `RunManager` + ligne dans `InitialiserStats()`
+- **Crédits (ressource run)** : ✅ implémenté — voir section Fonctionnel.
+- **Marchand** : nouveau `CellType.Shop`. Scène ou panel dédié. UI d'achat avec prix en or. Inventaire de vente généré depuis une `EquipmentLootTable` / `ConsumableLootTable`.
+- **Événements de craft** : à définir avec Elisyo (exemples à fournir). Probablement via `EventData` avec `EventEffectType` spécifique ou effets combinés existants.
+- **Boss** : `CellType.Boss` déjà présent. `EnemyData` boss avec mécaniques spéciales (phases, actions uniques). Transition scène dédiée ou Combat classique avec flag boss.
 
 ### Localisation 🌍
 À implémenter après la première version jouable. Utiliser `com.unity.localization`. Ne jamais hardcoder du texte visible dans le code C#.
@@ -283,4 +290,5 @@ Canvas
 25. **`effect` → `effects` (List)** : SkillData, ConsumableData, ModuleData utilisent désormais une liste. Tout asset existant avec `effect` assigné perdra sa référence — réassigner dans l'élément 0 de la liste `effects` dans l'Inspector.
 26. **`DecayStatuses` et nettoyage** : le nettoyage des stacks à 0 est intégré dans `DecayStatuses`. `ApplyPerTurnEffects` ne nettoie pas (elle ne modifie pas les stacks). Pas besoin d'appeler un cleanup séparé.
 27. **Formule dégâts et crits** : le crit se calcule APRÈS `CalculerDegatsJoueur` et APRÈS le bonus de scaling par stacks. Crit = `rawDamage × critMultiplier`. La défense est soustraite AVANT le crit (rawDamage = CalculerDegats - def, puis crit sur ce résultat).
-28. **`HasClearLineOfSight` — boucle infinie sur diagonales non carrées** : la boucle avance `currentX` et `currentY` simultanément à chaque itération. Si `dx ≠ dy` (ex : dx=2, dy=1 à portée ≥ 3), un axe dépasse la cible → condition `currentX != x2 || currentY != y2` reste vraie indéfiniment. Fix : guarded advance `int nextX = (currentX == x2) ? currentX : currentX + stepX;` (idem Y). Symptôme révélateur : Unity freeze seulement à la 2e pression d'un skill de vision, pas la 1re (portée 2 → 3 passe le seuil sqrt(5) ≈ 2.24).
+28. **`HasClearLineOfSight` — algorithme DDA** : l'ancien code avançait en diagonal et appelait `HasWall` entre cases non adjacentes cardinalement → toujours `false` → aucun mur ne bloquait sur les rayons obliques. Remplacé par DDA : `tDeltaX = 1/|dx|`, `tDeltaY = 1/|dy|`, `tMaxX = tMaxY = 0.5/|d|` au départ. À chaque itération, on avance l'axe dont `tMax` est le plus petit et on vérifie uniquement le mur cardinal correspondant. Coin exact (`|tMaxX - tMaxY| < 1e-6f`) : avancer les deux axes, bloquer si l'un ou l'autre des murs est présent.
+29. **`ConsomableContainer` désactivé dans la scène Event** : `EventManager.SpawnConsomableButtons()` appelle `consumableContainer.gameObject.SetActive(true)` en début de méthode — ne pas désactiver définitivement ce GO dans la scène, c'est le script qui gère son activation. Si le container est inactif au moment de l'`Instantiate`, `Awake()` des `ConsumableButton` enfants est quand même appelé (préfab actif), mais le container reste visuellement caché jusqu'à ce que le script l'active.

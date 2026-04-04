@@ -812,10 +812,11 @@ public class NavigationManager : MonoBehaviour
             ConsumableData consoRef = conso; // capture pour le lambda
             btnScript.Setup(conso, (c) => UtiliserConsommableNav(c));
 
-            // Utilisable sur la carte uniquement si usableOnMap et au moins un mapEffect défini
-            bool utilisable = conso.usableOnMap &&
-                              conso.mapEffects != null &&
-                              conso.mapEffects.Count > 0;
+            // Utilisable sur la carte si usableOnMap ET au moins un effet défini
+            // (mapEffects OU effects — les deux sont appliqués à l'utilisation)
+            bool aMapEffects = conso.mapEffects != null && conso.mapEffects.Count > 0;
+            bool aEffects    = conso.effects    != null && conso.effects.Count    > 0;
+            bool utilisable  = conso.usableOnMap && (aMapEffects || aEffects);
             btnScript.SetInteractable(utilisable);
         }
     }
@@ -864,9 +865,72 @@ public class NavigationManager : MonoBehaviour
     private void UtiliserConsommableNav(ConsumableData conso)
     {
         Debug.Log($"[Navigation] Consommable utilisé sur la carte : {conso.consumableName}");
-        AppliquerEffetsNav(conso.mapEffects);
+
+        // Applique les NavEffects (téléportation, révélation, compteur...)
+        if (conso.mapEffects != null && conso.mapEffects.Count > 0)
+            AppliquerEffetsNav(conso.mapEffects);
+
+        // Applique les EffectData (Heal, AddCredits, ModifyStat...)
+        if (conso.effects != null)
+        {
+            foreach (EffectData effet in conso.effects)
+            {
+                if (effet == null) continue;
+                AppliquerEffetConsommableHorsCombat(effet, conso.consumableName);
+            }
+        }
+
         RunManager.Instance?.RemoveConsumable(conso);
         SpawnConsommablesNav(); // Rafraîchit les boutons après consommation
+    }
+
+    /// <summary>
+    /// Applique un EffectData hors combat depuis la carte (consommable utilisé en navigation).
+    /// Seules les actions sensées hors combat sont traitées — les autres sont ignorées avec un log.
+    /// </summary>
+    private void AppliquerEffetConsommableHorsCombat(EffectData effet, string source)
+    {
+        if (effet == null || RunManager.Instance == null) return;
+
+        switch (effet.action)
+        {
+            case EffectAction.Heal:
+            {
+                int soin = Mathf.Min(
+                    Mathf.Max(0, Mathf.RoundToInt(effet.value)),
+                    RunManager.Instance.maxHP - RunManager.Instance.currentHP
+                );
+                if (soin > 0)
+                {
+                    RunManager.Instance.currentHP += soin;
+                    Debug.Log($"[Navigation] {source} — Soin : +{soin} HP " +
+                              $"→ {RunManager.Instance.currentHP}/{RunManager.Instance.maxHP}");
+                }
+                break;
+            }
+
+            case EffectAction.AddCredits:
+            {
+                int montant = Mathf.RoundToInt(effet.value);
+                RunManager.Instance.AddCredits(montant);
+                string signe = montant >= 0 ? "+" : "";
+                Debug.Log($"[Navigation] {source} — {signe}{montant} credits " +
+                          $"→ {RunManager.Instance.credits}");
+                break;
+            }
+
+            case EffectAction.ModifyStat:
+            {
+                RunManager.Instance.AddStatBonus(effet.statToModify, effet.value);
+                Debug.Log($"[Navigation] {source} — ModifyStat : {effet.statToModify} " +
+                          $"{(effet.value >= 0 ? "+" : "")}{effet.value}");
+                break;
+            }
+
+            default:
+                Debug.Log($"[Navigation] {source} — Effet '{effet.action}' non applicable hors combat, ignoré.");
+                break;
+        }
     }
 
     /// <summary>

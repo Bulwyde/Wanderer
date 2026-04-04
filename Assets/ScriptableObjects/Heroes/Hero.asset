@@ -19,6 +19,7 @@ MonoBehaviour:
   maxHP: 100
   attack: 10
   defense: 0
+  startingCredits: 0
   criticalChance: 0
   criticalMultiplier: 2
   regeneration: 0
@@ -32,6 +33,6 @@ MonoBehaviour:
   startingArm1: {fileID: 11400000, guid: 00bfed72720722c4a87df02eb7371be4, type: 2}
   startingArm2: {fileID: 11400000, guid: 031341bb13cdd234f97afad02e8f177a, type: 2}
   startingConsumables:
-  - {fileID: 11400000, guid: d6c4a653009701145be19cc2e5d6958c, type: 2}
+  - {fileID: 11400000, guid: 2971b8ab95e473d4b87c3a6d01ce53e9, type: 2}
   - {fileID: 11400000, guid: 2f119e003e5f7184294998db0039b9de, type: 2}
   - {fileID: 11400000, guid: fe94d9017fec5814996d71915bb3bd5d, type: 2}

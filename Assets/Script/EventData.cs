@@ -55,6 +55,7 @@ public class EventChoice
 ///   GainModule      → gainModuleMode + (modulesToGive | moduleLootTable)
 ///   GainEquipment   → gainEquipmentMode + (equipmentsToGive | equipmentLootTable)
 ///   SetEventFlag    → flagKey + flagValue
+///   ModifyCredits   → creditValue (positif = gain, négatif = coût)
 /// </summary>
 [System.Serializable]
 public class EventEffect
@@ -105,6 +106,9 @@ public class EventEffect
 
     [Tooltip("Valeur à ajouter à la stat (positif = augmentation, négatif = réduction).\nExemple : +1 pour gagner +1 Attaque, -0.1 pour perdre 10% de chance de critique.\nUtilisé par : ModifyStat.")]
     public float statValue;
+
+    [Tooltip("Montant de crédits à modifier.\nPositif = gain, négatif = coût.\nSi le joueur n'a pas assez de crédits, le bouton de choix est désactivé.\nUtilisé par : ModifyCredits.")]
+    public int creditValue;
 }
 
 /// <summary>
@@ -148,4 +152,5 @@ public enum EventEffectType
     SetEventFlag,   // Pose un flag booléen dans RunManager — champs : flagKey + flagValue
     TriggerNavEffect, // Déclenche un effet de navigation (téléportation, révélation, compteur...) — champ : navEffect
     ModifyStat,     // Modifie une stat du joueur de façon permanente pour le run — champs : statToModify + statValue
+    ModifyCredits,  // Modifie les crédits du joueur — champ : creditValue (positif = gain, négatif = coût)
 }

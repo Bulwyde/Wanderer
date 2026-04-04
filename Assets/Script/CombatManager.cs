@@ -28,6 +28,7 @@ public class CombatManager : MonoBehaviour
     public TextMeshProUGUI playerHPText;
     public TextMeshProUGUI playerArmorText;  // Affiche "Armure : 5" — peut rester non-assigné
     public TextMeshProUGUI energyText;       // Affiche "Énergie : 2 / 3"
+    public TextMeshProUGUI creditsText;      // Affiche "Credits : 120" — peut rester non-assigné
 
     // -----------------------------------------------
     // UI — ENNEMI
@@ -850,6 +851,18 @@ public class CombatManager : MonoBehaviour
                 break;
             }
 
+            case EffectAction.AddCredits:
+            {
+                int montant = Mathf.RoundToInt(effect.value);
+                if (RunManager.Instance != null)
+                {
+                    RunManager.Instance.AddCredits(montant);
+                    string signe = montant >= 0 ? "+" : "";
+                    Log($"{GetPlayerName()} utilise {sourceName} — {signe}{montant} credits → {RunManager.Instance.credits}");
+                }
+                break;
+            }
+
             default:
                 Log($"{GetPlayerName()} utilise {sourceName} — Effet '{effect.action}' non encore implémenté.");
                 break;
@@ -1030,6 +1043,18 @@ public class CombatManager : MonoBehaviour
                 break;
             }
 
+            case EffectAction.AddCredits:
+            {
+                int montant = Mathf.RoundToInt(effect.value);
+                if (RunManager.Instance != null)
+                {
+                    RunManager.Instance.AddCredits(montant);
+                    string signe = montant >= 0 ? "+" : "";
+                    Log($"{GetPlayerName()} utilise {sourceName} — {signe}{montant} credits → {RunManager.Instance.credits}");
+                }
+                break;
+            }
+
             default:
                 Log($"{GetPlayerName()} utilise {sourceName} — Effet '{effect.action}' non encore implémenté.");
                 break;
@@ -1155,6 +1180,18 @@ public class CombatManager : MonoBehaviour
                         case StatType.MaxEnergy:          effectiveMaxEnergy          += Mathf.RoundToInt(effect.value); break;
                     }
                     Log($"{source} — {effect.statToModify} {(effect.value >= 0 ? "+" : "")}{effect.value:F1} (permanent run)");
+                }
+                break;
+            }
+
+            case EffectAction.AddCredits:
+            {
+                int montant = Mathf.RoundToInt(effect.value);
+                if (RunManager.Instance != null)
+                {
+                    RunManager.Instance.AddCredits(montant);
+                    string signe = montant >= 0 ? "+" : "";
+                    Log($"{source} — {signe}{montant} credits → {RunManager.Instance.credits}");
                 }
                 break;
             }
@@ -1458,6 +1495,13 @@ public class CombatManager : MonoBehaviour
             // Notifie les modules abonnés à la mort de l'ennemi
             GameEvents.TriggerEnemyDied();
 
+            // Attribue les crédits de loot de l'ennemi
+            if (RunManager.Instance != null && enemyData != null && enemyData.creditsLoot > 0)
+            {
+                RunManager.Instance.AddCredits(enemyData.creditsLoot);
+                Log($"Loot — +{enemyData.creditsLoot} credits → {RunManager.Instance.credits} total");
+            }
+
             // Victoire → panel de loot avant de continuer
             ShowLootPanel();
             Log("Combat terminé — Victoire !");
@@ -1599,7 +1643,9 @@ public class CombatManager : MonoBehaviour
             ? $"Armure : {currentEnemyArmor}"
             : "";
 
-        if (energyText != null) energyText.text = $"Énergie : {currentEnergy} / {GetCurrentMaxEnergy()}";
+        if (energyText   != null) energyText.text   = $"Énergie : {currentEnergy} / {GetCurrentMaxEnergy()}";
+        if (creditsText  != null && RunManager.Instance != null)
+            creditsText.text = $"Credits : {RunManager.Instance.credits}";
     }
 
     /// <summary>

@@ -188,6 +188,16 @@ public class ModuleManager : MonoBehaviour
                 break;
             }
 
+            case EffectAction.AddCredits:
+            {
+                int montant = Mathf.RoundToInt(effect.value);
+                RunManager.Instance.AddCredits(montant);
+                string signe = montant >= 0 ? "+" : "";
+                Debug.Log($"[Module] {moduleName} — AddCredits hors combat : {signe}{montant} " +
+                          $"→ {RunManager.Instance.credits} credits");
+                break;
+            }
+
             default:
                 Debug.Log($"[Module] {moduleName} — Effet '{effect.action}' " +
                           $"non pris en charge hors combat.");

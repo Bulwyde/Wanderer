@@ -24,6 +24,10 @@ public class CharacterData : ScriptableObject
     public int attack;       // S'additionne aux dégâts des compétences
     public int defense;
 
+    // Crédits possédés au début d'un run avec ce personnage.
+    // 0 par défaut — certains personnages peuvent démarrer avec une avance.
+    public int startingCredits = 0;
+
     [Header("Stats avancées")]
     // Probabilité de coup critique (0 = jamais, 1 = toujours)
     [Range(0f, 1f)]

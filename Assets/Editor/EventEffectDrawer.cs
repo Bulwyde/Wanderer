@@ -99,6 +99,11 @@ public class EventEffectDrawer : PropertyDrawer
                 height += step; // statToModify
                 height += step; // statValue
                 break;
+
+            // -----------------------------------------------------------
+            case EventEffectType.ModifyCredits:
+                height += step; // creditValue
+                break;
         }
 
         return height;
@@ -227,6 +232,13 @@ public class EventEffectDrawer : PropertyDrawer
                 rect.height = lineH;
                 EditorGUI.PropertyField(rect, property.FindPropertyRelative("statValue"),
                     new GUIContent("Valeur (positif = gain, negatif = perte)"));
+                break;
+
+            // -----------------------------------------------------------
+            case EventEffectType.ModifyCredits:
+                rect.height = lineH;
+                EditorGUI.PropertyField(rect, property.FindPropertyRelative("creditValue"),
+                    new GUIContent("Credits (positif = gain, negatif = cout)"));
                 break;
         }
 

@@ -39,6 +39,10 @@ public class RunManager : MonoBehaviour
     public int currentHP;
     public int maxHP;
 
+    // Crédits — ressource run persistante (marchands, événements à coût, etc.).
+    // Valeur positive uniquement : plancher à 0 dans AddCredits().
+    public int credits;
+
     [Header("Navigation")]
     // Identifiant de la mission (map) en cours
     public string currentMissionID;
@@ -289,6 +293,30 @@ public class RunManager : MonoBehaviour
         return runStatBonuses.TryGetValue(stat, out float bonus) ? bonus : 0f;
     }
 
+    // -----------------------------------------------
+    // CRÉDITS
+    // -----------------------------------------------
+
+    /// <summary>
+    /// Modifie les crédits du joueur. Valeur positive = gain, négative = dépense.
+    /// Le total ne peut jamais descendre sous 0.
+    /// </summary>
+    public void AddCredits(int amount)
+    {
+        int avant = credits;
+        credits = Mathf.Max(0, credits + amount);
+        string signe = amount >= 0 ? "+" : "";
+        Debug.Log($"[RunManager] Crédits : {signe}{amount} → {credits} (était {avant})");
+    }
+
+    /// <summary>
+    /// Retourne true si le joueur possède au moins <amount> crédits.
+    /// </summary>
+    public bool HasEnoughCredits(int amount)
+    {
+        return credits >= amount;
+    }
+
     /// <summary>
     /// Incrémente (ou décrémente) un compteur nommé de `delta`.
     /// Crée le compteur s'il n'existe pas encore (valeur de départ : 0).
@@ -396,6 +424,7 @@ public class RunManager : MonoBehaviour
         navigationCounters.Clear();
         visionRangeBonus = 0;
         runStatBonuses.Clear();
+        credits = 0;
 
         // Réinitialise l'état de navigation : le joueur repart de la case de départ
         hasNavigationState = false;
@@ -538,11 +567,8 @@ public class RunManager : MonoBehaviour
         maxHP     = Mathf.Max(1, hpMax);
         currentHP = maxHP;
 
-        // -----------------------------------------------
-        // RESSOURCES FUTURES (or, mana, etc.)
-        // Ajouter ici quand CharacterData exposera des valeurs de départ.
-        // Exemple : gold = character.startingGold;
-        // -----------------------------------------------
+        // Crédits de départ — définis par personnage dans CharacterData
+        credits = Mathf.Max(0, character.startingCredits);
 
         Debug.Log($"[RunManager] Stats initialisées — HP : {currentHP}/{maxHP}");
     }

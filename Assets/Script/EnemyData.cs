@@ -47,6 +47,10 @@ public class EnemyData : ScriptableObject
     // LOOT
     // -----------------------------------------------
 
+    [Header("Loot — Crédits")]
+    [Tooltip("Crédits accordés au joueur quand cet ennemi est vaincu. 0 = aucun crédit.")]
+    public int creditsLoot = 0;
+
     [Header("Loot — Équipement")]
     [Tooltip("Pièces d'équipement que cet ennemi peut lâcher")]
     public List<EquipmentData> lootPool = new List<EquipmentData>();

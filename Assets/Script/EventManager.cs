@@ -79,10 +79,14 @@ public class EventManager : MonoBehaviour
     // UI — CONSOMMABLES
     // -----------------------------------------------
 
-    [Header("UI — HP")]
+    [Header("UI — HP / Crédits")]
     // Optionnel — affiche les HP courants du joueur dans la scène Event.
     // Mis à jour au Start() et après chaque choix (les effets peuvent modifier les HP).
     public TextMeshProUGUI hpText;
+
+    // Optionnel — affiche les crédits courants du joueur dans la scène Event.
+    // Mis à jour au Start() et après chaque choix (les effets peuvent modifier les crédits).
+    public TextMeshProUGUI creditsText;
 
     [Header("UI — Consommables")]
     // Conteneur où les icônes de consommables seront affichées (lecture seule en event)
@@ -115,6 +119,7 @@ public class EventManager : MonoBehaviour
         LoadAndDisplayEvent();
         SpawnConsumableButtons();
         RefreshHP();
+        RefreshCredits();
     }
 
     /// <summary>
@@ -163,6 +168,12 @@ public class EventManager : MonoBehaviour
         hpText.text = $"HP : {RunManager.Instance.currentHP} / {RunManager.Instance.maxHP}";
     }
 
+    private void RefreshCredits()
+    {
+        if (creditsText == null || RunManager.Instance == null) return;
+        creditsText.text = $"Credits : {RunManager.Instance.credits}";
+    }
+
     private void DisplayEvent()
     {
         // Fond d'écran
@@ -177,14 +188,18 @@ public class EventManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Affiche tous les consommables du joueur en lecture seule.
-    /// Tous les boutons sont non interactables en scène Event :
-    /// le joueur peut voir son inventaire mais pas l'utiliser pendant un événement.
+    /// Affiche tous les consommables du joueur.
+    /// Ceux dont usableInEvents = false sont grisés et non cliquables.
+    /// Le container est toujours affiché (activé au Start).
+    /// Appelé aussi après l'utilisation d'un consommable pour rafraîchir la liste.
     /// </summary>
     private void SpawnConsumableButtons()
     {
         if (consumableContainer == null || consumableButtonPrefab == null) return;
         if (RunManager.Instance == null) return;
+
+        // Le container doit toujours être visible en scène Event
+        consumableContainer.gameObject.SetActive(true);
 
         foreach (Transform child in consumableContainer)
             Destroy(child.gameObject);
@@ -197,8 +212,90 @@ public class EventManager : MonoBehaviour
             ConsumableButton cb = go.GetComponent<ConsumableButton>();
             if (cb == null) continue;
 
-            cb.Setup(conso, null);
-            cb.SetInteractable(false); // Jamais utilisable pendant un événement
+            // Callback uniquement si le consommable est utilisable en event — sinon null (clic ignoré)
+            System.Action<ConsumableData> callback = null;
+            if (conso.usableInEvents) callback = UtiliserConsommableEvent;
+
+            cb.Setup(conso, callback);
+            cb.SetInteractable(conso.usableInEvents);
+        }
+    }
+
+    /// <summary>
+    /// Appelé quand le joueur utilise un consommable depuis la scène Event.
+    /// Applique les effects (EffectData) dans un contexte hors combat,
+    /// retire le consommable de l'inventaire, puis rafraîchit l'UI.
+    /// Les mapEffects (NavEffect) sont ignorés ici — ils n'ont pas de sens dans un événement.
+    /// </summary>
+    private void UtiliserConsommableEvent(ConsumableData consommable)
+    {
+        if (consommable == null || RunManager.Instance == null) return;
+
+        Debug.Log($"[Event] Consommable utilisé : {consommable.consumableName}");
+
+        if (consommable.effects != null)
+        {
+            foreach (EffectData effet in consommable.effects)
+            {
+                if (effet == null) continue;
+                AppliquerEffetHorsCombat(effet, consommable.consumableName);
+            }
+        }
+
+        RunManager.Instance.RemoveConsumable(consommable);
+
+        // Rafraîchit la liste (le bouton utilisé disparaît) et les indicateurs
+        SpawnConsumableButtons();
+        RefreshHP();
+        RefreshCredits();
+    }
+
+    /// <summary>
+    /// Applique un EffectData dans un contexte hors combat (event, navigation).
+    /// Seules les actions sensées hors combat sont traitées — les autres sont ignorées avec un log.
+    /// </summary>
+    private void AppliquerEffetHorsCombat(EffectData effet, string source)
+    {
+        if (effet == null || RunManager.Instance == null) return;
+
+        switch (effet.action)
+        {
+            case EffectAction.Heal:
+            {
+                int soin = Mathf.Min(
+                    Mathf.Max(0, Mathf.RoundToInt(effet.value)),
+                    RunManager.Instance.maxHP - RunManager.Instance.currentHP
+                );
+                if (soin > 0)
+                {
+                    RunManager.Instance.currentHP += soin;
+                    Debug.Log($"[Event] {source} — Soin : +{soin} HP " +
+                              $"→ {RunManager.Instance.currentHP}/{RunManager.Instance.maxHP}");
+                }
+                break;
+            }
+
+            case EffectAction.AddCredits:
+            {
+                int montant = Mathf.RoundToInt(effet.value);
+                RunManager.Instance.AddCredits(montant);
+                string signe = montant >= 0 ? "+" : "";
+                Debug.Log($"[Event] {source} — {signe}{montant} credits " +
+                          $"→ {RunManager.Instance.credits}");
+                break;
+            }
+
+            case EffectAction.ModifyStat:
+            {
+                RunManager.Instance.AddStatBonus(effet.statToModify, effet.value);
+                Debug.Log($"[Event] {source} — ModifyStat : {effet.statToModify} " +
+                          $"{(effet.value >= 0 ? "+" : "")}{effet.value}");
+                break;
+            }
+
+            default:
+                Debug.Log($"[Event] {source} — Effet '{effet.action}' non applicable hors combat, ignoré.");
+                break;
         }
     }
 
@@ -217,13 +314,38 @@ public class EventManager : MonoBehaviour
         {
             GameObject go = Instantiate(choiceButtonPrefab, choiceContainer);
 
-            TextMeshProUGUI label = go.GetComponentInChildren<TextMeshProUGUI>();
-            if (label != null) label.text = choice.choiceText;
+            // Calcule le coût total en crédits de ce choix (somme des effets négatifs)
+            int coutCredits = 0;
+            if (choice.effects != null)
+            {
+                foreach (EventEffect eff in choice.effects)
+                {
+                    if (eff.type == EventEffectType.ModifyCredits && eff.creditValue < 0)
+                        coutCredits += -eff.creditValue;
+                }
+            }
 
+            // Texte du bouton — suffixe le coût si applicable
+            TextMeshProUGUI label = go.GetComponentInChildren<TextMeshProUGUI>();
+            if (label != null)
+            {
+                string texte = choice.choiceText;
+                if (coutCredits > 0)
+                    texte += $" [Cout : {coutCredits} credits]";
+                label.text = texte;
+            }
+
+            // Désactive le bouton si le joueur n'a pas assez de crédits
             Button btn = go.GetComponent<Button>();
-            EventChoice captured = choice; // capture nécessaire pour le lambda
             if (btn != null)
+            {
+                bool peutSePermettre = coutCredits == 0
+                    || (RunManager.Instance != null && RunManager.Instance.HasEnoughCredits(coutCredits));
+                btn.interactable = peutSePermettre;
+
+                EventChoice captured = choice; // capture nécessaire pour le lambda
                 btn.onClick.AddListener(() => OnChoiceMade(captured));
+            }
         }
     }
 
@@ -242,6 +364,7 @@ public class EventManager : MonoBehaviour
 
         ApplyEffects(choice.effects);
         RefreshHP();
+        RefreshCredits();
 
         // Remplace la description par le texte de résultat
         if (descriptionText != null)
@@ -438,6 +561,16 @@ public class EventManager : MonoBehaviour
                     RunManager.Instance.AddStatBonus(effect.statToModify, effect.statValue);
                     Debug.Log($"[Event] ModifyStat — {effect.statToModify} " +
                               $"{(effect.statValue >= 0 ? "+" : "")}{effect.statValue}");
+                    break;
+
+                // -----------------------------------------------------------
+                // CRÉDITS
+                // -----------------------------------------------------------
+
+                case EventEffectType.ModifyCredits:
+                    RunManager.Instance.AddCredits(effect.creditValue);
+                    Debug.Log($"[Event] ModifyCredits — {(effect.creditValue >= 0 ? "+" : "")}{effect.creditValue} " +
+                              $"→ {RunManager.Instance.credits} credits");
                     break;
 
                 default:

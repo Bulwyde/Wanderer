@@ -167,11 +167,14 @@ public class EffectDataEditor : Editor
             }
 
             // -----------------------------------------------------------
-            case EffectAction.AddGold:
+            case EffectAction.AddCredits:
             {
                 EditorGUILayout.PropertyField(
                     serializedObject.FindProperty("value"),
-                    new GUIContent("Quantite d'or"));
+                    new GUIContent("Quantite de credits"));
+                EditorGUILayout.HelpBox(
+                    "Positif = gain de credits. Negatif = depense (ne peut pas passer sous 0).",
+                    MessageType.None);
                 // secondaryValue masqué
                 break;
             }

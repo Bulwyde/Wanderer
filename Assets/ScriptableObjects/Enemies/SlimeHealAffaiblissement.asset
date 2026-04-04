@@ -29,6 +29,7 @@ MonoBehaviour:
     maxUses: 0
   - skill: {fileID: 11400000, guid: 78e77d56eedde5543a2432d1098947b4, type: 2}
     maxUses: 0
+  creditsLoot: 40
   lootPool:
   - {fileID: 11400000, guid: 00bfed72720722c4a87df02eb7371be4, type: 2}
   - {fileID: 11400000, guid: 3cbd00fa3520e754b9270d70f802ab2a, type: 2}

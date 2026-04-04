@@ -108,7 +108,7 @@ public enum EffectAction
     ModifyStat,             // Modifie une stat (attaque, défense...)
     AddArmor,               // Ajoute de l'armure
     GainEnergy,             // Restaure de l'énergie courante (plafonné à l'énergie max du tour)
-    AddGold,                // Ajoute des pièces
+    AddCredits,             // Modifie les crédits du joueur (positif = gain, négatif = dépense)
     RevealRoom,             // Révèle une salle sur la carte
     DisableEnemyPart,       // Désactive une partie d'un ennemi
 }

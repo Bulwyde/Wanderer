@@ -46,10 +46,13 @@ public class ConsumableData : ScriptableObject
 
     [Header("Utilisation")]
     // Peut être utilisé pendant un combat (depuis l'interface de combat)
-    public bool usableInCombat = true;
+    public bool usableInCombat = false;
 
     // Peut être utilisé sur la carte (hors combat, depuis l'interface de navigation)
-    public bool usableOnMap = true;
+    public bool usableOnMap = false;
+
+    // Peut être utilisé depuis la scène Event (applique les effects comme hors combat)
+    public bool usableInEvents = false;
 
     // -----------------------------------------------
     // EFFETS DE NAVIGATION

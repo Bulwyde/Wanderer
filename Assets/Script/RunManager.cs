@@ -59,6 +59,10 @@ public class RunManager : MonoBehaviour
     // ID d'événement spécifique si la salle est de type Event
     public string currentSpecificEventID;
 
+    // MapData de la carte en cours — assigné par NavigationManager avant chaque transition de scène.
+    // Permet aux scènes Shop (et futures scènes) d'accéder à la CellData courante.
+    public MapData currentMapData;
+
     [Header("Modificateurs de difficulté")]
     public float difficultyModifier = 1.0f;
 
@@ -230,6 +234,15 @@ public class RunManager : MonoBehaviour
     // HashSet est idéal ici : vérification instantanée, pas de doublons.
     // Ce n'est pas sérialisé car c'est un état purement runtime (réinitialisé à chaque run).
     private HashSet<string> clearedRooms = new HashSet<string>();
+
+    // -----------------------------------------------
+    // ÉTATS DES MARCHANDS
+    // -----------------------------------------------
+
+    // Un ShopState par case Marchand, indexé par clé "x,y".
+    // Généré à la première visite, conservé pour toute la run.
+    // Les items achetés sont marqués dans ShopState : ils restent visibles mais grisés.
+    private Dictionary<string, ShopState> shopStates = new Dictionary<string, ShopState>();
 
     // -----------------------------------------------
     // COMPTEURS DE NAVIGATION
@@ -425,6 +438,8 @@ public class RunManager : MonoBehaviour
         visionRangeBonus = 0;
         runStatBonuses.Clear();
         credits = 0;
+        shopStates.Clear();
+        currentMapData = null;
 
         // Réinitialise l'état de navigation : le joueur repart de la case de départ
         hasNavigationState = false;
@@ -577,6 +592,120 @@ public class RunManager : MonoBehaviour
     {
         if (starting != null && IsSlotFree(slot))
             EquipItem(slot, starting);
+    }
+
+    // -----------------------------------------------
+    // MARCHANDS — GÉNÉRATION ET ACCÈS
+    // -----------------------------------------------
+
+    /// <summary>
+    /// Retourne l'état du marchand pour la case donnée.
+    /// S'il n'existe pas encore, génère l'inventaire à partir du ShopData fourni.
+    ///
+    /// Le ShopData est résolu en amont (priorité : cell.shopData → mapData.defaultShopData).
+    /// Si shopData est null, le marchand sera vide et un warning est loggué.
+    ///
+    /// Anti-duplicata : on retire chaque article tiré de la liste des disponibles
+    /// avant de tirer le suivant, garantissant l'unicité au sein de chaque catégorie.
+    /// Modules : en plus, les modules déjà possédés par le joueur sont filtrés dès le départ.
+    /// </summary>
+    public ShopState GetOrCreateShopState(CellData cell, ShopData shopData)
+    {
+        string key = $"{cell.x},{cell.y}";
+        if (shopStates.TryGetValue(key, out ShopState existing))
+            return existing;
+
+        ShopState state = new ShopState { genere = true };
+
+        if (shopData == null)
+        {
+            Debug.LogWarning($"[RunManager] Shop ({cell.x},{cell.y}) — aucun ShopData fourni, marchand vide.");
+            shopStates[key] = state;
+            return state;
+        }
+
+        // ── Équipements ──────────────────────────────────────────────────────
+        if (shopData.equipmentLootTable != null && shopData.equipmentCount > 0)
+        {
+            List<EquipmentData> pool = new List<EquipmentData>(shopData.equipmentLootTable.equipments);
+            pool.RemoveAll(e => e == null);
+
+            int nbATirer = Mathf.Min(shopData.equipmentCount, pool.Count);
+            for (int i = 0; i < nbATirer; i++)
+            {
+                int idx = Random.Range(0, pool.Count);
+                EquipmentData item = pool[idx];
+                pool.RemoveAt(idx);
+
+                state.equipements.Add(new ShopItemEquipment
+                {
+                    data = item,
+                    prix = Random.Range(shopData.equipmentPriceRange.x,
+                                        shopData.equipmentPriceRange.y + 1)
+                });
+            }
+        }
+
+        // ── Modules ──────────────────────────────────────────────────────────
+        if (shopData.moduleLootTable != null && shopData.moduleCount > 0)
+        {
+            List<ModuleData> pool = new List<ModuleData>(shopData.moduleLootTable.modules);
+            pool.RemoveAll(m => m == null || HasModule(m));
+
+            int nbATirer = Mathf.Min(shopData.moduleCount, pool.Count);
+            for (int i = 0; i < nbATirer; i++)
+            {
+                int idx = Random.Range(0, pool.Count);
+                ModuleData item = pool[idx];
+                pool.RemoveAt(idx);
+
+                state.modules.Add(new ShopItemModule
+                {
+                    data = item,
+                    prix = Random.Range(shopData.modulePriceRange.x,
+                                        shopData.modulePriceRange.y + 1)
+                });
+            }
+        }
+
+        // ── Consommables ─────────────────────────────────────────────────────
+        if (shopData.consumableLootTable != null && shopData.consumableCount > 0)
+        {
+            List<ConsumableData> pool = new List<ConsumableData>(shopData.consumableLootTable.consumables);
+            pool.RemoveAll(c => c == null);
+
+            int nbATirer = Mathf.Min(shopData.consumableCount, pool.Count);
+            for (int i = 0; i < nbATirer; i++)
+            {
+                int idx = Random.Range(0, pool.Count);
+                ConsumableData item = pool[idx];
+                pool.RemoveAt(idx);
+
+                state.consommables.Add(new ShopItemConsomable
+                {
+                    data = item,
+                    prix = Random.Range(shopData.consumablePriceRange.x,
+                                        shopData.consumablePriceRange.y + 1)
+                });
+            }
+        }
+
+        shopStates[key] = state;
+        Debug.Log($"[RunManager] Shop généré en ({cell.x},{cell.y}) avec '{shopData.name}' — " +
+                  $"{state.equipements.Count} équipements, {state.modules.Count} modules, " +
+                  $"{state.consommables.Count} consommables.");
+        return state;
+    }
+
+    /// <summary>
+    /// Retourne l'état du marchand pour la position (x, y), ou null s'il n'a pas encore été généré.
+    /// À utiliser uniquement en lecture (ex : vérifier si le shop existe déjà).
+    /// Pour obtenir ou créer, utiliser GetOrCreateShopState().
+    /// </summary>
+    public ShopState GetShopState(int x, int y)
+    {
+        shopStates.TryGetValue($"{x},{y}", out ShopState state);
+        return state;
     }
 
     public void EndRun()

@@ -485,6 +485,23 @@ public class NavigationManager : MonoBehaviour
                 SceneLoader.Instance.GoToEvent();
                 break;
 
+            case CellType.Shop:
+                // La case marchand n'est jamais "cleared" — on peut y revenir autant de fois que souhaité.
+                // L'état (inventaire, prix, articles achetés) est persistant via RunManager.shopStates.
+                if (RunManager.Instance == null || SceneLoader.Instance == null)
+                {
+                    Debug.LogError("RunManager ou SceneLoader introuvable !");
+                    break;
+                }
+
+                // Stocke la MapData pour que ShopManager puisse accéder à la CellData
+                RunManager.Instance.currentMapData = mapData;
+                RunManager.Instance.SaveNavigationState(
+                    PlayerX, PlayerY, visitedCells, exploredCells);
+                RunManager.Instance.EnterRoom(cell);
+                SceneLoader.Instance.GoToShop();
+                break;
+
             case CellType.Start:
                 Debug.Log($"({PlayerX},{PlayerY}) — Case de départ, pas de transition");
                 break;

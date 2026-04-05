@@ -22,6 +22,7 @@ public class MapRenderer : MonoBehaviour
     public Color colorBoss    = new Color(0.8f, 0.0f, 0.0f);
     public Color colorClassic = new Color(0.3f, 0.5f, 0.8f);
     public Color colorEvent   = new Color(1.0f, 0.5f, 0.0f);
+    public Color colorShop    = new Color(0.2f, 0.8f, 0.8f); // cyan — marchand
     public Color colorNonNav  = new Color(0.1f, 0.1f, 0.1f);
     public Color colorWall    = new Color(0.9f, 0.7f, 0.1f);
     public Color colorPlayer  = Color.white;
@@ -172,8 +173,11 @@ public class MapRenderer : MonoBehaviour
                 {
                     // Si la salle a été complétée, on la montre comme vide
                     // même si son type d'origine est Classic ou Boss.
+                    // Exception : les cases Shop gardent leur couleur même après visite
+                    // (le marchand reste accessible, son état est persistant).
                     bool cleared = RunManager.Instance != null &&
-                                   RunManager.Instance.IsRoomCleared(x, y);
+                                   RunManager.Instance.IsRoomCleared(x, y) &&
+                                   cell?.cellType != CellType.Shop;
 
                     CellType displayType = cleared ? CellType.Empty
                                                    : (cell?.cellType ?? CellType.Empty);
@@ -275,7 +279,8 @@ public class MapRenderer : MonoBehaviour
         if (navigationManager.IsVisible(x, y))
         {
             bool cleared = RunManager.Instance != null &&
-                           RunManager.Instance.IsRoomCleared(x, y);
+                           RunManager.Instance.IsRoomCleared(x, y) &&
+                           cell?.cellType != CellType.Shop;
             CellType displayType = cleared ? CellType.Empty
                                            : (cell?.cellType ?? CellType.Empty);
             cellImages[x, y].color = GetCellColor(displayType);
@@ -331,6 +336,7 @@ public void CenterCameraOnPlayer()
             case CellType.Boss:         return colorBoss;
             case CellType.Classic:      return colorClassic;
             case CellType.Event:        return colorEvent;
+            case CellType.Shop:         return colorShop;
             case CellType.NonNavigable: return colorNonNav;
             default:                    return colorEmpty;
         }

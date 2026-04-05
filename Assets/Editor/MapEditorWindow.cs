@@ -49,6 +49,7 @@ public class MapEditorWindow : EditorWindow
     private Color colorBoss        = new Color(0.8f, 0.0f, 0.0f);
     private Color colorClassic     = new Color(0.3f, 0.5f, 0.8f);
     private Color colorEvent       = new Color(0.8f, 0.5f, 0.0f);
+    private Color colorShop        = new Color(0.2f, 0.8f, 0.8f);
     private Color colorNonNav      = new Color(0.1f, 0.1f, 0.1f);
     private Color colorWall        = new Color(0.9f, 0.7f, 0.1f);
 
@@ -155,6 +156,7 @@ public class MapEditorWindow : EditorWindow
         colorBoss    = EditorGUILayout.ColorField("Boss",          colorBoss);
         colorClassic = EditorGUILayout.ColorField("Classique",     colorClassic);
         colorEvent   = EditorGUILayout.ColorField("Événement",     colorEvent);
+        colorShop    = EditorGUILayout.ColorField("Marchand",      colorShop);
         colorNonNav  = EditorGUILayout.ColorField("Non navigable", colorNonNav);
         colorWall    = EditorGUILayout.ColorField("Mur",           colorWall);
         EditorGUI.indentLevel--;
@@ -276,6 +278,34 @@ public class MapEditorWindow : EditorWindow
                 if (selectedCell.eventPool == null)
                     EditorGUILayout.HelpBox(
                         "Aucun EventPool assigné. Crée-en un via RPG → Event Pool.",
+                        MessageType.Warning);
+            }
+        }
+
+        // Configuration du marchand — uniquement pour les cases de type Shop
+        if (selectedCell.cellType == CellType.Shop)
+        {
+            EditorGUILayout.Space(4);
+            EditorGUILayout.LabelField("Marchand", EditorStyles.boldLabel);
+
+            ShopData newShopData = (ShopData)EditorGUILayout.ObjectField(
+                "Shop Data", selectedCell.shopData, typeof(ShopData), false);
+            if (newShopData != selectedCell.shopData)
+            {
+                selectedCell.shopData = newShopData;
+                EditorUtility.SetDirty(currentMap);
+            }
+
+            if (selectedCell.shopData == null)
+            {
+                // Vérifie si la MapData a un fallback
+                if (currentMap.defaultShopData != null)
+                    EditorGUILayout.HelpBox(
+                        $"Aucun ShopData assigné — le ShopData par défaut de la map sera utilisé ({currentMap.defaultShopData.name}).",
+                        MessageType.Info);
+                else
+                    EditorGUILayout.HelpBox(
+                        "Aucun ShopData assigné sur cette case, et aucun ShopData par défaut sur la map. Le marchand sera vide.",
                         MessageType.Warning);
             }
         }
@@ -527,6 +557,7 @@ private Rect GetVerticalWallRect(Rect grid, int x, int y)
             case CellType.Boss:          return colorBoss;
             case CellType.Classic:       return colorClassic;
             case CellType.Event:         return colorEvent;
+            case CellType.Shop:          return colorShop;
             case CellType.NonNavigable:  return colorNonNav;
             default:                     return colorEmpty;
         }
@@ -540,6 +571,7 @@ private Rect GetVerticalWallRect(Rect grid, int x, int y)
             case CellType.Boss:          return "B";
             case CellType.Classic:       return "C";
             case CellType.Event:         return "E";
+            case CellType.Shop:          return "M";
             case CellType.NonNavigable:  return "X";
             default:                     return "";
         }

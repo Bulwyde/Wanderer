@@ -29,6 +29,11 @@ public class MapData : ScriptableObject
     // Liste de tous les murs entre cases adjacentes
     public List<WallData> walls = new List<WallData>();
 
+    [Header("Marchand — défaut")]
+    // ShopData utilisé pour toutes les cases Marchand qui n'ont pas
+    // de ShopData assigné individuellement.
+    public ShopData defaultShopData;
+
     /// <summary>
     /// Retourne la case à la position (x, y).
     /// </summary>
@@ -94,6 +99,12 @@ public class CellData
 
     // Mode FromPool : référence vers un EventPool ScriptableObject prédéfini.
     public EventPool eventPool;
+
+    // ── Champs Marchand (CellType.Shop) ─────────────────────────────────────
+
+    // Configuration du marchand pour cette case spécifique.
+    // Si null, la MapData.defaultShopData est utilisée en fallback.
+    public ShopData shopData;
 }
 
 /// <summary>
@@ -116,6 +127,7 @@ public enum CellType
     Classic,        // Salle classique — contenu décidé par la génération
     Event,          // Salle d'événement textuel — eventPool contient les EventData disponibles
     NonNavigable,   // Bloc non navigable — obstacle infranchissable
+    Shop,           // Salle marchand — inventaire persistant généré à la première visite
 }
 
 /// <summary>

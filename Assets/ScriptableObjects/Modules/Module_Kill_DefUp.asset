@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ModuleData
   moduleID: module_kill_defup
   moduleName: Defense Up
-  icon: {fileID: 0}
+  icon: {fileID: 8923337421485890298, guid: 2906ccd1ac48ebc498254b6e24cd3aab, type: 3}
   description: 
   keywords: []
   effects:

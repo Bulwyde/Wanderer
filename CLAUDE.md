@@ -70,6 +70,9 @@ Le joueur explore une carte, tombe sur des salles (combat, événement, etc.), g
 - `InitialiserStats()` : calcule `maxHP = characterData.maxHP + Σ bonusHP équipements`, pose `currentHP = maxHP`. Prévu pour accueillir les futures ressources (or, etc.).
 - `AddModule()` appelle automatiquement `ModuleManager.NotifyModulesChanged()`.
 - ⚠️ `EnterRoom(CellData)` ne set plus `currentSpecificEventID` — c'est `NavigationManager` qui l'assigne après le tirage aléatoire.
+- `currentMapData` : assigné par `NavigationManager` avant `GoToShop()`. Utilisé par `ShopManager` pour retrouver la `CellData` du marchand.
+- `GetOrCreateShopState(CellData, ShopData)` : génère l'inventaire du shop à la première visite depuis le `ShopData` fourni (anti-duplicata, filtrage modules possédés). Si `ShopData` est null, marchand vide + warning. Conservé dans `shopStates[x,y]` pour toute la run. Reset dans `StartNewRun()`.
+- `GetShopState(x, y)` : lecture seule, retourne null si pas encore généré.
 
 **`SceneLoader.cs`** — Singleton simple, wrappe `SceneManager.LoadScene()`.
 
@@ -137,6 +140,29 @@ Canvas
 
 ---
 
+### Scène Shop
+
+**`ShopManager.cs`** — Gère la scène Marchand.
+- Lit `RunManager.currentRoomX/Y` + `RunManager.currentMapData` pour retrouver la `CellData` du marchand.
+- Résout le `ShopData` à utiliser : `cell.shopData` en priorité, sinon `currentMapData.defaultShopData`. Passe le résultat à `RunManager.GetOrCreateShopState(cell, shopData)`.
+- Affiche 3 zones (équipements / modules / consommables) via `ShopItemButton` prefab. Équipements en colonnes de 3 max (`GenererArticlesEquipement` crée des GO `ColonneEquipement` avec VLG + ContentSizeFitter).
+- Remplacement d'équipement (slot plein) : délégué à `EquipmentOfferController.StartOffresSequentielles()`. Les crédits ne sont déduits que si l'item est effectivement équipé à l'issue (`EstEquipe()`).
+- Consommables du joueur : même logique qu'EventManager (`usableInEvents`).
+- Bouton "Quitter" → `SceneLoader.GoToNavigation()`.
+- **Deux modes de mise à jour de l'UI :**
+  - `RafraichirArticles()` : détruit et recrée tous les boutons — à appeler après un achat (label "Acheté" à afficher). Appelle `Canvas.ForceUpdateCanvases()` à la fin pour éviter les décalages de layout sur un frame.
+  - `MettreAJourDisponibilite()` : met à jour `SetInteractable()` sur les boutons existants via les listes `_boutonsEquipement/Modules/Consommables` — à appeler quand seuls les crédits changent (consommable utilisé). Aucun flash possible car les GO ne sont jamais recréés.
+- ⚠️ `currentMapData` est assigné par NavigationManager dans `case CellType.Shop` avant `GoToShop()`.
+- ⚠️ `EquipmentOfferController` se désactive dans `Awake()` — bouton "Quitter" doit être frère, jamais enfant.
+- `ConsommableContainer` (joueur) désactivé par défaut dans la scène — `GenererConsommablesJoueur()` appelle `SetActive(true)` en début de méthode, comme `EventManager.SpawnConsomableButtons()`.
+- `ModuleHUD` (prefab) dans HUDPanel — piloté par `ModuleManager.OnModulesChanged` (statique), aucun branchement manuel nécessaire.
+
+**`ShopItemButton.cs`** — Bouton d'article du shop. Champs : `itemNameText`, `priceText`. `Setup(nom, prix, achetable, callback, labelPrix)`.
+
+**`ShopState.cs`** — Classes sérialisables : `ShopItemEquipment`, `ShopItemModule`, `ShopItemConsomable`, `ShopState`. Stocké dans `RunManager.shopStates[x,y]`.
+
+---
+
 ### Scène Event
 
 **`EventManager.cs`** — Lit `RunManager.currentSpecificEventID`, cherche dans `EventDatabase`, affiche titre/description/boutons. Après choix : applique effets, affiche `outcomeText`. Si équipement en attente → `EquipmentOfferController.StartOffresSequentielles()`. `MontrerContinueButton()` remonte toute la hiérarchie pour activer les parents avant d'activer le bouton.
@@ -163,6 +189,7 @@ Canvas
 | `ModuleLootTable` | Pool de modules aléatoires (filtre déjà possédés) |
 | `ConsumableLootTable` | Pool de consommables aléatoires |
 | `EquipmentLootTable` | Pool d'équipements aléatoires |
+| `ShopData` | Configuration d'un marchand (loot tables, quantités, fourchettes de prix) — assigné sur une `CellData` ou comme `defaultShopData` sur `MapData` |
 | `RandomEvents` | Fallback events par MapData — assigné dans l'Inspector de `NavigationManager` |
 | `EventDatabase` | Liste globale d'EventData, `GetByID(string)` |
 
@@ -241,6 +268,7 @@ Canvas
 - **Crédits** : ressource run persistante. `RunManager.credits` (public int), reset à 0 dans `StartNewRun()`, initialisé depuis `CharacterData.startingCredits` dans `InitialiserStats()`. `AddCredits(int)` gère gain et dépense (plancher à 0). `HasEnoughCredits(int)` pour les vérifications de coût. `EffectAction.AddCredits` branché dans `CombatManager` (skills, consommables, modules) et `ModuleManager.ApplyEffectOutOfCombat`. `EventEffectType.ModifyCredits` + champ `creditValue` (int) dans `EventEffect` — `EventManager` désactive automatiquement un bouton de choix si le joueur n'a pas assez de crédits et suffixe le texte `[Cout : X credits]`. `NavigationHUD` et `EventManager` ont un champ optionnel `creditsText` (TMP) à assigner dans l'Inspector. Le rayon va du centre de (x1,y1) au centre de (x2,y2) et traverse une frontière de grille à la fois — jamais en diagonal pur. `tMaxX`/`tMaxY` déterminent quelle frontière est atteinte en premier ; seul le mur cardinal correspondant est vérifié. Coin exact (frontières X et Y simultanées) : bloque si l'un ou l'autre des murs adjacents est présent. L'ancien code avançait en diagonal et appelait `HasWall` entre cases diagonales → toujours `false` → aucun mur ne bloquait la vue sur les rayons obliques.
 - **`EnemyData.creditsLoot`** : champ `int` sur `EnemyData` — crédits accordés au joueur à la mort de l'ennemi. Traité dans `CombatManager` via `EffectAction.AddCredits` (ou directement selon implémentation). Valeur par défaut `0`.
 - **`ConsumableData.usableInEvents`** : troisième flag de contexte (avec `usableInCombat` et `usableOnMap`). Tous les trois sont `false` par défaut. `EventManager.SpawnConsomableButtons()` affiche tous les consommables — ceux avec `usableInEvents = false` sont grisés et non cliquables, le container est activé automatiquement au spawn.
+- **Marchand** : `CellType.Shop` ajouté. Couleur cyan sur la carte. Scène "Shop" dédiée. `ShopManager.cs` + `ShopItemButton.cs` + `ShopState.cs` créés. Persistance par case (`RunManager.shopStates[x,y]`). Articles par catégorie (équipements / modules / consommables), anti-duplicata, prix aléatoires dans fourchette Inspector, filtrage modules déjà possédés. Remplacement d'équipement via `EquipmentOfferController`. Consommables joueur utilisables (même logique qu'Event). Cases Shop ne deviennent jamais "vides" sur la carte.
 
 ### À faire 🔧
 - **Scène de sélection de personnage** — `MainMenuManager.defaultCharacter` est le placeholder en attendant. Quand elle existera : passer le `CharacterData` choisi à `StartNewRun()` et appeler `GoToNavigation()`.
@@ -252,7 +280,7 @@ Canvas
 - Cooldown des skills de navigation hors combat
 - Paramètres (panel à construire)
 - **Crédits (ressource run)** : ✅ implémenté — voir section Fonctionnel.
-- **Marchand** : nouveau `CellType.Shop`. Scène ou panel dédié. UI d'achat avec prix en or. Inventaire de vente généré depuis une `EquipmentLootTable` / `ConsumableLootTable`.
+- **Marchand** : ✅ implémenté — voir section Fonctionnel ci-dessous. Il reste à créer la scène Unity "Shop" et le prefab `ShopItemButton`.
 - **Événements de craft** : à définir avec Elisyo (exemples à fournir). Probablement via `EventData` avec `EventEffectType` spécifique ou effets combinés existants.
 - **Boss** : `CellType.Boss` déjà présent. `EnemyData` boss avec mécaniques spéciales (phases, actions uniques). Transition scène dédiée ou Combat classique avec flag boss.
 
@@ -291,4 +319,11 @@ Canvas
 26. **`DecayStatuses` et nettoyage** : le nettoyage des stacks à 0 est intégré dans `DecayStatuses`. `ApplyPerTurnEffects` ne nettoie pas (elle ne modifie pas les stacks). Pas besoin d'appeler un cleanup séparé.
 27. **Formule dégâts et crits** : le crit se calcule APRÈS `CalculerDegatsJoueur` et APRÈS le bonus de scaling par stacks. Crit = `rawDamage × critMultiplier`. La défense est soustraite AVANT le crit (rawDamage = CalculerDegats - def, puis crit sur ce résultat).
 28. **`HasClearLineOfSight` — algorithme DDA** : l'ancien code avançait en diagonal et appelait `HasWall` entre cases non adjacentes cardinalement → toujours `false` → aucun mur ne bloquait sur les rayons obliques. Remplacé par DDA : `tDeltaX = 1/|dx|`, `tDeltaY = 1/|dy|`, `tMaxX = tMaxY = 0.5/|d|` au départ. À chaque itération, on avance l'axe dont `tMax` est le plus petit et on vérifie uniquement le mur cardinal correspondant. Coin exact (`|tMaxX - tMaxY| < 1e-6f`) : avancer les deux axes, bloquer si l'un ou l'autre des murs est présent.
-29. **`ConsomableContainer` désactivé dans la scène Event** : `EventManager.SpawnConsomableButtons()` appelle `consumableContainer.gameObject.SetActive(true)` en début de méthode — ne pas désactiver définitivement ce GO dans la scène, c'est le script qui gère son activation. Si le container est inactif au moment de l'`Instantiate`, `Awake()` des `ConsumableButton` enfants est quand même appelé (préfab actif), mais le container reste visuellement caché jusqu'à ce que le script l'active.
+30. **`ShopManager` + `currentMapData` null** : `RunManager.currentMapData` doit être assigné par `NavigationManager` avant `GoToShop()`. S'il est null, `TrouverCellCourante()` loggue une erreur et le shop ne se charge pas. Vérifier que la ligne `RunManager.Instance.currentMapData = mapData;` est bien dans le `case CellType.Shop`.
+31. **`ShopItemButton` prefab** : le prefab doit avoir un composant `Button` + `ShopItemButton` à la racine, avec `ItemNameText` et `PriceText` (TMP) comme enfants et assignés dans l'Inspector du prefab.
+32. **Achat d'équipement + remplacement** : les crédits ne sont prélevés et l'article marqué "acheté" qu'après confirmation (`EstEquipe()` retourne true). Si le joueur passe l'offre (SkipButton), aucun crédit n'est prélevé — comportement voulu.
+33. **Cases Shop jamais `cleared`** : `NavigationManager` ne doit pas appeler `RunManager.ClearCurrentRoom()` pour les shops. `MapRenderer` vérifie `cell?.cellType != CellType.Shop` avant d'afficher la couleur "vide".
+34. **`ConsomableContainer` désactivé dans la scène Event** : `EventManager.SpawnConsomableButtons()` appelle `consumableContainer.gameObject.SetActive(true)` en début de méthode — ne pas désactiver définitivement ce GO dans la scène, c'est le script qui gère son activation. Si le container est inactif au moment de l'`Instantiate`, `Awake()` des `ConsumableButton` enfants est quand même appelé (préfab actif), mais le container reste visuellement caché jusqu'à ce que le script l'active.
+35. **`ViderContainer` — `SetActive(false)` avant `Destroy`** : `Destroy()` est différé à la fin du frame. Sans `SetActive(false)`, les anciens GO (en attente de destruction) et les nouveaux coexistent dans le `LayoutGroup` pendant un frame → décalage visuel. `SetActive(false)` retire immédiatement l'enfant du calcul de layout, avant même que `Destroy()` soit effectif.
+36. **`Canvas.ForceUpdateCanvases()` après reconstruction UI** : quand on détruit + recrée des éléments avec `ContentSizeFitter` ou `LayoutGroup`, Unity diffère le recalcul des tailles/positions à la fin du frame. Appeler `Canvas.ForceUpdateCanvases()` immédiatement après pour forcer un recalcul synchrone et éviter les décalages visuels d'un frame.
+37. **Flash interactable dans le Shop** : ne jamais appeler `RafraichirArticles()` (destroy + recreate) quand seul l'état interactable des boutons doit changer. Les boutons instanciés depuis un prefab sont `interactable=true` par défaut — ils flashent "disponibles" pendant un frame avant que `Setup()` les grise. Utiliser `MettreAJourDisponibilite()` (mise à jour in-place via listes `_boutonsEquipement/Modules/Consommables`) à la place. Réserver `RafraichirArticles()` aux cas où le contenu change (label "Acheté", nouvel article, etc.).

@@ -26,4 +26,5 @@ public class SceneLoader : MonoBehaviour
     public void GoToNavigation()        => LoadScene("Navigation");
     public void GoToCombat()            => LoadScene("Combat");
     public void GoToEvent()             => LoadScene("Event");
+    public void GoToShop()              => LoadScene("Shop");
 }

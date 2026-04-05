@@ -56,6 +56,10 @@ public class RunManager : MonoBehaviour
     // Permet aux autres scènes de savoir dans quel contexte elles s'exécutent
     public CellType currentCellType;
 
+    // Ennemi à affronter dans la salle courante.
+    // Assigné par EnterRoom() depuis la CellData. Null si aucun ennemi spécifique (fallback Inspector).
+    public EnemyData currentEnemyData;
+
     // ID d'événement spécifique si la salle est de type Event
     public string currentSpecificEventID;
 
@@ -462,13 +466,43 @@ public class RunManager : MonoBehaviour
     /// </summary>
     public void EnterRoom(CellData cell)
     {
-        currentRoomX   = cell.x;
-        currentRoomY   = cell.y;
+        currentRoomX    = cell.x;
+        currentRoomY    = cell.y;
         currentCellType = cell.cellType;
+
+        // Résout l'ennemi : specificEnemy sur la case > pool de la map > fallback Inspector (null ici)
+        if (cell.specificEnemy != null)
+        {
+            currentEnemyData = cell.specificEnemy;
+        }
+        else
+        {
+            EnemyPool pool = ResolveEnemyPool(cell.cellType);
+            currentEnemyData = pool != null ? pool.PickRandom() : null;
+        }
+
         // currentSpecificEventID est désormais assigné par NavigationManager
         // après le tirage aléatoire dans ChoisirEventAleatoire()
 
-        Debug.Log($"RunManager — Entrée en salle ({cell.x},{cell.y}) — Type : {cell.cellType}");
+        Debug.Log($"[RunManager] Entrée en salle ({cell.x},{cell.y}) — Type : {cell.cellType}" +
+                  (currentEnemyData != null ? $" | Ennemi : {currentEnemyData.enemyName}" : " | Ennemi : fallback Inspector"));
+    }
+
+    /// <summary>
+    /// Retourne la EnemyPool de la MapData courante correspondant au type de case.
+    /// Retourne null si currentMapData est null ou si aucune pool n'est assignée pour ce type.
+    /// </summary>
+    private EnemyPool ResolveEnemyPool(CellType cellType)
+    {
+        if (currentMapData == null) return null;
+
+        switch (cellType)
+        {
+            case CellType.Classic: return currentMapData.normalEnemyPool;
+            case CellType.Elite:   return currentMapData.eliteEnemyPool;
+            case CellType.Boss:    return currentMapData.bossEnemyPool;
+            default:               return null;
+        }
     }
 
     /// <summary>

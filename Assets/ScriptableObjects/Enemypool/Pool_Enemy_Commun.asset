@@ -1,0 +1,18 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f975845bfcd4ede4295e9d9653502ec0, type: 3}
+  m_Name: Pool_Enemy_Commun
+  m_EditorClassIdentifier: Assembly-CSharp::EnemyPool
+  enemies:
+  - {fileID: 11400000, guid: 68c13da0aa4d4074e8240a674d9b9b9e, type: 2}
+  - {fileID: 11400000, guid: 7c906a44287ea6c4b808ba33aeaf5398, type: 2}
+  - {fileID: 11400000, guid: 0bf10eedcff22f24b969939af22ba4f3, type: 2}

@@ -434,6 +434,7 @@ public class NavigationManager : MonoBehaviour
         switch (cell.cellType)
         {
             case CellType.Classic:
+            case CellType.Elite:
             case CellType.Boss:
                 if (RunManager.Instance != null &&
                     RunManager.Instance.IsRoomCleared(cell.x, cell.y))
@@ -448,6 +449,8 @@ public class NavigationManager : MonoBehaviour
                     break;
                 }
 
+                // Stocke la MapData pour que ResolveEnemyPool() puisse accéder aux pools d'ennemis
+                RunManager.Instance.currentMapData = mapData;
                 RunManager.Instance.SaveNavigationState(
                     PlayerX, PlayerY, visitedCells, exploredCells);
                 RunManager.Instance.EnterRoom(cell);

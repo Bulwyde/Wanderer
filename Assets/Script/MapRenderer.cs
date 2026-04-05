@@ -21,6 +21,7 @@ public class MapRenderer : MonoBehaviour
     public Color colorStart   = new Color(0.0f, 0.8f, 0.2f);
     public Color colorBoss    = new Color(0.8f, 0.0f, 0.0f);
     public Color colorClassic = new Color(0.3f, 0.5f, 0.8f);
+    public Color colorElite   = new Color(0.7f, 0.2f, 0.8f); // violet — élite
     public Color colorEvent   = new Color(1.0f, 0.5f, 0.0f);
     public Color colorShop    = new Color(0.2f, 0.8f, 0.8f); // cyan — marchand
     public Color colorNonNav  = new Color(0.1f, 0.1f, 0.1f);
@@ -335,6 +336,7 @@ public void CenterCameraOnPlayer()
             case CellType.Start:        return colorStart;
             case CellType.Boss:         return colorBoss;
             case CellType.Classic:      return colorClassic;
+            case CellType.Elite:        return colorElite;
             case CellType.Event:        return colorEvent;
             case CellType.Shop:         return colorShop;
             case CellType.NonNavigable: return colorNonNav;

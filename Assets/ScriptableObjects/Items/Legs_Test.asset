@@ -12,8 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b76755a0a8a0b0741b5d7badea9590bb, type: 3}
   m_Name: Legs_Test
   m_EditorClassIdentifier: Assembly-CSharp::EquipmentData
-  equipmentID: 
-  equipmentName: 
+  equipmentID: legs_test
+  equipmentName: Legs Test
   icon: {fileID: 0}
   description: 
   keywords: []

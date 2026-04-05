@@ -34,6 +34,13 @@ public class MapData : ScriptableObject
     // de ShopData assigné individuellement.
     public ShopData defaultShopData;
 
+    [Header("Pools d'ennemis")]
+    // Piochés aléatoirement quand une case n'a pas de specificEnemy assigné.
+    // La pool correspondant au type de la case est utilisée (Normal / Elite / Boss).
+    public EnemyPool normalEnemyPool;
+    public EnemyPool eliteEnemyPool;
+    public EnemyPool bossEnemyPool;
+
     /// <summary>
     /// Retourne la case à la position (x, y).
     /// </summary>
@@ -100,6 +107,12 @@ public class CellData
     // Mode FromPool : référence vers un EventPool ScriptableObject prédéfini.
     public EventPool eventPool;
 
+    // ── Champs Combat (CellType.Classic / CellType.Boss) ────────────────────
+
+    // Ennemi à affronter dans cette salle.
+    // Si null, l'EnemyData assigné dans l'Inspector de CombatManager est utilisé en fallback.
+    public EnemyData specificEnemy;
+
     // ── Champs Marchand (CellType.Shop) ─────────────────────────────────────
 
     // Configuration du marchand pour cette case spécifique.
@@ -128,6 +141,7 @@ public enum CellType
     Event,          // Salle d'événement textuel — eventPool contient les EventData disponibles
     NonNavigable,   // Bloc non navigable — obstacle infranchissable
     Shop,           // Salle marchand — inventaire persistant généré à la première visite
+    Elite,          // Salle élite — ennemi plus difficile qu'un classique
 }
 
 /// <summary>

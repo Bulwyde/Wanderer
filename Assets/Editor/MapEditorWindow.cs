@@ -48,6 +48,7 @@ public class MapEditorWindow : EditorWindow
     private Color colorStart       = new Color(0.0f, 0.8f, 0.2f);
     private Color colorBoss        = new Color(0.8f, 0.0f, 0.0f);
     private Color colorClassic     = new Color(0.3f, 0.5f, 0.8f);
+    private Color colorElite       = new Color(0.7f, 0.2f, 0.8f); // violet — élite
     private Color colorEvent       = new Color(0.8f, 0.5f, 0.0f);
     private Color colorShop        = new Color(0.2f, 0.8f, 0.8f);
     private Color colorNonNav      = new Color(0.1f, 0.1f, 0.1f);
@@ -155,6 +156,7 @@ public class MapEditorWindow : EditorWindow
         colorStart   = EditorGUILayout.ColorField("Départ",        colorStart);
         colorBoss    = EditorGUILayout.ColorField("Boss",          colorBoss);
         colorClassic = EditorGUILayout.ColorField("Classique",     colorClassic);
+        colorElite   = EditorGUILayout.ColorField("Élite",         colorElite);
         colorEvent   = EditorGUILayout.ColorField("Événement",     colorEvent);
         colorShop    = EditorGUILayout.ColorField("Marchand",      colorShop);
         colorNonNav  = EditorGUILayout.ColorField("Non navigable", colorNonNav);
@@ -306,6 +308,47 @@ public class MapEditorWindow : EditorWindow
                 else
                     EditorGUILayout.HelpBox(
                         "Aucun ShopData assigné sur cette case, et aucun ShopData par défaut sur la map. Le marchand sera vide.",
+                        MessageType.Warning);
+            }
+        }
+
+        // Configuration de l'ennemi — uniquement pour les cases de type Classic, Elite et Boss
+        if (selectedCell.cellType == CellType.Classic ||
+            selectedCell.cellType == CellType.Elite   ||
+            selectedCell.cellType == CellType.Boss)
+        {
+            EditorGUILayout.Space(4);
+            EditorGUILayout.LabelField("Combat", EditorStyles.boldLabel);
+
+            EnemyData newEnemy = (EnemyData)EditorGUILayout.ObjectField(
+                "Ennemi", selectedCell.specificEnemy, typeof(EnemyData), false);
+            if (newEnemy != selectedCell.specificEnemy)
+            {
+                selectedCell.specificEnemy = newEnemy;
+                EditorUtility.SetDirty(currentMap);
+            }
+
+            if (selectedCell.specificEnemy == null)
+            {
+                EnemyPool pool = null;
+                string poolName = "";
+                if (currentMap != null)
+                {
+                    if (selectedCell.cellType == CellType.Classic)
+                    { pool = currentMap.normalEnemyPool; poolName = "normalEnemyPool"; }
+                    else if (selectedCell.cellType == CellType.Elite)
+                    { pool = currentMap.eliteEnemyPool; poolName = "eliteEnemyPool"; }
+                    else if (selectedCell.cellType == CellType.Boss)
+                    { pool = currentMap.bossEnemyPool; poolName = "bossEnemyPool"; }
+                }
+
+                if (pool != null)
+                    EditorGUILayout.HelpBox(
+                        $"Pas d'ennemi specifique — pioche aleatoire dans {poolName} ({pool.name}).",
+                        MessageType.Info);
+                else
+                    EditorGUILayout.HelpBox(
+                        "Aucun ennemi specifique et aucune pool assignee sur la MapData — fallback Inspector de CombatManager.",
                         MessageType.Warning);
             }
         }
@@ -556,6 +599,7 @@ private Rect GetVerticalWallRect(Rect grid, int x, int y)
             case CellType.Start:         return colorStart;
             case CellType.Boss:          return colorBoss;
             case CellType.Classic:       return colorClassic;
+            case CellType.Elite:         return colorElite;
             case CellType.Event:         return colorEvent;
             case CellType.Shop:          return colorShop;
             case CellType.NonNavigable:  return colorNonNav;
@@ -570,6 +614,7 @@ private Rect GetVerticalWallRect(Rect grid, int x, int y)
             case CellType.Start:         return "S";
             case CellType.Boss:          return "B";
             case CellType.Classic:       return "C";
+            case CellType.Elite:         return "EL";
             case CellType.Event:         return "E";
             case CellType.Shop:          return "M";
             case CellType.NonNavigable:  return "X";

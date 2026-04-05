@@ -178,6 +178,13 @@ public class CombatManager : MonoBehaviour
         else
             Debug.Log("[Combat] Pas de CharacterData dans RunManager — utilisation du champ Inspector local.");
 
+        // Résoudre l'EnemyData depuis RunManager si la case courante a un ennemi assigné.
+        // Fallback sur le champ Inspector pour les tests ou si aucun ennemi n'est défini sur la case.
+        if (RunManager.Instance?.currentEnemyData != null)
+            enemyData = RunManager.Instance.currentEnemyData;
+        else
+            Debug.Log("[Combat] Pas d'EnemyData dans RunManager — utilisation du champ Inspector local.");
+
         if (endTurnButton      != null) endTurnButton.onClick.AddListener(OnEndTurn);
         if (endButton          != null) endButton.onClick.AddListener(OnEndButtonClicked);
         if (victoireButton     != null) victoireButton.onClick.AddListener(OnVictoireCheat);
@@ -1523,6 +1530,16 @@ public class CombatManager : MonoBehaviour
         {
             RunManager.Instance.currentHP = currentPlayerHP;
             RunManager.Instance.maxHP     = GetPlayerMaxHP();
+
+            // Victoire sur le boss → fin de run, retour au menu principal
+            if (RunManager.Instance.currentCellType == CellType.Boss)
+            {
+                Log("Boss vaincu — fin de la run.");
+                RunManager.Instance.EndRun();
+                SceneLoader.Instance.GoToMainMenu();
+                return;
+            }
+
             RunManager.Instance.ClearCurrentRoom();
         }
         SceneLoader.Instance.GoToNavigation();

@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c13b9ef6d09b5344b85cee60eda85826, type: 3}
+  m_Name: Elite
+  m_EditorClassIdentifier: Assembly-CSharp::EnemyData
+  enemyID: elite
+  enemyName: Elite
+  portrait: {fileID: 0}
+  maxHP: 1000
+  attack: 10
+  defense: 2
+  actions:
+  - skill: {fileID: 11400000, guid: 9c9666361562e55498dc31655fa61747, type: 2}
+    maxUses: 1
+  - skill: {fileID: 11400000, guid: 9de6836a04603bf499a97c1a54e2453e, type: 2}
+    maxUses: 0
+  creditsLoot: 500
+  lootPool:
+  - {fileID: 11400000, guid: 7240fdddf83b30d4e95f7ccaf85c0b17, type: 2}
+  - {fileID: 11400000, guid: 19651403c3f02204f8ba5298d5c3da42, type: 2}
+  lootOfferCount: 2
+  consumableLootPool: []

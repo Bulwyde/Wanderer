@@ -87,11 +87,18 @@ Roguelike tour par tour Unity/C#, inspiré Slay the Spire + Darkest Dungeon. Car
 | `EventPool` | Pool d'events (filtre déjà joués) |
 | `ShopData` | Loot tables, quantités, fourchettes de prix |
 | `EventDatabase` | Liste globale `GetByID(string)` |
+| `TagData` | Tag sémantique — `tagName`, `[Flags] TagCategorie categorie`, `Color couleur`. Assets dans `Assets/ScriptableObjects/Tags/` |
+
+**Système de tags :** tous les Data principaux (EquipmentData, EnemyData, EventData, ConsumableData, ModuleData, SkillData, CharacterData, MapData) portent un `List<TagData> tags`. Sert aux conditions d'effets et au filtrage de loot — **pas d'affichage joueur** (≠ KeywordData). `TagCategorie` est un `[Flags]` enum : cocher plusieurs catégories pour les tags cross-types (ex : `Feu` sur Ennemi + Équipement). `EquipmentData.isUnique` supprimé — remplacé par un tag `Tag_Unique`.
+
+**`TagData` ↔ nom d'asset (sync automatique) :** `OnValidate` dans `TagData.cs` remplit `tagName` depuis le nom du fichier à la création. `TagDataWatcher` (AssetPostprocessor) répercute tout renommage Project → `tagName`. `TagDataEditor` (DelayedTextField) répercute `tagName` → nom d'asset. `[CanEditMultipleObjects]` activé.
+
+**`KeywordData` ≠ `TagData` :** KeywordData = tooltips UI pour le joueur (description, couleur de surbrillance, tooltips imbriqués). TagData = logique interne. Ne pas fusionner.
 
 **`EffectTrigger.None = 0`** — valeur par défaut. Les assets avec l'ancien trigger `OnPlayerTurnStart` (index 0) doivent être reconfigurés.
 **`EffectDataEditor` custom** : tout nouveau champ `EffectData` doit aussi être ajouté dans `EffectDataEditor.cs` sinon invisible dans l'Inspector.
 
-**Editors custom :** `EffectDataEditor`, `EventEffectDrawer`, `NavEffectDrawer`, `MapEditorWindow`.
+**Editors custom :** `EffectDataEditor`, `EventEffectDrawer`, `NavEffectDrawer`, `MapEditorWindow`, `TagDataEditor`.
 
 **Prefabs :** `ChoiceButton` (360×65px), `SkillButtonPrefab`, `LootCard`, `ConsumableButton`, `ModuleIcon` (48×48px).
 `ConsumableButton.SetInteractable(false)` grise + réduit taille d'un tiers. Désactiver `ChildControlSize` sur le container. `ModuleHUD` enfant direct du Canvas (jamais du `mapContainer`).
@@ -119,7 +126,7 @@ Roguelike tour par tour Unity/C#, inspiré Slay the Spire + Darkest Dungeon. Car
 ## État du développement
 
 ### Fonctionnel ✅
-Combat complet (tours, énergie, armure StS, cooldowns, statuts, crits, regen, lifesteal) · IA ennemie circulaire · Équipement (stats effectives, skills, passifs) · Loot post-combat · Navigation (brouillard, clavier, sauvegarde) · Modules (GameEvents, HUD, OnFightStart) · Consommables (3 scènes) · Events narratifs (tous effets) · Pool d'events (ManualList/FromPool, anti-doublon) · EquipmentOfferController partagé · NavEffect complets · MainMenu complet · Seeding au lancement · Boutons passifs équipement · Crédits · Marchand (ShopData, persistance par case) · Boss (victoire → EndRun + MainMenu) · EnemyPool + CellType.Elite · Sélection ennemi par case/pool
+Combat complet (tours, énergie, armure StS, cooldowns, statuts, crits, regen, lifesteal) · IA ennemie circulaire · Équipement (stats effectives, skills, passifs) · Loot post-combat · Navigation (brouillard, clavier, sauvegarde) · Modules (GameEvents, HUD, OnFightStart) · Consommables (3 scènes) · Events narratifs (tous effets) · Pool d'events (ManualList/FromPool, anti-doublon) · EquipmentOfferController partagé · NavEffect complets · MainMenu complet · Seeding au lancement · Boutons passifs équipement · Crédits · Marchand (ShopData, persistance par case) · Boss (victoire → EndRun + MainMenu) · EnemyPool + CellType.Elite · Sélection ennemi par case/pool · **Système de tags** (TagData sur tous les Data, sync nom asset ↔ tagName, multi-édition)
 
 ### À faire 🔧
 - Scène de sélection de personnage (`MainMenuManager.defaultCharacter` = placeholder)
@@ -132,6 +139,7 @@ Combat complet (tours, énergie, armure StS, cooldowns, statuts, crits, regen, l
 - Mécaniques boss spéciales (phases, actions uniques) dans `EnemyData`/`EnemyAI`
 - Événements de craft (à définir)
 - Localisation (`com.unity.localization`) — après 1ère version jouable
+- Conditions de tags dans `EffectData` (ex : "si l'équipement a le tag Épée") — système de tags posé, vérification à implémenter
 
 ---
 

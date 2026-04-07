@@ -55,6 +55,11 @@ public class CharacterData : ScriptableObject
     // modifiée par des bonus d'équipement ou des effets passifs.
     public int maxEnergy = 3;
 
+    [Header("Tags")]
+    // Tags sémantiques pour les interactions et les conditions d'effets
+    // Ex : Tag_Guerrier, Tag_Mage — créer les assets dans Assets/ScriptableObjects/Tags/
+    public List<TagData> tags = new List<TagData>();
+
     [Header("Module de départ")]
     // Module passif donné au joueur au début de chaque run avec ce personnage.
     // Équivalent d'une relique de départ (comme dans Slay the Spire).

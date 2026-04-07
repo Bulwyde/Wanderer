@@ -20,6 +20,11 @@ public class MapData : ScriptableObject
     public int width = 30;
     public int height = 30;
 
+    [Header("Tags")]
+    // Tags sémantiques pour les interactions et les conditions d'effets
+    // Ex : Tag_Donjon, Tag_Foret — créer les assets dans Assets/ScriptableObjects/Tags/
+    public List<TagData> tags = new List<TagData>();
+
     [Header("Cases")]
     // Liste de toutes les cases de la grille
     // Stockées à plat : l'index d'une case (x,y) = x + y * width

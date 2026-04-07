@@ -38,7 +38,7 @@ public class ModuleData : ScriptableObject
     public List<EffectData> effects = new List<EffectData>();
 
     [Header("Tags")]
-    // Tags pour la gestion du loot et les interactions entre modules
-    // Ex : "Offensif", "Magie", "Navigation", "SetAncienGuerrier"
-    public string[] tags;
+    // Tags sémantiques pour les interactions et la gestion du loot
+    // Ex : Tag_Offensif, Tag_Magie, Tag_Navigation — créer les assets dans Assets/ScriptableObjects/Tags/
+    public List<TagData> tags = new List<TagData>();
 }

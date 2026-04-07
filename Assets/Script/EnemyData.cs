@@ -47,6 +47,19 @@ public class EnemyData : ScriptableObject
     // LOOT
     // -----------------------------------------------
 
+    // -----------------------------------------------
+    // TAGS
+    // -----------------------------------------------
+
+    [Header("Tags")]
+    // Tags sémantiques pour les interactions et les conditions d'effets
+    // Ex : Tag_Humain, Tag_Undead, Tag_Feu — créer les assets dans Assets/ScriptableObjects/Tags/
+    public List<TagData> tags = new List<TagData>();
+
+    // -----------------------------------------------
+    // LOOT
+    // -----------------------------------------------
+
     [Header("Loot — Crédits")]
     [Tooltip("Crédits accordés au joueur quand cet ennemi est vaincu. 0 = aucun crédit.")]
     public int creditsLoot = 0;

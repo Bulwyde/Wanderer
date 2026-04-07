@@ -49,13 +49,11 @@ public class EquipmentData : ScriptableObject
     public List<SkillData> skills;
 
     [Header("Tags")]
-    // Tags internes pour la gestion du loot et les interactions
-    public string[] tags;
+    // Tags sémantiques pour les interactions et la gestion du loot
+    // Ex : Tag_Épée, Tag_Feu, Tag_Maudit — créer les assets dans Assets/ScriptableObjects/Tags/
+    public List<TagData> tags = new List<TagData>();
 
-    [Header("Objet unique / Set")]
-    // Si true, cet équipement a des effets uniques designés à la main
-    public bool isUnique;
-
+    [Header("Set")]
     // Identifiant du set auquel appartient cet équipement (vide si aucun)
     public string setID;
 }

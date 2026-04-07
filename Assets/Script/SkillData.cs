@@ -40,9 +40,9 @@ public class SkillData : ScriptableObject
     public SkillTargetType targetType;
 
     [Header("Tags")]
-    // Tags internes pour la gestion et les interactions
-    // Ex : "Physique", "Magie", "Soin", "Zone"
-    public string[] tags;
+    // Tags sémantiques pour les interactions et les conditions d'effets
+    // Ex : Tag_Physique, Tag_Magie, Tag_Soin — créer les assets dans Assets/ScriptableObjects/Tags/
+    public List<TagData> tags = new List<TagData>();
 
     // -----------------------------------------------
     // COMPÉTENCE DE NAVIGATION (jambes)

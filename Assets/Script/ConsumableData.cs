@@ -41,6 +41,15 @@ public class ConsumableData : ScriptableObject
     public List<EffectData> effects = new List<EffectData>();
 
     // -----------------------------------------------
+    // TAGS
+    // -----------------------------------------------
+
+    [Header("Tags")]
+    // Tags sémantiques pour les interactions et les conditions d'effets
+    // Ex : Tag_Soin, Tag_Poison, Tag_Rare — créer les assets dans Assets/ScriptableObjects/Tags/
+    public List<TagData> tags = new List<TagData>();
+
+    // -----------------------------------------------
     // CONTEXTE D'UTILISATION
     // -----------------------------------------------
 

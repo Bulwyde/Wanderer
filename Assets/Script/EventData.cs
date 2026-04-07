@@ -21,6 +21,11 @@ public class EventData : ScriptableObject
     // Image affichée en fond d'écran — peut rester null (fond neutre)
     public Sprite backgroundImage;
 
+    [Header("Tags")]
+    // Tags sémantiques pour les interactions et les conditions d'effets
+    // Ex : Tag_Combat, Tag_Mystere — créer les assets dans Assets/ScriptableObjects/Tags/
+    public List<TagData> tags = new List<TagData>();
+
     [Header("Choix")]
     public List<EventChoice> choices = new List<EventChoice>();
 }

@@ -25,3 +25,6 @@ MonoBehaviour:
   tags: []
   isNavigationSkill: 0
   navEffects: []
+  navCooldownType: 0
+  navCooldownCount: 1
+  navCooldownTag: {fileID: 0}

@@ -18,6 +18,8 @@ MonoBehaviour:
   description: "Inflige 4 d\xE9g\xE2ts \xE0 l'ennemi"
   effects:
   - {fileID: 11400000, guid: a25dd40cf618dbd419f947c107e47ba2, type: 2}
+  tags: []
   usableInCombat: 1
   usableOnMap: 0
+  usableInEvents: 0
   mapEffects: []

@@ -43,12 +43,13 @@ Roguelike tour par tour Unity/C#, inspiré Slay the Spire + Darkest Dungeon. Car
 - `EquipItem()` appelle automatiquement `RecalculerMaxHP()` si `maxHP > 0` (ignoré pendant le seeding initial).
 - `AddModule()` appelle automatiquement `ModuleManager.NotifyModulesChanged()`.
 - `GetOrCreateShopState(CellData, ShopData)` : génère l'inventaire shop à la 1ère visite, persiste dans `shopStates[x,y]`, reset dans `StartNewRun()`.
+- **Cooldowns nav** : `combatsTermines`/`eventsTermines` (compteurs run), `navSkillCooldowns` (dict skillID → `NavSkillCooldownState`). `SetNavSkillCooldown(skillID, type, count, tag?)` · `IsNavSkillReady(skillID)` · `TickCooldownsDe(NavCooldownType)` · `TickCooldownsAvecTag(List<TagData>)`. Tout resetté dans `StartNewRun()`. Classe helper `NavSkillCooldownState` définie en bas du fichier.
 
 **`ModuleManager.cs`** — DDOL, **doit être dans la scène Navigation**. `OnModulesChanged` statique (HUD sans instance) mais les effets GameEvents nécessitent une instance.
 
 ### Navigation
 
-**`NavigationManager.cs`** — Déplacements clavier, brouillard de guerre (3 sets), `AppliquerEffetsNav`, `RevealZoneChoice`, tirage d'events (`ChoisirEventAleatoire` + fallback `RandomEvents`). Assigne `currentMapData` avant `EnterRoom()` pour les cases Classic/Elite/Boss et avant `GoToShop()`.
+**`NavigationManager.cs`** — Déplacements clavier, brouillard de guerre (3 sets), `AppliquerEffetsNav`, `RevealZoneChoice`, tirage d'events (`ChoisirEventAleatoire` + fallback `RandomEvents`). Assigne `currentMapData` avant `EnterRoom()` pour les cases Classic/Elite/Boss et avant `GoToShop()`. Gère les cooldowns des skills de navigation : `SpawnSkillsJambes()` grise les boutons selon `IsNavSkillReady`, `UtiliserSkillJambes()` appelle `SetNavSkillCooldown` après effet. Détecte la première visite d'un shop (`GetShopState == null`) pour déclencher `TickCooldownsDe(ShopDecouvert)`.
 
 **`MapData.cs`** — ScriptableObject grille. `CellData` a `specificEnemy` (EnemyData), `eventList`/`eventPool`, `shopData`. `MapData` a `normalEnemyPool`, `eliteEnemyPool`, `bossEnemyPool` (EnemyPool).
 
@@ -76,7 +77,7 @@ Roguelike tour par tour Unity/C#, inspiré Slay the Spire + Darkest Dungeon. Car
 | `CharacterData` | Stats de base, équipement/module/consommables départ, `baseVisionRange`, `startingCredits` |
 | `EnemyData` | Stats, actions IA, lootPool, consumableLootPool, `creditsLoot` |
 | `EnemyPool` | Pool d'ennemis aléatoires (`PickRandom()`). Assigné sur `MapData` (3 pools) |
-| `SkillData` | Compétence (coût énergie, cooldown, `List<EffectData> effects`) |
+| `SkillData` | Compétence (coût énergie, cooldown, `List<EffectData> effects`). Navigation : `isNavigationSkill`, `navEffects`, `navCooldownType` (`NavCooldownType` enum), `navCooldownCount`, `navCooldownTag` |
 | `EffectData` | Effet universel (trigger, action, target, value) — skills/consommables/modules/passifs |
 | `StatusData` | Statut (behavior, perTurnAction, decayPerTurn, decayTiming, maxStacks) |
 | `EquipmentData` | Slot, bonus stats, skills, passiveEffects |
@@ -98,7 +99,8 @@ Roguelike tour par tour Unity/C#, inspiré Slay the Spire + Darkest Dungeon. Car
 **`EffectTrigger.None = 0`** — valeur par défaut. Les assets avec l'ancien trigger `OnPlayerTurnStart` (index 0) doivent être reconfigurés.
 **`EffectDataEditor` custom** : tout nouveau champ `EffectData` doit aussi être ajouté dans `EffectDataEditor.cs` sinon invisible dans l'Inspector.
 
-**Editors custom :** `EffectDataEditor`, `EventEffectDrawer`, `NavEffectDrawer`, `MapEditorWindow`, `TagDataEditor`.
+**Editors custom :** `EffectDataEditor`, `EventEffectDrawer`, `NavEffectDrawer`, `MapEditorWindow`, `TagDataEditor`, `SkillDataEditor`.
+**Editors Data (filtrage tags) :** `CharacterDataEditor`, `ConsumableDataEditor`, `EquipmentDataEditor`, `EventDataEditor`, `EnemyDataEditor`, `MapDataEditor`, `ModuleDataEditor` — tous s'appuient sur `TagListFilterUtil.DrawFilteredTagList(prop, categorie)` pour ne proposer que les tags de la catégorie correspondante (+ tags "Everything" = toutes catégories cochées). Cache statique par catégorie, invalidé à chaque recompilation.
 
 **Prefabs :** `ChoiceButton` (360×65px), `SkillButtonPrefab`, `LootCard`, `ConsumableButton`, `ModuleIcon` (48×48px).
 `ConsumableButton.SetInteractable(false)` grise + réduit taille d'un tiers. Désactiver `ChildControlSize` sur le container. `ModuleHUD` enfant direct du Canvas (jamais du `mapContainer`).
@@ -121,12 +123,15 @@ Roguelike tour par tour Unity/C#, inspiré Slay the Spire + Darkest Dungeon. Car
 **Bus d'événements (`GameEvents.cs`) :**
 `TriggerPlayerTurnStarted/Ended`, `TriggerPlayerDealtDamage(dmg)`, `TriggerPlayerDamaged(dmg)`, `TriggerEnemyDied()` → tous écoutés par `ModuleManager`. `OnRoomEntered`/`OnChestOpened`/`OnShopEntered` définis mais pas encore écoutés.
 
+**Cooldowns de skills de navigation :**
+`NavCooldownType` enum dans `SkillData.cs` : `None | ShopDecouvert | CombatsTermines | EventsTermines | MondeTermine | CombatEnnemisAvecTag`. Le type détermine l'événement qui recharge le skill. Points de déclenchement : `CombatManager.EndCombat` (→ `TickCooldownsAvecTag` sur les tags de l'ennemi) · `CombatManager.OnLootContinueClicked` (→ `TickCooldownsDe(CombatsTermines)` ou `MondeTermine` selon boss ou non, + `combatsTermines++`) · `EventManager.OnContinueClicked` (→ `TickCooldownsDe(EventsTermines)` + `eventsTermines++`) · `NavigationManager.OnRoomEntered` Shop (→ `TickCooldownsDe(ShopDecouvert)` si première visite). Le bouton de navigation est grisé si `!IsNavSkillReady(skillID)`. ⚠️ `skillID` doit être renseigné sur le `SkillData` sinon le cooldown est ignoré.
+
 ---
 
 ## État du développement
 
 ### Fonctionnel ✅
-Combat complet (tours, énergie, armure StS, cooldowns, statuts, crits, regen, lifesteal) · IA ennemie circulaire · Équipement (stats effectives, skills, passifs) · Loot post-combat · Navigation (brouillard, clavier, sauvegarde) · Modules (GameEvents, HUD, OnFightStart) · Consommables (3 scènes) · Events narratifs (tous effets) · Pool d'events (ManualList/FromPool, anti-doublon) · EquipmentOfferController partagé · NavEffect complets · MainMenu complet · Seeding au lancement · Boutons passifs équipement · Crédits · Marchand (ShopData, persistance par case) · Boss (victoire → EndRun + MainMenu) · EnemyPool + CellType.Elite · Sélection ennemi par case/pool · **Système de tags** (TagData sur tous les Data, sync nom asset ↔ tagName, multi-édition)
+Combat complet (tours, énergie, armure StS, cooldowns, statuts, crits, regen, lifesteal) · IA ennemie circulaire · Équipement (stats effectives, skills, passifs) · Loot post-combat · Navigation (brouillard, clavier, sauvegarde) · Modules (GameEvents, HUD, OnFightStart) · Consommables (3 scènes) · Events narratifs (tous effets) · Pool d'events (ManualList/FromPool, anti-doublon) · EquipmentOfferController partagé · NavEffect complets · MainMenu complet · Seeding au lancement · Boutons passifs équipement · Crédits · Marchand (ShopData, persistance par case) · Boss (victoire → EndRun + MainMenu) · EnemyPool + CellType.Elite · Sélection ennemi par case/pool · **Système de tags** (TagData sur tous les Data, sync nom asset ↔ tagName, multi-édition) · **Cooldowns skills de navigation** (5 types, bouton grisé, persist RunManager) · **Filtrage tags par catégorie dans l'Inspector** (8 editors Data + TagListFilterUtil)
 
 ### À faire 🔧
 - Scène de sélection de personnage (`MainMenuManager.defaultCharacter` = placeholder)
@@ -134,12 +139,16 @@ Combat complet (tours, énergie, armure StS, cooldowns, statuts, crits, regen, l
 - Icônes par type de case dans `MapRenderer`
 - Sons, animations, retours visuels
 - Popup "Utiliser / Jeter" consommables
-- Cooldown skills de navigation hors combat
 - Paramètres (panel)
 - Mécaniques boss spéciales (phases, actions uniques) dans `EnemyData`/`EnemyAI`
 - Événements de craft (à définir)
 - Localisation (`com.unity.localization`) — après 1ère version jouable
-- Conditions de tags dans `EffectData` (ex : "si l'équipement a le tag Épée") — système de tags posé, vérification à implémenter
+- Conditions de tags dans `EffectData` — système de tags posé, vérification à implémenter. Les cas d'usage identifiés couvrent 4 catégories distinctes qui nécessitent chacune un mécanisme différent :
+  - **A** : Condition on/off (l'effet se déclenche si un objet a le tag) — ex : "+50% dégâts sur les ennemis Boss", "bonus si carte World1"
+  - **B** : Filtrer ce qu'on reçoit par tag — ex : "obtenez un consommable de type Soin", "obtenez un équipement de type Handgun"
+  - **C** : Scaling par comptage de tags — ex : "+1 attaque par équipement Saber équipé", "skills Poison appliquent 1 stack supplémentaire"
+  - **D** : Influence sur la navigation/génération — ex : "+10% chances ennemi Shiny", "prochain event de type Ultra rare" (touche EnemyPools et NavigationManager, pas EffectData)
+  - Ne pas tout implémenter d'un coup — attaquer catégorie par catégorie quand un besoin concret se présente en jeu
 
 ---
 
@@ -171,3 +180,6 @@ Combat complet (tours, énergie, armure StS, cooldowns, statuts, crits, regen, l
 24. **Cases Shop jamais `cleared`** : ne pas appeler `ClearCurrentRoom()` pour les shops. `MapRenderer` vérifie `cellType != Shop` avant couleur "vide".
 25. **`ShopItemButton` prefab** : `Button` + `ShopItemButton` à la racine, `ItemNameText` + `PriceText` (TMP) assignés dans l'Inspector.
 26. **LOS DDA** : algorithme DDA dans `HasClearLineOfSight` — avance par frontière cardinale, jamais en diagonal pur. Coin exact = bloquer si l'un des deux murs cardinaux adjacents est présent.
+27. **`NavCooldownType.CombatEnnemisAvecTag`** : le `skillID` doit être renseigné sur le `SkillData` — sans lui, `SetNavSkillCooldown` est ignoré silencieusement.
+28. **`TagListFilterUtil` cache statique** : les tags filtrés sont mis en cache par catégorie jusqu'à la recompilation. Si un nouveau `TagData` est créé, rouvrir l'asset concerné après recompilation pour voir la liste à jour.
+29. **Tags déjà assignés hors catégorie** : si un asset avait un tag non conforme avant l'ajout des editors filtrés, il apparaîtra comme `(aucun)` dans le popup et sera mis à null à la prochaine sauvegarde — vérifier les assets existants.

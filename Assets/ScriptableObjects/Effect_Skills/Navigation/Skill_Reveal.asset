@@ -28,3 +28,6 @@ MonoBehaviour:
     value: 1
     counterKey: 
     allowedCellTypes: 
+  navCooldownType: 2
+  navCooldownCount: 3
+  navCooldownTag: {fileID: 0}

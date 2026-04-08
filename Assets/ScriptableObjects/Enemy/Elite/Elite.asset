@@ -23,6 +23,8 @@ MonoBehaviour:
     maxUses: 1
   - skill: {fileID: 11400000, guid: 9de6836a04603bf499a97c1a54e2453e, type: 2}
     maxUses: 0
+  tags:
+  - {fileID: 11400000, guid: 9b97f8bbb7856054ba7ae2d74d48d62c, type: 2}
   creditsLoot: 500
   lootPool:
   - {fileID: 11400000, guid: 7240fdddf83b30d4e95f7ccaf85c0b17, type: 2}

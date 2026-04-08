@@ -19,7 +19,7 @@ MonoBehaviour:
   keywords: []
   energyCost: 0
   cooldown: 0
-  effect: {fileID: 0}
+  effects: []
   targetType: 0
   tags: []
   isNavigationSkill: 1
@@ -28,3 +28,6 @@ MonoBehaviour:
     value: 1
     counterKey: 
     allowedCellTypes: 
+  navCooldownType: 5
+  navCooldownCount: 1
+  navCooldownTag: {fileID: 11400000, guid: 9b97f8bbb7856054ba7ae2d74d48d62c, type: 2}

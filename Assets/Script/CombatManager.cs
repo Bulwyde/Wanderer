@@ -1502,6 +1502,10 @@ public class CombatManager : MonoBehaviour
             // Notifie les modules abonnés à la mort de l'ennemi
             GameEvents.TriggerEnemyDied();
 
+            // Recharge les skills de navigation en attente d'un kill avec tag spécifique
+            if (RunManager.Instance != null && enemyData?.tags != null && enemyData.tags.Count > 0)
+                RunManager.Instance.TickCooldownsAvecTag(enemyData.tags);
+
             // Attribue les crédits de loot de l'ennemi
             if (RunManager.Instance != null && enemyData != null && enemyData.creditsLoot > 0)
             {
@@ -1535,11 +1539,14 @@ public class CombatManager : MonoBehaviour
             if (RunManager.Instance.currentCellType == CellType.Boss)
             {
                 Log("Boss vaincu — fin de la run.");
+                RunManager.Instance.TickCooldownsDe(NavCooldownType.MondeTermine);
                 RunManager.Instance.EndRun();
                 SceneLoader.Instance.GoToMainMenu();
                 return;
             }
 
+            RunManager.Instance.combatsTermines++;
+            RunManager.Instance.TickCooldownsDe(NavCooldownType.CombatsTermines);
             RunManager.Instance.ClearCurrentRoom();
         }
         SceneLoader.Instance.GoToNavigation();

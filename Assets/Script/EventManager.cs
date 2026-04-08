@@ -694,6 +694,9 @@ public class EventManager : MonoBehaviour
         {
             // Marque l'event comme joué pour ne pas le retirer dans le pool d'une future visite
             RunManager.Instance.MarkEventPlayed(currentEvent.eventID);
+            // Incrémente le compteur global et recharge les skills en attente d'un événement
+            RunManager.Instance.eventsTermines++;
+            RunManager.Instance.TickCooldownsDe(NavCooldownType.EventsTermines);
             // Marque la salle comme complétée (comportement identique aux salles de combat)
             RunManager.Instance.ClearCurrentRoom();
         }

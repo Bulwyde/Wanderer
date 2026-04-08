@@ -261,6 +261,115 @@ public class RunManager : MonoBehaviour
     // S'ajoute au baseVisionRange défini dans NavigationManager.
     public int visionRangeBonus = 0;
 
+    // Nombre total de combats gagnés pendant ce run — utilisé par les cooldowns de type CombatsTermines.
+    public int combatsTermines = 0;
+
+    // Nombre total d'événements complétés pendant ce run — utilisé par les cooldowns de type EventsTermines.
+    public int eventsTermines = 0;
+
+    // -----------------------------------------------
+    // COOLDOWNS DE COMPÉTENCES DE NAVIGATION
+    // -----------------------------------------------
+
+    // État de cooldown des compétences de navigation.
+    // Clé = skillID, valeur = type + nombre de déclenchements encore nécessaires.
+    // Clé absente (ou remaining ≤ 0) = compétence disponible.
+    private Dictionary<string, NavSkillCooldownState> navSkillCooldowns
+        = new Dictionary<string, NavSkillCooldownState>();
+
+    /// <summary>
+    /// Met une compétence de navigation en cooldown.
+    /// Sera rechargée après <count> occurrences de l'événement correspondant à <type>.
+    /// Ignoré si type vaut None ou si skillID est vide.
+    /// </summary>
+    public void SetNavSkillCooldown(string skillID, NavCooldownType type, int count, TagData tagRequis = null)
+    {
+        if (string.IsNullOrEmpty(skillID) || type == NavCooldownType.None) return;
+        navSkillCooldowns[skillID] = new NavSkillCooldownState
+        {
+            type      = type,
+            remaining = Mathf.Max(1, count),
+            tagRequis = tagRequis
+        };
+        Debug.Log($"[RunManager] Cooldown — '{skillID}' en cooldown ({type} x{count})");
+    }
+
+    /// <summary>
+    /// Retourne true si la compétence de navigation est prête à être utilisée.
+    /// Un skillID vide ou absent du dictionnaire = toujours prêt.
+    /// </summary>
+    public bool IsNavSkillReady(string skillID)
+    {
+        if (string.IsNullOrEmpty(skillID)) return true;
+        return !navSkillCooldowns.TryGetValue(skillID, out NavSkillCooldownState state)
+               || state.remaining <= 0;
+    }
+
+    /// <summary>
+    /// Décrémente d'un cran tous les cooldowns du type donné.
+    /// Les compétences qui atteignent 0 sont retirées du dictionnaire (= de nouveau disponibles).
+    /// </summary>
+    public void TickCooldownsDe(NavCooldownType type)
+    {
+        if (type == NavCooldownType.None) return;
+
+        List<string> aRetirer = new List<string>();
+        List<string> cles = new List<string>(navSkillCooldowns.Keys);
+
+        foreach (string skillID in cles)
+        {
+            NavSkillCooldownState state = navSkillCooldowns[skillID];
+            if (state.type != type) continue;
+
+            state.remaining--;
+            if (state.remaining <= 0)
+            {
+                aRetirer.Add(skillID);
+                Debug.Log($"[RunManager] Cooldown — '{skillID}' rechargé ({type})");
+            }
+            else
+            {
+                Debug.Log($"[RunManager] Cooldown — '{skillID}' : {state.remaining} restant(s) ({type})");
+            }
+        }
+
+        foreach (string skillID in aRetirer)
+            navSkillCooldowns.Remove(skillID);
+    }
+
+    /// <summary>
+    /// Décrémente d'un cran les cooldowns de type EnnemisAvecTag
+    /// dont le tag requis figure dans la liste de tags de l'ennemi vaincu.
+    /// </summary>
+    public void TickCooldownsAvecTag(List<TagData> tagsEnnemi)
+    {
+        if (tagsEnnemi == null || tagsEnnemi.Count == 0) return;
+
+        List<string> aRetirer = new List<string>();
+        List<string> cles = new List<string>(navSkillCooldowns.Keys);
+
+        foreach (string skillID in cles)
+        {
+            NavSkillCooldownState state = navSkillCooldowns[skillID];
+            if (state.type != NavCooldownType.CombatEnnemisAvecTag) continue;
+            if (state.tagRequis == null || !tagsEnnemi.Contains(state.tagRequis)) continue;
+
+            state.remaining--;
+            if (state.remaining <= 0)
+            {
+                aRetirer.Add(skillID);
+                Debug.Log($"[RunManager] Cooldown — '{skillID}' rechargé (tag {state.tagRequis.tagName})");
+            }
+            else
+            {
+                Debug.Log($"[RunManager] Cooldown — '{skillID}' : {state.remaining} restant(s) (tag {state.tagRequis.tagName})");
+            }
+        }
+
+        foreach (string skillID in aRetirer)
+            navSkillCooldowns.Remove(skillID);
+    }
+
     // -----------------------------------------------
     // BONUS DE STATS DE RUN
     // -----------------------------------------------
@@ -440,6 +549,9 @@ public class RunManager : MonoBehaviour
         startingConsumablesSeeded = false;
         navigationCounters.Clear();
         visionRangeBonus = 0;
+        combatsTermines = 0;
+        eventsTermines = 0;
+        navSkillCooldowns.Clear();
         runStatBonuses.Clear();
         credits = 0;
         shopStates.Clear();
@@ -752,4 +864,21 @@ public class RunManager : MonoBehaviour
     {
         difficultyModifier = Mathf.Clamp(difficultyModifier + delta, 0.5f, 3.0f);
     }
+}
+
+// -----------------------------------------------
+// CLASSES HELPER
+// -----------------------------------------------
+
+/// <summary>
+/// Stocke l'état de cooldown d'une compétence de navigation.
+/// </summary>
+public class NavSkillCooldownState
+{
+    // Type de condition qui déclenche le rechargement
+    public NavCooldownType type;
+    // Nombre d'occurrences restantes avant que le skill soit de nouveau disponible
+    public int remaining;
+    // Pour le type EnnemisAvecTag : le tag que doit porter l'ennemi tué
+    public TagData tagRequis;
 }

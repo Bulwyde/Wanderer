@@ -497,6 +497,13 @@ public class NavigationManager : MonoBehaviour
                     break;
                 }
 
+                // Détection de première visite : GetShopState renvoie null si l'inventaire
+                // n'a pas encore été généré pour cette case → c'est la première fois.
+                // On tick avant GoToShop() car ShopManager appellera GetOrCreateShopState()
+                // qui créera l'état, empêchant la détection lors de la prochaine visite.
+                if (RunManager.Instance.GetShopState(cell.x, cell.y) == null)
+                    RunManager.Instance.TickCooldownsDe(NavCooldownType.ShopDecouvert);
+
                 // Stocke la MapData pour que ShopManager puisse accéder à la CellData
                 RunManager.Instance.currentMapData = mapData;
                 RunManager.Instance.SaveNavigationState(
@@ -868,10 +875,13 @@ public class NavigationManager : MonoBehaviour
             TextMeshProUGUI label = btn.GetComponentInChildren<TextMeshProUGUI>();
             if (label != null) label.text = skill.skillName;
 
-            // Branche le clic
+            // Branche le clic et grise le bouton si le skill est en cooldown
             Button btnComp = btn.GetComponent<Button>();
             if (btnComp != null)
             {
+                bool estPret = RunManager.Instance?.IsNavSkillReady(skill.skillID) ?? true;
+                btnComp.interactable = estPret;
+
                 SkillData skillRef = skill; // capture pour le lambda
                 btnComp.onClick.AddListener(() => UtiliserSkillJambes(skillRef));
             }
@@ -955,13 +965,20 @@ public class NavigationManager : MonoBehaviour
 
     /// <summary>
     /// Utilise une compétence de navigation des jambes :
-    /// applique ses navEffects.
-    /// Note : pas de cooldown géré hors combat pour l'instant.
+    /// applique ses navEffects, puis met le skill en cooldown si un type est configuré.
     /// </summary>
     private void UtiliserSkillJambes(SkillData skill)
     {
         Debug.Log($"[Navigation] Compétence de jambes utilisée : {skill.skillName}");
         AppliquerEffetsNav(skill.navEffects);
+
+        // Met le skill en cooldown si un type est configuré
+        if (skill.navCooldownType != NavCooldownType.None && !string.IsNullOrEmpty(skill.skillID))
+        {
+            RunManager.Instance?.SetNavSkillCooldown(
+                skill.skillID, skill.navCooldownType, skill.navCooldownCount, skill.navCooldownTag);
+            SpawnSkillsJambes(); // Rafraîchit les boutons (bouton concerné maintenant grisé)
+        }
     }
 
     /// <summary>

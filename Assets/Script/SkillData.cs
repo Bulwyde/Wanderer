@@ -57,6 +57,19 @@ public class SkillData : ScriptableObject
     // Effets déclenchés quand la compétence est utilisée depuis la carte.
     // Ignorés si isNavigationSkill = false ou si la liste est vide.
     public List<NavEffect> navEffects = new List<NavEffect>();
+
+    [Header("Cooldown de navigation")]
+    // Condition de rechargement du skill (None = toujours disponible, pas de cooldown).
+    // Ignoré si isNavigationSkill = false.
+    public NavCooldownType navCooldownType = NavCooldownType.None;
+
+    // Pour CombatsTermines / EventsTermines : nombre d'occurrences requises avant rechargement.
+    // Ignoré pour les autres types de cooldown.
+    public int navCooldownCount = 1;
+
+    // Pour EnnemisAvecTag : le tag que doit porter l'ennemi tué pour déclencher le rechargement.
+    // Ignoré pour les autres types de cooldown.
+    public TagData navCooldownTag;
 }
 
 /// <summary>
@@ -69,4 +82,17 @@ public enum SkillTargetType
     RandomEnemy,        // Cible un ennemi aléatoire
     Self,               // Se cible soi-même (soin, buff...)
     AllCharacters,      // Cible tous les personnages
+}
+
+/// <summary>
+/// Définit la condition de rechargement d'une compétence de navigation hors combat.
+/// </summary>
+public enum NavCooldownType
+{
+    None,                 // Toujours disponible — pas de cooldown
+    ShopDecouvert,        // Se recharge après X nouvelles visites de marchands (X = navCooldownCount)
+    CombatsTermines,      // Se recharge après X combats gagnés (X = navCooldownCount)
+    EventsTermines,       // Se recharge après X événements complétés (X = navCooldownCount)
+    MondeTermine,         // Se recharge après la victoire contre le boss
+    CombatEnnemisAvecTag, // Se recharge après X combats gagnés contre un ennemi portant navCooldownTag (X = navCooldownCount)
 }

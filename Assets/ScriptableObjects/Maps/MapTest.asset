@@ -17,6 +17,7 @@ MonoBehaviour:
   backgroundSprite: {fileID: 0}
   width: 30
   height: 30
+  tags: []
   cells:
   - x: 0
     y: 0
@@ -1564,7 +1565,7 @@ MonoBehaviour:
     shopData: {fileID: 0}
   - x: 13
     y: 6
-    cellType: 0
+    cellType: 6
     eventCellMode: 0
     eventList: []
     eventPool: {fileID: 0}

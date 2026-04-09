@@ -82,6 +82,10 @@ public class ShopManager : MonoBehaviour
     [Header("UI — Remplacement d'équipement")]
     // Même composant partagé que dans Event — gère le remplacement quand le slot est plein
     public EquipmentOfferController equipmentOfferController;
+    // Panel parent (même structure que LootPanel en Combat) — caché par défaut
+    public GameObject lootPanel;
+    // Bouton "Continuer" affiché après résolution — ferme le LootPanel, reste dans le shop
+    public Button     lootContinueButton;
 
     // -----------------------------------------------
     // RÉFÉRENCES UI — NAVIGATION
@@ -155,6 +159,13 @@ public class ShopManager : MonoBehaviour
 
         if (quitterButton != null)
             quitterButton.onClick.AddListener(Quitter);
+
+        if (lootPanel          != null) lootPanel.SetActive(false);
+        if (lootContinueButton != null)
+        {
+            lootContinueButton.onClick.AddListener(OnLootContinuerCliqué);
+            lootContinueButton.gameObject.SetActive(false);
+        }
 
         RafraichirHUD();
         GenererArticlesShop();
@@ -497,6 +508,10 @@ public class ShopManager : MonoBehaviour
         pendingPrix              = item.prix;
         pendingShopItemEquipement = item;
 
+        // Affiche le LootPanel (structure partagée avec Combat) si assigné
+        if (lootPanel          != null) lootPanel.SetActive(true);
+        if (lootContinueButton != null) lootContinueButton.gameObject.SetActive(false);
+
         equipmentOfferController.StartOffresSequentielles(
             new List<EquipmentData> { item.data },
             OnRemplacementResolu);
@@ -528,6 +543,19 @@ public class ShopManager : MonoBehaviour
 
         RafraichirHUD();
         RafraichirArticles();
+
+        // Dans le shop, on ferme directement le LootPanel sans passer par un bouton "Continuer"
+        // Le joueur reste dans le shop et peut continuer ses achats
+        if (lootPanel != null) lootPanel.SetActive(false);
+    }
+
+    /// <summary>
+    /// Ferme le LootPanel après résolution d'un remplacement d'équipement.
+    /// Le joueur reste dans le shop.
+    /// </summary>
+    private void OnLootContinuerCliqué()
+    {
+        if (lootPanel != null) lootPanel.SetActive(false);
     }
 
     private void AcheterModule(ShopItemModule item)

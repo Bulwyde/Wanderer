@@ -26,6 +26,7 @@ Roguelike tour par tour Unity/C#, inspiré Slay the Spire + Darkest Dungeon. Car
 
 **Scènes :** `MainMenu` | `Navigation` | `Combat` | `Event` | `Shop`
 **Transitions :** toutes via `SceneLoader` (DDOL) — `GoToNavigation/Combat/Event/Shop/MainMenu()`.
+**Résolution cible :** 640×360 (16:9). Tous les CanvasScaler → `Scale with Screen Size`, référence `640×360`, `Match Width or Height = 0.5`.
 
 ---
 
@@ -60,13 +61,29 @@ Roguelike tour par tour Unity/C#, inspiré Slay the Spire + Darkest Dungeon. Car
 
 **`CombatManager.cs`** — États `PlayerTurn → EnemyTurn → Victory/Defeat`. `ResolveEquipment()` au démarrage : lit `RunManager.selectedCharacter` + `currentEnemyData` (fallback Inspector). Seeding dans `ResolveEquipment()` = no-op en jeu normal (déjà fait par `StartNewRun()`). Sur victoire boss → `EndRun()` + `GoToMainMenu()` sans `ClearCurrentRoom()`.
 
-**`EquipmentOfferController.cs`** — Partagé Combat (simultané) / Event (séquentiel). Se désactive dans `Awake()`. ⚠️ Boutons "Continuer" doivent être **frères**, jamais enfants.
+**`EquipmentOfferController.cs`** — Partagé Combat (simultané) / Event et Shop (séquentiel). Se désactive dans `Awake()`.
+- **Structure LootPanel** — identique dans les 3 scènes (Combat, Event, Shop) :
+  ```
+  LootPanel
+    LootContinueButton   ← frère de EquipmentOfferArea (géré par le manager externe)
+    EquipmentOfferArea   ← EquipmentOfferController ici
+      LootCardContainer
+      SkipButton         ← enfant (géré par EquipmentOfferController, caché avec le parent)
+      ArmSelectionPanel  ← enfant (idem)
+        Arm1Button
+        Arm2Button
+  ```
+- `LootContinueButton` = **frère**, jamais enfant — sinon caché par `SetActive(false)` de l'area.
+- `SkipButton` + `ArmSelectionPanel` = **enfants** — se cachent automatiquement avec l'area.
+- **Combat** : `LootContinueButton` → aller en navigation. `skipButton` non assigné (mode simultané).
+- **Event** : `LootContinueButton` → `OnContinueClicked` (même effet que l'ancien `continueButton`). `EventManager` expose `lootPanel` + `lootContinueButton`.
+- **Shop** : pas de `LootContinueButton` affiché — le `LootPanel` se ferme automatiquement après résolution. `ShopManager` expose `lootPanel` (champ `lootContinueButton` ignoré en pratique).
 
 ### Shop / Event
 
-**`ShopManager.cs`** — Résout `ShopData` (`cell.shopData` > `currentMapData.defaultShopData`). Deux modes UI : `RafraichirArticles()` (destroy+recreate, après achat) et `MettreAJourDisponibilite()` (in-place, après crédit seul — évite le flash interactable).
+**`ShopManager.cs`** — Résout `ShopData` (`cell.shopData` > `currentMapData.defaultShopData`). Deux modes UI : `RafraichirArticles()` (destroy+recreate, après achat) et `MettreAJourDisponibilite()` (in-place, après crédit seul — évite le flash interactable). Champs `lootPanel` + `lootContinueButton` présents mais `lootContinueButton` non utilisé — le panel se ferme directement dans `OnRemplacementResolu()`.
 
-**`EventManager.cs`** — Système d'effets propre (`EventEffect`/`EventEffectType`), indépendant de `EffectData`. `MontrerContinueButton()` remonte toute la hiérarchie avant d'activer.
+**`EventManager.cs`** — Système d'effets propre (`EventEffect`/`EventEffectType`), indépendant de `EffectData`. `MontrerContinueButton()` remonte toute la hiérarchie avant d'activer. Champs `lootPanel` + `lootContinueButton` : si assignés, le `LootPanel` s'ouvre pour les offres et `lootContinueButton` déclenche `OnContinueClicked` après résolution.
 
 ---
 
@@ -164,7 +181,7 @@ Combat complet (tours, énergie, armure StS, cooldowns, statuts, crits, regen, l
 8. **GUILayout Begin/End** : `BeginHorizontal()` → `EndHorizontal()` dans tous les chemins, y compris avant `break`.
 9. **`[Header]` + CustomPropertyDrawer** : ne jamais combiner — chevauchements Inspector.
 10. **`SetActive(true)` enfant d'un GO inactif** : activer tous les parents d'abord.
-11. **EquipmentOfferController** : se désactive via `Awake()`. Boutons "Continuer" = frères, jamais enfants. `lootContinueButton` masqué dans `Start()`.
+11. **EquipmentOfferController** : se désactive via `Awake()`. `LootContinueButton` = frère de `EquipmentOfferArea`, jamais enfant (sinon caché par le `SetActive(false)`). `SkipButton` et `ArmSelectionPanel` = enfants de `EquipmentOfferArea` (se cachent avec le parent). `lootContinueButton` masqué dans `Start()` du manager.
 12. **RevealZoneChoice + clics UI** : `Input.GetMouseButtonDown(0)` capte les clics UI → `EventSystem.current.IsPointerOverGameObject()` si conflits.
 13. **CharacterData/EnemyData fallback Inspector** : champs Inspector de `CombatManager` = tests isolés uniquement. En jeu normal, écrasés par RunManager.
 14. **Seeding no-op** : `CombatManager.ResolveEquipment()` ne seed rien en jeu normal — tout fait par `StartNewRun()`. Ne pas dupliquer.
@@ -183,3 +200,5 @@ Combat complet (tours, énergie, armure StS, cooldowns, statuts, crits, regen, l
 27. **`NavCooldownType.CombatEnnemisAvecTag`** : le `skillID` doit être renseigné sur le `SkillData` — sans lui, `SetNavSkillCooldown` est ignoré silencieusement.
 28. **`TagListFilterUtil` cache statique** : les tags filtrés sont mis en cache par catégorie jusqu'à la recompilation. Si un nouveau `TagData` est créé, rouvrir l'asset concerné après recompilation pour voir la liste à jour.
 29. **Tags déjà assignés hors catégorie** : si un asset avait un tag non conforme avant l'ajout des editors filtrés, il apparaîtra comme `(aucun)` dans le popup et sera mis à null à la prochaine sauvegarde — vérifier les assets existants.
+30. **CanvasScaler résolution** : référence cible = 640×360, mode `Scale with Screen Size`, `Match = 0.5`. Ne pas utiliser `Constant Pixel Size` (aucun scaling) ni une référence 4:3 (800×600) ou 1080p.
+31. **`NavigationHUD`** : peut être mis en composant sur `NavigationManager` s'il n'y a pas de GO dédié — l'Update() fonctionne pareil. Les champs `hpText`/`creditsText` doivent être assignés dans l'Inspector.

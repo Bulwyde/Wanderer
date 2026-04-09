@@ -74,6 +74,10 @@ public class EventManager : MonoBehaviour
     [Header("UI — Offre d'équipement")]
     // Composant partagé avec la scène Combat — gère l'affichage et la résolution des offres
     public EquipmentOfferController equipmentOfferController;
+    // Panel parent (même structure que LootPanel en Combat) — caché par défaut
+    public GameObject lootPanel;
+    // Bouton "Continuer" affiché après résolution des offres — même action que continueButton
+    public Button     lootContinueButton;
 
     // -----------------------------------------------
     // UI — CONSOMMABLES
@@ -114,6 +118,13 @@ public class EventManager : MonoBehaviour
         {
             continueButton.onClick.AddListener(OnContinueClicked);
             continueButton.gameObject.SetActive(false);
+        }
+
+        if (lootPanel          != null) lootPanel.SetActive(false);
+        if (lootContinueButton != null)
+        {
+            lootContinueButton.onClick.AddListener(OnContinueClicked);
+            lootContinueButton.gameObject.SetActive(false);
         }
 
         LoadAndDisplayEvent();
@@ -377,6 +388,10 @@ public class EventManager : MonoBehaviour
         // Si des pièces sont à proposer, déléguer au contrôleur partagé
         if (pendingEquipmentOffers.Count > 0 && equipmentOfferController != null)
         {
+            // Affiche le LootPanel (structure partagée avec Combat) si assigné
+            if (lootPanel          != null) lootPanel.SetActive(true);
+            if (lootContinueButton != null) lootContinueButton.gameObject.SetActive(false);
+
             equipmentOfferController.StartOffresSequentielles(pendingEquipmentOffers, OnEquipementResolu);
             pendingEquipmentOffers.Clear();
         }
@@ -638,10 +653,15 @@ public class EventManager : MonoBehaviour
     /// <summary>
     /// Appelé par EquipmentOfferController quand toutes les offres sont résolues
     /// (équipées ou passées). Affiche le bouton "Continuer".
+    /// Si un lootContinueButton est assigné (LootPanel partagé), on l'utilise à la place
+    /// du continueButton habituel.
     /// </summary>
     private void OnEquipementResolu()
     {
-        MontrerContinueButton();
+        if (lootContinueButton != null)
+            lootContinueButton.gameObject.SetActive(true);
+        else
+            MontrerContinueButton();
     }
 
     /// <summary>

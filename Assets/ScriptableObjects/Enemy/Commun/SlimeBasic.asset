@@ -14,8 +14,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::EnemyData
   enemyID: slime_basic
   enemyName: Slime
-  portrait: {fileID: 0}
-  maxHP: 2000
+  portrait: {fileID: -2026416148943288999, guid: 917d909b4c933754ca27a9d9a3a6558e, type: 3}
+  maxHP: 200
   attack: 5
   defense: 0
   actions:

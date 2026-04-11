@@ -40,11 +40,21 @@ public class MapData : ScriptableObject
     public ShopData defaultShopData;
 
     [Header("Pools d'ennemis")]
-    // Piochés aléatoirement quand une case n'a pas de specificEnemy assigné.
+    // Piochés aléatoirement quand une case n'a pas de specificEnemy/specificGroup assigné.
     // La pool correspondant au type de la case est utilisée (Normal / Elite / Boss).
+    // Chaque entrée peut être un EnemyData (solo) ou un EnemyGroup (multi).
     public EnemyPool normalEnemyPool;
     public EnemyPool eliteEnemyPool;
     public EnemyPool bossEnemyPool;
+
+    [Header("Loot combat — défaut")]
+    // Table de loot utilisée si ni l'ennemi/groupe ne définit de lootPool.
+    // Sert de fallback global par map pour éviter les combats sans récompense.
+    public EquipmentLootTable defaultCombatLootTable;
+
+    [Tooltip("Nombre de choix proposés au joueur quand le loot vient du defaultCombatLootTable.")]
+    [Range(1, 4)]
+    public int defaultLootOfferCount = 2;
 
     /// <summary>
     /// Retourne la case à la position (x, y).
@@ -112,11 +122,15 @@ public class CellData
     // Mode FromPool : référence vers un EventPool ScriptableObject prédéfini.
     public EventPool eventPool;
 
-    // ── Champs Combat (CellType.Classic / CellType.Boss) ────────────────────
+    // ── Champs Combat (CellType.Classic / CellType.Boss / CellType.Elite) ──────
 
-    // Ennemi à affronter dans cette salle.
-    // Si null, l'EnemyData assigné dans l'Inspector de CombatManager est utilisé en fallback.
+    // Ennemi solo à affronter dans cette salle.
+    // Si null et specificGroup est null, fallback sur la pool de la MapData.
     public EnemyData specificEnemy;
+
+    // Groupe d'ennemis à affronter dans cette salle — prioritaire sur specificEnemy.
+    // Utiliser pour des rencontres multi-ennemis spécifiques à cette case.
+    public EnemyGroup specificGroup;
 
     // ── Champs Marchand (CellType.Shop) ─────────────────────────────────────
 

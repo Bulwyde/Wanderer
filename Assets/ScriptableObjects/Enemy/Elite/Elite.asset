@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::EnemyData
   enemyID: elite
   enemyName: Elite
-  portrait: {fileID: 0}
+  portrait: {fileID: 1142697403063345136, guid: 540d2d315eadeb740a9e04947c69ea1e, type: 3}
   maxHP: 1000
   attack: 10
   defense: 2

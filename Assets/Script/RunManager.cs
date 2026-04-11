@@ -56,9 +56,14 @@ public class RunManager : MonoBehaviour
     // Permet aux autres scènes de savoir dans quel contexte elles s'exécutent
     public CellType currentCellType;
 
-    // Ennemi à affronter dans la salle courante.
-    // Assigné par EnterRoom() depuis la CellData. Null si aucun ennemi spécifique (fallback Inspector).
+    // Ennemi à affronter dans la salle courante (combat solo).
+    // Assigné par EnterRoom() depuis la CellData. Null si groupe ou fallback Inspector.
     public EnemyData currentEnemyData;
+
+    // Groupe d'ennemis à affronter dans la salle courante (combat multi).
+    // Assigné par EnterRoom() si la case ou la pool renvoie un groupe.
+    // Si non-null, CombatManager l'utilise en priorité sur currentEnemyData.
+    public EnemyGroup currentEnemyGroup;
 
     // ID d'événement spécifique si la salle est de type Event
     public string currentSpecificEventID;
@@ -555,7 +560,9 @@ public class RunManager : MonoBehaviour
         runStatBonuses.Clear();
         credits = 0;
         shopStates.Clear();
-        currentMapData = null;
+        currentMapData   = null;
+        currentEnemyData  = null;
+        currentEnemyGroup = null;
 
         // Réinitialise l'état de navigation : le joueur repart de la case de départ
         hasNavigationState = false;
@@ -582,22 +589,49 @@ public class RunManager : MonoBehaviour
         currentRoomY    = cell.y;
         currentCellType = cell.cellType;
 
-        // Résout l'ennemi : specificEnemy sur la case > pool de la map > fallback Inspector (null ici)
-        if (cell.specificEnemy != null)
+        // Réinitialise les deux champs avant résolution
+        currentEnemyData  = null;
+        currentEnemyGroup = null;
+
+        // Priorité de résolution :
+        //   1. specificGroup sur la case (groupe fixe)
+        //   2. specificEnemy sur la case (ennemi fixe solo)
+        //   3. Pool de la MapData → peut renvoyer un groupe ou un solo
+        //   4. Null → fallback Inspector dans CombatManager
+        if (cell.specificGroup != null)
+        {
+            currentEnemyGroup = cell.specificGroup;
+            Debug.Log($"[RunManager] Entrée en salle ({cell.x},{cell.y}) — Type : {cell.cellType}" +
+                      $" | Groupe fixe : {currentEnemyGroup.groupName}");
+        }
+        else if (cell.specificEnemy != null)
         {
             currentEnemyData = cell.specificEnemy;
+            Debug.Log($"[RunManager] Entrée en salle ({cell.x},{cell.y}) — Type : {cell.cellType}" +
+                      $" | Ennemi fixe : {currentEnemyData.enemyName}");
         }
         else
         {
             EnemyPool pool = ResolveEnemyPool(cell.cellType);
-            currentEnemyData = pool != null ? pool.PickRandom() : null;
+            if (pool != null)
+            {
+                EnemyPoolEntry entry = pool.PickRandom();
+                if (entry != null)
+                {
+                    if (entry.IsGroup)
+                        currentEnemyGroup = entry.enemyGroup;
+                    else
+                        currentEnemyData = entry.enemyData;
+                }
+            }
+
+            string nomRencontre = currentEnemyGroup != null ? $"Groupe : {currentEnemyGroup.groupName}"
+                                : currentEnemyData  != null ? $"Ennemi : {currentEnemyData.enemyName}"
+                                : "fallback Inspector";
+            Debug.Log($"[RunManager] Entrée en salle ({cell.x},{cell.y}) — Type : {cell.cellType} | {nomRencontre}");
         }
 
-        // currentSpecificEventID est désormais assigné par NavigationManager
-        // après le tirage aléatoire dans ChoisirEventAleatoire()
-
-        Debug.Log($"[RunManager] Entrée en salle ({cell.x},{cell.y}) — Type : {cell.cellType}" +
-                  (currentEnemyData != null ? $" | Ennemi : {currentEnemyData.enemyName}" : " | Ennemi : fallback Inspector"));
+        // currentSpecificEventID est assigné par NavigationManager après tirage dans ChoisirEventAleatoire()
     }
 
     /// <summary>

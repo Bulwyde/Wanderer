@@ -14,8 +14,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::EnemyData
   enemyID: slime_poison
   enemyName: Poison
-  portrait: {fileID: 0}
-  maxHP: 2000
+  portrait: {fileID: -3297650188656544483, guid: 82538c3874249314ebcb826ef6a94856, type: 3}
+  maxHP: 20
   attack: 5
   defense: 0
   actions:

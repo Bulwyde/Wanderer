@@ -3,11 +3,20 @@ using UnityEngine.UI;
 using TMPro;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 
 public enum BattleState { PlayerTurn, EnemyTurn, Victory, Defeat }
 
 /// <summary>
 /// Gère la scène de combat : tours, énergie, compétences, effets, fin de combat.
+/// Supporte les combats contre 1 à 4 ennemis simultanément.
+///
+/// Résolution de la rencontre au démarrage :
+///   RunManager.currentEnemyGroup (groupe) > RunManager.currentEnemyData (solo) > fallback Inspector
+///
+/// Ciblage :
+///   Skills SingleEnemy → mode sélection de cible (flèche joueur → souris → clic sur ennemi)
+///   Skills AllEnemies / RandomEnemy → résolution automatique, pas de sélection
 /// </summary>
 public class CombatManager : MonoBehaviour
 {
@@ -17,6 +26,9 @@ public class CombatManager : MonoBehaviour
 
     [Header("Données")]
     public CharacterData characterData;
+    // Fallbacks Inspector pour les tests en scène isolée (écrasés par RunManager en jeu normal)
+    // Priorité : enemyGroup > enemyData (même logique qu'en jeu via RunManager)
+    public EnemyGroup    enemyGroup;
     public EnemyData     enemyData;
 
     // -----------------------------------------------
@@ -24,22 +36,37 @@ public class CombatManager : MonoBehaviour
     // -----------------------------------------------
 
     [Header("UI — Joueur")]
-    public TextMeshProUGUI playerNameText;
     public TextMeshProUGUI playerHPText;
-    public TextMeshProUGUI playerArmorText;  // Affiche "Armure : 5" — peut rester non-assigné
-    public TextMeshProUGUI energyText;       // Affiche "Énergie : 2 / 3"
-    public TextMeshProUGUI creditsText;      // Affiche "Credits : 120" — peut rester non-assigné
+    public TextMeshProUGUI playerArmorText;
+    public TextMeshProUGUI energyText;
+    public TextMeshProUGUI creditsText;
+    // Sprite du joueur — sert aussi de point d'ancrage pour la flèche de ciblage
+    public RectTransform   playerSpriteTransform;
 
     // -----------------------------------------------
-    // UI — ENNEMI
+    // UI — ENNEMIS (dynamique)
     // -----------------------------------------------
 
-    [Header("UI — Ennemi")]
-    public TextMeshProUGUI enemyNameText;
-    public TextMeshProUGUI enemyHPText;
-    public TextMeshProUGUI enemyArmorText;   // Affiche "Armure : 3" — peut rester non-assigné
-    // Affiche la prochaine action de l'ennemi (comme dans Slay the Spire)
-    public TextMeshProUGUI enemyNextActionText;
+    [Header("UI — Ennemis")]
+    // Conteneur dans lequel les blocs UI ennemis sont générés dynamiquement (HorizontalLayoutGroup)
+    public Transform   enemiesContainer;
+    // Prefab d'un bloc ennemi — structure attendue :
+    //   Root (Button + EnemyUIBlock si besoin)
+    //     ├── EnemySprite (Image) ← sprite + Animator pour les futures animations
+    //     ├── EnemyNameText (TMP)
+    //     ├── EnemyHPText (TMP)
+    //     ├── EnemyArmorText (TMP)
+    //     └── EnemyNextActionText (TMP)
+    public GameObject  enemyUIPrefab;
+
+    // -----------------------------------------------
+    // UI — CIBLAGE (flèche style Slay the Spire)
+    // -----------------------------------------------
+
+    [Header("UI — Ciblage")]
+    // RectTransform de la flèche — pivot (0, 0.5), s'étire de playerSpriteTransform vers la souris
+    // Doit avoir un composant Image avec le sprite de la flèche (ou une couleur de remplissage)
+    public RectTransform arrowTransform;
 
     // -----------------------------------------------
     // UI — COMBAT
@@ -48,27 +75,16 @@ public class CombatManager : MonoBehaviour
     [Header("UI — Combat")]
     public TextMeshProUGUI turnText;
     public TextMeshProUGUI combatLogText;
-
-    // Bouton "Fin du tour" — le joueur l'utilise quand il a fini ses actions
-    public Button endTurnButton;
-
-    // Conteneur où les boutons de compétences seront générés dynamiquement.
-    // Place-le dans le CombatActivePanel, configure-le avec un Horizontal ou Vertical Layout Group.
-    public Transform skillButtonContainer;
-
-    // Préfab d'un bouton de compétence — doit avoir le composant SkillButton
-    public GameObject skillButtonPrefab;
+    public Button          endTurnButton;
+    public Transform       skillButtonContainer;
+    public GameObject      skillButtonPrefab;
 
     // -----------------------------------------------
     // UI — CONSOMMABLES
     // -----------------------------------------------
 
     [Header("UI — Consommables")]
-    // Conteneur où les boutons de consommables seront générés dynamiquement
-    // (Horizontal ou Vertical Layout Group recommandé)
-    public Transform consumableButtonContainer;
-
-    // Préfab d'un bouton de consommable — doit avoir le composant ConsumableButton
+    public Transform  consumableButtonContainer;
     public GameObject consumableButtonPrefab;
 
     // -----------------------------------------------
@@ -76,7 +92,6 @@ public class CombatManager : MonoBehaviour
     // -----------------------------------------------
 
     [Header("Debug / Tests")]
-    // Instakill l'ennemi — à retirer quand le vrai système sera complet
     public Button victoireButton;
 
     // -----------------------------------------------
@@ -84,24 +99,19 @@ public class CombatManager : MonoBehaviour
     // -----------------------------------------------
 
     [Header("UI — Panneaux")]
-    public GameObject combatActivePanel;
-    public GameObject endPanel;
+    public GameObject      combatActivePanel;
+    public GameObject      endPanel;
     public TextMeshProUGUI endTitleText;
     public Button          endButton;
     public TextMeshProUGUI endButtonText;
 
     // -----------------------------------------------
-    // UI — LOOT (affiché à la place de endPanel en cas de victoire)
+    // UI — LOOT
     // -----------------------------------------------
 
     [Header("UI — Loot")]
-    // Panel principal affiché après une victoire
-    public GameObject lootPanel;
-
-    // Bouton "Continuer" du panel loot — toujours actif (le joueur peut ignorer le loot)
-    public Button lootContinueButton;
-
-    // Contrôleur partagé qui gère l'affichage et la résolution des cartes de loot
+    public GameObject              lootPanel;
+    public Button                  lootContinueButton;
     public EquipmentOfferController equipmentOfferController;
 
     // -----------------------------------------------
@@ -110,60 +120,47 @@ public class CombatManager : MonoBehaviour
 
     private BattleState battleState;
 
+    // Groupe résolu depuis RunManager (null si combat solo)
+    private EnemyGroup currentGroup;
+
+    // Liste des ennemis actifs — chaque EnemyInstance porte toutes ses données runtime
+    private List<EnemyInstance> enemies = new List<EnemyInstance>();
+
+    // Canvas racine — mis en cache pour la conversion pixels écran → unités canvas (flèche ciblage)
+    private Canvas _rootCanvas;
+
+    // Compétence en attente d'une cible (mode sélection de cible)
+    private SkillData   pendingSkill;
+    private bool        isSelectingTarget;
+
+    // Vrai si EndCombat a déjà été appelé ce combat (protection multi-appel)
+    private bool combatEnded;
+
     private int currentPlayerHP;
-    private int currentEnemyHP;
     private int currentEnergy;
-
-    // Armure (style Slay the Spire) :
-    //   - Absorbe les dégâts directs avant les HP
-    //   - N'absorbe PAS le poison
-    //   - Se remet à 0 au début du tour de l'entité concernée
     private int currentPlayerArmor;
-    private int currentEnemyArmor;
 
-    // Stats effectives du joueur — stats de base + bonus de chaque pièce d'équipement.
-    // Calculées une fois au démarrage du combat dans ResolveEquipment().
-    // On les sépare des données brutes (CharacterData) pour ne jamais modifier le ScriptableObject.
     private int   effectiveMaxHP;
     private int   effectiveAttack;
     private int   effectiveDefense;
     private int   effectiveMaxEnergy;
-    private float effectiveCriticalChance;      // Probabilité de coup critique [0, 1]
-    private float effectiveCriticalMultiplier;  // Multiplicateur de dégâts sur un critique
-    private int   effectiveRegeneration;        // HP récupérés au début de chaque tour joueur
-    private float effectiveLifeSteal;           // Fraction des dégâts convertie en soins [0, 1]
+    private float effectiveCriticalChance;
+    private float effectiveCriticalMultiplier;
+    private int   effectiveRegeneration;
+    private float effectiveLifeSteal;
 
-    // Skills disponibles en combat : collectés depuis l'équipement, ou startingSkills en fallback
-    private List<SkillData> availableSkills = new List<SkillData>();
-
-    // Instance de l'IA ennemie — gère la file d'actions circulaire
-    private EnemyAI enemyAI;
-
-    // Liste des boutons de compétences instanciés — on les garde pour les mettre à jour
-    private List<SkillButton> spawnedSkillButtons = new List<SkillButton>();
-
-    // Liste des boutons de consommables instanciés — recréés après chaque utilisation
+    private List<SkillData>        availableSkills          = new List<SkillData>();
+    private List<SkillButton>      spawnedSkillButtons      = new List<SkillButton>();
     private List<ConsumableButton> spawnedConsumableButtons = new List<ConsumableButton>();
-
-    // Cooldowns par compétence : nombre de tours restants avant de pouvoir l'utiliser
-    private Dictionary<SkillData, int> skillCooldowns = new Dictionary<SkillData, int>();
+    private Dictionary<SkillData, int> skillCooldowns       = new Dictionary<SkillData, int>();
 
     private const float EnemyActionDelay = 1.0f;
 
-    // Vrai uniquement pendant le tout premier tour du combat.
-    // Permet d'appliquer les modules Passive après le reset d'armure initial.
     private bool isFirstTurn = true;
 
-    // Statuts actifs en combat — clé = définition du statut, valeur = nombre de stacks
-    // Les stacks sont trackés ici, jamais dans les ScriptableObjects
     private Dictionary<StatusData, int> playerStatuses = new Dictionary<StatusData, int>();
-    private Dictionary<StatusData, int> enemyStatuses  = new Dictionary<StatusData, int>();
 
-    // Modificateurs de stats temporaires ce combat — appliqués par les skills et consommables.
-    // Viennent s'ajouter à effectiveX après les bonus de run (eux-mêmes dans ResolveEquipment).
-    // Les statuts de type ModifyStat sont calculés dynamiquement dans GetPlayerStatModifiers().
     private Dictionary<StatType, float> combatStatModifiers = new Dictionary<StatType, float>();
-
 
     // -----------------------------------------------
     // INITIALISATION
@@ -171,19 +168,27 @@ public class CombatManager : MonoBehaviour
 
     void Start()
     {
-        // Résoudre le CharacterData depuis RunManager si une run est en cours.
-        // Fallback sur le champ Inspector pour les tests de la scène Combat en isolation.
         if (RunManager.Instance?.selectedCharacter != null)
             characterData = RunManager.Instance.selectedCharacter;
         else
             Debug.Log("[Combat] Pas de CharacterData dans RunManager — utilisation du champ Inspector local.");
 
-        // Résoudre l'EnemyData depuis RunManager si la case courante a un ennemi assigné.
-        // Fallback sur le champ Inspector pour les tests ou si aucun ennemi n'est défini sur la case.
-        if (RunManager.Instance?.currentEnemyData != null)
+        // Résout la rencontre (groupe > solo > fallback Inspector)
+        if (RunManager.Instance?.currentEnemyGroup != null)
+        {
+            currentGroup = RunManager.Instance.currentEnemyGroup;
+        }
+        else if (RunManager.Instance?.currentEnemyData != null)
+        {
             enemyData = RunManager.Instance.currentEnemyData;
+            currentGroup = null;
+        }
         else
-            Debug.Log("[Combat] Pas d'EnemyData dans RunManager — utilisation du champ Inspector local.");
+        {
+            // Fallback Inspector — priorité groupe > solo
+            currentGroup = enemyGroup;
+            Debug.Log("[Combat] Pas de rencontre dans RunManager — utilisation du fallback Inspector.");
+        }
 
         if (endTurnButton      != null) endTurnButton.onClick.AddListener(OnEndTurn);
         if (endButton          != null) endButton.onClick.AddListener(OnEndButtonClicked);
@@ -193,58 +198,172 @@ public class CombatManager : MonoBehaviour
         if (endPanel           != null) endPanel.SetActive(false);
         if (lootPanel          != null) lootPanel.SetActive(false);
         if (lootContinueButton != null) lootContinueButton.gameObject.SetActive(false);
+        if (arrowTransform != null)
+        {
+            arrowTransform.gameObject.SetActive(false);
+            // La flèche ne doit jamais intercepter les clics — sinon elle bloque les boutons ennemis
+            Image arrowImage = arrowTransform.GetComponent<Image>();
+            if (arrowImage != null) arrowImage.raycastTarget = false;
+        }
+
+        // Mise en cache du Canvas racine pour la conversion pixels écran ↔ unités canvas.
+        // Cherché depuis arrowTransform (enfant du Canvas) et non depuis this (qui peut être
+        // sur un GO séparé hors hiérarchie Canvas — GetComponentInParent retournerait null).
+        if (arrowTransform != null)
+        {
+            _rootCanvas = arrowTransform.GetComponentInParent<Canvas>();
+            if (_rootCanvas != null) _rootCanvas = _rootCanvas.rootCanvas;
+        }
 
         InitializeCombat();
     }
 
+    void Update()
+    {
+        if (!isSelectingTarget) return;
+
+        UpdateTargetingArrow();
+
+        if (Input.GetMouseButtonDown(0))
+        {
+            // Détection manuelle sur le rect du sprite (et non sur le root élargi par le LayoutGroup).
+            // Le Button.onClick utilisait le root qui s'étire pour remplir le conteneur,
+            // causant un décalage d'un ennemi par rapport au sprite visible.
+            foreach (EnemyInstance e in enemies)
+            {
+                if (!e.IsAlive || e.spriteImage == null) continue;
+                if (RectTransformUtility.RectangleContainsScreenPoint(
+                        e.spriteImage.rectTransform, Input.mousePosition, null))
+                {
+                    OnEnemyCibleClique(e);
+                    return;
+                }
+            }
+            // Clic en dehors de tout sprite ennemi → on laisse la flèche active
+        }
+
+        // Annulation avec clic droit ou Échap
+        if (Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.Escape))
+            CancelTargetSelection();
+    }
+
     private void InitializeCombat()
     {
-        // Reset des modificateurs temporaires de combat
+        combatEnded = false;
         combatStatModifiers.Clear();
-
-        // Résout l'équipement en premier — les stats effectives et availableSkills
-        // sont nécessaires pour tout le reste de l'initialisation
         ResolveEquipment();
 
-        // HP du joueur : on prend ceux du RunManager (persistants entre salles)
-        // ou le max effectif (premier combat du run / test direct)
-        currentPlayerHP = (RunManager.Instance != null && RunManager.Instance.currentHP > 0)
+        currentPlayerHP    = (RunManager.Instance != null && RunManager.Instance.currentHP > 0)
             ? RunManager.Instance.currentHP
             : effectiveMaxHP;
 
-        if (enemyData != null)
-        {
-            currentEnemyHP = enemyData.maxHP;
-            enemyAI = new EnemyAI(enemyData);
-        }
+        // Construit la liste des EnemyInstance
+        enemies.Clear();
+        BuildEnemyList();
 
-        // Initialise les cooldowns à 0 pour chaque skill disponible
         foreach (SkillData skill in availableSkills)
-        {
-            if (skill != null)
-                skillCooldowns[skill] = 0;
-        }
+            if (skill != null) skillCooldowns[skill] = 0;
 
         SpawnSkillButtons();
         SpawnConsumableButtons();
-        UpdateUI();
-        UpdateEnemyNextActionUI();
-        Log($"Combat commencé — {GetPlayerName()} vs {GetEnemyName()}");
+        UpdatePlayerUI();
+        Log($"Combat commencé — {GetPlayerName()} vs {GetRencontreName()}");
         StartPlayerTurn();
+    }
+
+    // -----------------------------------------------
+    // CONSTRUCTION DE LA LISTE D'ENNEMIS
+    // -----------------------------------------------
+
+    /// <summary>
+    /// Construit la List<EnemyInstance> depuis currentGroup ou enemyData (fallback solo).
+    /// Génère les blocs UI correspondants dans enemiesContainer.
+    /// </summary>
+    private void BuildEnemyList()
+    {
+        List<EnemyData> dataList = new List<EnemyData>();
+
+        if (currentGroup != null && currentGroup.enemies != null)
+        {
+            foreach (EnemyData d in currentGroup.enemies)
+                if (d != null) dataList.Add(d);
+        }
+        else if (enemyData != null)
+        {
+            dataList.Add(enemyData);
+        }
+
+        // Plafonne à 4
+        if (dataList.Count > 4) dataList = dataList.GetRange(0, 4);
+
+        foreach (EnemyData data in dataList)
+        {
+            EnemyInstance instance = new EnemyInstance(data);
+            SpawnEnemyUI(instance);
+            enemies.Add(instance);
+        }
+
+        Debug.Log($"[Combat] {enemies.Count} ennemi(s) initialisé(s).");
+    }
+
+    /// <summary>
+    /// Génère le bloc UI d'un EnemyInstance dans enemiesContainer.
+    /// Remplit les références UI dans l'instance.
+    /// </summary>
+    private void SpawnEnemyUI(EnemyInstance instance)
+    {
+        if (enemyUIPrefab == null || enemiesContainer == null) return;
+
+        GameObject root = Instantiate(enemyUIPrefab, enemiesContainer);
+        instance.uiRoot = root;
+
+        // CanvasGroup — permet de passer blocksRaycasts à false hors ciblage
+        // pour que les blocs ennemis ne bloquent pas les autres boutons (ex : Fin de tour)
+        // ⚠️ Ne pas utiliser ?? avec GetComponent : Unity null ≠ C# null, ?? ne le détecte pas
+        instance.canvasGroup = root.GetComponent<CanvasGroup>();
+        if (instance.canvasGroup == null) instance.canvasGroup = root.AddComponent<CanvasGroup>();
+        instance.canvasGroup.blocksRaycasts = false;
+
+        // Sprite — cherché par nom exact "EnemySprite" pour éviter de récupérer
+        // le fond blanc du Button sur le root (GetComponentInChildren inclut le root lui-même)
+        Transform spriteChild = root.transform.Find("EnemySprite");
+        if (spriteChild != null)
+        {
+            instance.spriteImage = spriteChild.GetComponent<Image>();
+            if (instance.spriteImage != null)
+            {
+                // Respecte les proportions d'origine du sprite (pas d'étirement)
+                instance.spriteImage.preserveAspect = true;
+                if (instance.data.portrait != null)
+                    instance.spriteImage.sprite = instance.data.portrait;
+            }
+        }
+
+        // Textes TMP — cherchés par nom dans les enfants
+        foreach (TextMeshProUGUI tmp in root.GetComponentsInChildren<TextMeshProUGUI>())
+        {
+            switch (tmp.gameObject.name)
+            {
+                case "EnemyHPText":         instance.hpText         = tmp; break;
+                case "EnemyArmorText":      instance.armorText      = tmp; break;
+                case "EnemyNextActionText": instance.nextActionText = tmp; break;
+            }
+        }
+
+        // Bouton sur le root — gardé comme référence mais plus utilisé pour le ciblage.
+        // La détection de clic se fait dans Update() via RectTransformContainsScreenPoint
+        // sur spriteImage, ce qui correspond à ce que l'œil voit (pas au root élargi par le LayoutGroup).
+        instance.targetButton = root.GetComponent<Button>();
+        if (instance.targetButton != null)
+            instance.targetButton.interactable = false;
+
+        UpdateEnemyUI(instance);
     }
 
     // -----------------------------------------------
     // RÉSOLUTION DE L'ÉQUIPEMENT
     // -----------------------------------------------
 
-    /// <summary>
-    /// Lit les 5 emplacements d'équipement du CharacterData et calcule :
-    ///   - Les stats effectives (base + somme des bonus de chaque pièce)
-    ///   - La liste de skills disponibles (collectés depuis l'équipement)
-    ///
-    /// Si aucun équipement n'apporte de skills, on replie sur startingSkills
-    /// pour pouvoir jouer sans équipement assigné (pratique pendant le développement).
-    /// </summary>
     private void ResolveEquipment()
     {
         if (characterData == null)
@@ -260,7 +379,6 @@ public class CombatManager : MonoBehaviour
             return;
         }
 
-        // On part des stats de base du personnage
         effectiveMaxHP              = characterData.maxHP;
         effectiveAttack             = characterData.attack;
         effectiveDefense            = characterData.defense;
@@ -272,11 +390,6 @@ public class CombatManager : MonoBehaviour
 
         availableSkills.Clear();
 
-        // Priorité : pièce sauvegardée dans RunManager (gagnée pendant la run)
-        // Fallback  : pièce de départ définie sur le CharacterData (config initiale)
-        //
-        // Cette logique est prête pour un inventaire : si un jour on ajoute
-        // une liste d'objets portés, on interroge RunManager de la même façon.
         List<EquipmentData> equipped = new List<EquipmentData>
         {
             RunManager.Instance?.GetEquipped(EquipmentSlot.Head)  ?? characterData.startingHead,
@@ -289,8 +402,6 @@ public class CombatManager : MonoBehaviour
         foreach (EquipmentData equip in equipped)
         {
             if (equip == null) continue;
-
-            // Additionne les bonus de stats
             effectiveMaxHP              += equip.bonusHP;
             effectiveAttack             += equip.bonusAttack;
             effectiveDefense            += equip.bonusDefense;
@@ -298,18 +409,10 @@ public class CombatManager : MonoBehaviour
             effectiveCriticalMultiplier += equip.bonusCriticalMultiplier;
             effectiveRegeneration       += equip.bonusRegeneration;
             effectiveLifeSteal          += equip.bonusLifeSteal;
-
-            // Collecte les skills de cette pièce
             foreach (SkillData skill in equip.skills)
-            {
-                if (skill != null)
-                    availableSkills.Add(skill);
-            }
+                if (skill != null) availableSkills.Add(skill);
         }
 
-        // Seed RunManager avec l'équipement de départ pour tout slot encore vide.
-        // Sans ça, IsSlotFree() renverrait true au premier combat (RunManager est vide),
-        // ce qui ferait auto-placer les pièces de bras sans demander au joueur.
         if (RunManager.Instance != null)
         {
             SeedSlotIfFree(EquipmentSlot.Head,  characterData.startingHead);
@@ -318,30 +421,19 @@ public class CombatManager : MonoBehaviour
             SeedSlotIfFree(EquipmentSlot.Arm1,  characterData.startingArm1);
             SeedSlotIfFree(EquipmentSlot.Arm2,  characterData.startingArm2);
 
-            // Seed le module de départ si le joueur n'en possède pas encore.
-            // Même logique que pour l'équipement : on ne le donne qu'une seule fois.
             if (characterData.startingModule != null
                 && !RunManager.Instance.HasModule(characterData.startingModule))
-            {
                 RunManager.Instance.AddModule(characterData.startingModule);
-            }
 
-            // Seed les consommables de départ — donnés une seule fois par run, au premier combat.
-            // Le flag startingConsumablesSeeded empêche de les redonner si le joueur
-            // a tout utilisé et entre dans un nouveau combat pendant le même run.
             if (characterData.startingConsumables != null
                 && !RunManager.Instance.startingConsumablesSeeded)
             {
-                foreach (ConsumableData consumable in characterData.startingConsumables)
-                {
-                    if (consumable != null)
-                        RunManager.Instance.AddConsumable(consumable);
-                }
+                foreach (ConsumableData c in characterData.startingConsumables)
+                    if (c != null) RunManager.Instance.AddConsumable(c);
                 RunManager.Instance.startingConsumablesSeeded = true;
             }
         }
 
-        // Bonus de stats permanents du run (events, modules, etc.) — lus depuis RunManager
         if (RunManager.Instance != null)
         {
             effectiveMaxHP              += Mathf.RoundToInt(RunManager.Instance.GetStatBonus(StatType.MaxHP));
@@ -353,20 +445,13 @@ public class CombatManager : MonoBehaviour
             effectiveMaxEnergy          += Mathf.RoundToInt(RunManager.Instance.GetStatBonus(StatType.MaxEnergy));
         }
 
-        // Plafonne la chance de critique entre 0 et 1 (les bonus d'équipement et de run peuvent dépasser)
         effectiveCriticalChance = Mathf.Clamp01(effectiveCriticalChance);
 
         Debug.Log($"[Combat] Équipement résolu — HP: {effectiveMaxHP}, ATK: {effectiveAttack}, " +
                   $"DEF: {effectiveDefense}, Énergie: {effectiveMaxEnergy}, " +
-                  $"Crit: {effectiveCriticalChance:P0}, Multi: {effectiveCriticalMultiplier:F1}x, " +
-                  $"Regen: {effectiveRegeneration}, LifeSteal: {effectiveLifeSteal:P0}, " +
-                  $"Skills: {availableSkills.Count}");
+                  $"Crit: {effectiveCriticalChance:P0}, Skills: {availableSkills.Count}");
     }
 
-    /// <summary>
-    /// Enregistre une pièce de départ dans RunManager uniquement si le slot est vide.
-    /// Appelé une fois par combat pour initialiser l'état de l'équipement au premier run.
-    /// </summary>
     private void SeedSlotIfFree(EquipmentSlot slot, EquipmentData starting)
     {
         if (starting != null && RunManager.Instance.IsSlotFree(slot))
@@ -377,69 +462,41 @@ public class CombatManager : MonoBehaviour
     // GÉNÉRATION DES BOUTONS DE COMPÉTENCES
     // -----------------------------------------------
 
-    /// <summary>
-    /// Instancie un bouton par compétence dans le skillButtonContainer.
-    /// On génère les boutons une seule fois à l'initialisation —
-    /// on les met à jour (grisés, cooldown) à chaque changement d'état.
-    /// Après les compétences actives, génère également un bouton passif grisé
-    /// pour chaque passiveEffect des pièces de bras (Arm1, Arm2).
-    /// </summary>
     private void SpawnSkillButtons()
     {
         if (skillButtonPrefab == null || skillButtonContainer == null) return;
 
-        // Compétences actives (non-navigation)
         foreach (SkillData skill in availableSkills)
         {
-            if (skill == null) continue;
-            // Les skills de navigation (jambes) n'ont pas de bouton en combat
-            if (skill.isNavigationSkill) continue;
-
+            if (skill == null || skill.isNavigationSkill) continue;
             GameObject go = Instantiate(skillButtonPrefab, skillButtonContainer);
             SkillButton sb = go.GetComponent<SkillButton>();
             if (sb == null) continue;
-
             sb.Setup(skill, UseSkill);
             spawnedSkillButtons.Add(sb);
         }
 
-        // Effets passifs des bras — boutons grisés, non cliquables
         SpawnPassifsBras();
     }
 
-    /// <summary>
-    /// Génère un bouton passif grisé pour chaque passiveEffect des pièces Arm1 et Arm2.
-    /// Les boutons sont ajoutés à la suite des compétences actives dans le même container.
-    /// </summary>
     private void SpawnPassifsBras()
     {
-        EquipmentData bras1 = RunManager.Instance?.GetEquipped(EquipmentSlot.Arm1)
-                              ?? characterData?.startingArm1;
-        EquipmentData bras2 = RunManager.Instance?.GetEquipped(EquipmentSlot.Arm2)
-                              ?? characterData?.startingArm2;
-
+        EquipmentData bras1 = RunManager.Instance?.GetEquipped(EquipmentSlot.Arm1) ?? characterData?.startingArm1;
+        EquipmentData bras2 = RunManager.Instance?.GetEquipped(EquipmentSlot.Arm2) ?? characterData?.startingArm2;
         SpawnPassifsEquipement(bras1);
         SpawnPassifsEquipement(bras2);
     }
 
-    /// <summary>
-    /// Instancie un bouton passif grisé pour chaque EffectData dans passiveEffects de la pièce.
-    /// </summary>
     private void SpawnPassifsEquipement(EquipmentData equip)
     {
         if (equip == null || equip.passiveEffects == null) return;
-
         foreach (EffectData effet in equip.passiveEffects)
         {
             if (effet == null) continue;
-
             GameObject go = Instantiate(skillButtonPrefab, skillButtonContainer);
             SkillButton sb = go.GetComponent<SkillButton>();
             if (sb == null) continue;
-
             sb.SetupPassif(effet);
-            // Les boutons passifs ne sont pas trackés dans spawnedSkillButtons :
-            // ils sont toujours grisés, jamais mis à jour par UpdateSkillButtons().
             Debug.Log($"[Combat] Bouton passif généré : {effet.displayName ?? effet.effectID} ({equip.equipmentName})");
         }
     }
@@ -448,15 +505,10 @@ public class CombatManager : MonoBehaviour
     // GÉNÉRATION DES BOUTONS DE CONSOMMABLES
     // -----------------------------------------------
 
-    /// <summary>
-    /// Instancie un bouton par consommable utilisable en combat.
-    /// Appelé à l'initialisation et après chaque utilisation (pour refléter l'inventaire mis à jour).
-    /// </summary>
     private void SpawnConsumableButtons()
     {
         if (consumableButtonPrefab == null || consumableButtonContainer == null) return;
 
-        // Nettoie les anciens boutons avant de recréer
         foreach (ConsumableButton cb in spawnedConsumableButtons)
             if (cb != null) Destroy(cb.gameObject);
         spawnedConsumableButtons.Clear();
@@ -468,13 +520,10 @@ public class CombatManager : MonoBehaviour
         foreach (ConsumableData consumable in consumables)
         {
             if (consumable == null) continue;
-
             GameObject go = Instantiate(consumableButtonPrefab, consumableButtonContainer);
             ConsumableButton cb = go.GetComponent<ConsumableButton>();
             if (cb == null) continue;
-
             cb.Setup(consumable, UseConsumable);
-            // Non utilisable en combat = affiché mais grisé et réduit
             cb.SetInteractable(consumable.usableInCombat);
             spawnedConsumableButtons.Add(cb);
         }
@@ -486,54 +535,35 @@ public class CombatManager : MonoBehaviour
 
     private void StartPlayerTurn()
     {
-        battleState = BattleState.PlayerTurn;
-
-        // Réinitialise l'énergie au maximum effectif (base + bonus équipement + modificateurs actifs)
-        currentEnergy = GetCurrentMaxEnergy();
-
-        // L'armure du joueur se remet à 0 au début de son tour (comme dans Slay the Spire)
+        battleState    = BattleState.PlayerTurn;
+        currentEnergy  = GetCurrentMaxEnergy();
         currentPlayerArmor = 0;
 
-        // Modules Passive : appliqués une seule fois au premier tour, après le reset d'armure.
-        // Placés ici (et non dans InitializeCombat) pour éviter que le reset efface l'armure passive.
         if (isFirstTurn)
         {
             isFirstTurn = false;
             ModuleManager.Instance?.ApplyModulesWithTrigger(EffectTrigger.OnFightStart);
         }
 
-        // Statuts sur le joueur : effets automatiques (poison, etc.) en début de tour,
-        // puis décroissance des statuts dont le timing est OnTurnStart.
-        // Les statuts OnTurnEnd décroissent dans OnEndTurn(), après que le joueur a agi.
-        ApplyPerTurnEffects(forEnemy: false);
-        DecayStatuses(forEnemy: false, StatusDecayTiming.OnTurnStart);
+        ApplyPlayerPerTurnEffects();
+        DecayPlayerStatuses(StatusDecayTiming.OnTurnStart);
 
-        // Régénération : soigne le joueur au début de son tour (plafonné aux HP max)
         if (effectiveRegeneration > 0)
         {
             int healed = Mathf.Min(effectiveRegeneration, GetPlayerMaxHP() - currentPlayerHP);
-            if (healed > 0)
-            {
-                currentPlayerHP += healed;
-                Log($"Régénération — +{healed} HP → {currentPlayerHP}/{GetPlayerMaxHP()}");
-            }
+            if (healed > 0) { currentPlayerHP += healed; Log($"Régénération — +{healed} HP"); }
         }
 
-        // Décrémente tous les cooldowns d'un tour
         DecrementCooldowns();
 
         if (endTurnButton != null) endTurnButton.interactable = true;
         if (turnText      != null) turnText.text = "Tour du joueur";
 
         UpdateSkillButtons();
-
-        // Réactive uniquement les consommables utilisables en combat (les autres restent grisés)
         foreach (ConsumableButton cb in spawnedConsumableButtons)
             cb.SetInteractable(cb.Consumable != null && cb.Consumable.usableInCombat);
 
-        UpdateUI();
-
-        // Notifie les modules abonnés au début du tour joueur
+        UpdatePlayerUI();
         GameEvents.TriggerPlayerTurnStarted();
     }
 
@@ -541,17 +571,11 @@ public class CombatManager : MonoBehaviour
     {
         battleState = BattleState.EnemyTurn;
 
-        // L'armure de l'ennemi se remet à 0 au début de son tour
-        currentEnemyArmor = 0;
-
         if (endTurnButton != null) endTurnButton.interactable = false;
-        if (turnText      != null) turnText.text = "Tour de l'ennemi";
+        if (turnText      != null) turnText.text = "Tour des ennemis";
 
-        // Désactive tous les boutons de compétences et consommables pendant le tour ennemi
-        foreach (SkillButton sb in spawnedSkillButtons)
-            sb.SetInteractable(false);
-        foreach (ConsumableButton cb in spawnedConsumableButtons)
-            cb.SetInteractable(false);
+        foreach (SkillButton   sb in spawnedSkillButtons)      sb.SetInteractable(false);
+        foreach (ConsumableButton cb in spawnedConsumableButtons) cb.SetInteractable(false);
 
         StartCoroutine(EnemyTurnRoutine());
     }
@@ -560,248 +584,283 @@ public class CombatManager : MonoBehaviour
     {
         yield return new WaitForSeconds(EnemyActionDelay);
 
-        // Statuts sur l'ennemi : effets automatiques (poison, etc.) en début de tour,
-        // puis décroissance OnTurnStart. Les statuts OnTurnEnd décroissent après l'action ennemie.
-        ApplyPerTurnEffects(forEnemy: true);
-        DecayStatuses(forEnemy: true, StatusDecayTiming.OnTurnStart);
-        UpdateUI();
-
-        // Si l'ennemi est mort à cause de ses propres statuts, on ne va pas plus loin
-        if (currentEnemyHP <= 0)
+        foreach (EnemyInstance ennemi in enemies)
         {
-            EndCombat(victory: true);
-            yield break;
+            if (!ennemi.IsAlive) continue;
+            if (combatEnded) yield break;
+
+            // Reset d'armure au début du tour de cet ennemi
+            ennemi.currentArmor = 0;
+
+            // Effets de statuts + décroissance pour cet ennemi
+            ApplyEnemyPerTurnEffects(ennemi);
+            DecayEnemyStatuses(ennemi, StatusDecayTiming.OnTurnStart);
+            UpdateEnemyUI(ennemi);
+
+            // L'ennemi a pu mourir à cause de ses propres statuts
+            if (!ennemi.IsAlive)
+            {
+                CheckEnemyDeath(ennemi);
+                if (combatEnded) yield break;
+                continue;
+            }
+
+            // L'ennemi exécute son action
+            SkillData nextSkill = ennemi.ai != null && ennemi.ai.HasActions
+                ? ennemi.ai.GetAndAdvanceAction()
+                : null;
+
+            if (nextSkill != null && nextSkill.effects != null && nextSkill.effects.Count > 0)
+            {
+                foreach (EffectData eff in nextSkill.effects)
+                    if (eff != null) ApplyEnemyEffect(eff, nextSkill.skillName, ennemi);
+            }
+            else
+            {
+                // Attaque de base
+                int atk      = ennemi.data != null ? ennemi.data.attack : 5;
+                int rawDmg   = Mathf.Max(1, atk - GetCurrentDefense());
+                AppliquerDegatsAuJoueur(rawDmg, ennemi.GetName(), "Attaque de base");
+            }
+
+            UpdatePlayerUI();
+
+            if (currentPlayerHP <= 0)
+            {
+                EndCombat(victory: false);
+                yield break;
+            }
+
+            DecayEnemyStatuses(ennemi, StatusDecayTiming.OnTurnEnd);
+            UpdateEnemyUI(ennemi);
+
+            // Délai entre les actions de chaque ennemi
+            yield return new WaitForSeconds(EnemyActionDelay);
         }
 
-        // Récupère et exécute la prochaine action de la file
-        // Si la file est vide (toutes les actions épuisées), repli sur une attaque de base
-        SkillData nextSkill = enemyAI != null && enemyAI.HasActions
-            ? enemyAI.GetAndAdvanceAction()
-            : null;
-
-        if (nextSkill != null && nextSkill.effects != null && nextSkill.effects.Count > 0)
-        {
-            // L'ennemi utilise son skill — on applique les effets depuis son point de vue
-            foreach (EffectData eff in nextSkill.effects)
-                if (eff != null) ApplyEnemyEffect(eff, nextSkill.skillName);
-        }
-        else
-        {
-            // Repli : attaque de base si pas de skill ou pas d'effet défini
-            // Formule : attaque de l'ennemi - défense du joueur (pas de valeur de coup de base)
-            int enemyAtk  = enemyData != null ? enemyData.attack : 5;
-            int rawDamage = Mathf.Max(1, enemyAtk - effectiveDefense);
-
-            int armorAbsorbed  = Mathf.Min(currentPlayerArmor, rawDamage);
-            int hpDamage       = rawDamage - armorAbsorbed;
-            currentPlayerArmor = Mathf.Max(0, currentPlayerArmor - armorAbsorbed);
-            currentPlayerHP    = Mathf.Max(0, currentPlayerHP    - hpDamage);
-
-            string armorInfo = armorAbsorbed > 0 ? $" (dont {armorAbsorbed} absorbés par l'armure)" : "";
-            Log($"{GetEnemyName()} attaque — {rawDamage} dégâts{armorInfo} → {currentPlayerHP}/{GetPlayerMaxHP()} HP");
-        }
-
-        UpdateUI();
-        UpdateEnemyNextActionUI(); // met à jour l'affichage de la prochaine action
-
-        if (currentPlayerHP <= 0)
-        {
-            EndCombat(victory: false);
-            yield break;
-        }
-
-        // Décroissance en fin de tour de l'ennemi (debuffs OnTurnEnd sur l'ennemi)
-        DecayStatuses(forEnemy: true, StatusDecayTiming.OnTurnEnd);
-
-        StartPlayerTurn();
+        if (!combatEnded)
+            StartPlayerTurn();
     }
 
     // -----------------------------------------------
     // ACTIONS DU JOUEUR
     // -----------------------------------------------
 
-    /// <summary>
-    /// Le joueur termine son tour manuellement.
-    /// </summary>
     private void OnEndTurn()
     {
         if (battleState != BattleState.PlayerTurn) return;
+
+        // Annule le ciblage si en cours
+        if (isSelectingTarget) CancelTargetSelection();
+
         Log($"{GetPlayerName()} termine son tour.");
-
-        // Décroissance en fin de tour du joueur (debuffs OnTurnEnd comme Affaiblissement)
-        // Placé ici pour que les 3 tours annoncés soient 3 tours complets d'action
-        DecayStatuses(forEnemy: false, StatusDecayTiming.OnTurnEnd);
-
-        // Notifie les modules abonnés à la fin du tour joueur
+        DecayPlayerStatuses(StatusDecayTiming.OnTurnEnd);
         GameEvents.TriggerPlayerTurnEnded();
-
         StartEnemyTurn();
     }
 
-    /// <summary>
-    /// Utilise une compétence. Vérifie énergie et cooldown avant d'appliquer l'effet.
-    /// </summary>
     private void UseSkill(SkillData skill)
     {
         if (battleState != BattleState.PlayerTurn) return;
         if (skill == null) return;
 
-        // Vérifie le cooldown
         if (skillCooldowns.TryGetValue(skill, out int cd) && cd > 0)
         {
             Log($"{skill.skillName} est en cooldown ({cd} tours restants).");
             return;
         }
 
-        // Vérifie l'énergie
         if (currentEnergy < skill.energyCost)
         {
             Log($"Pas assez d'énergie pour {skill.skillName} (coût : {skill.energyCost}).");
             return;
         }
 
-        // Dépense l'énergie
-        currentEnergy -= skill.energyCost;
-
-        // Active le cooldown
-        if (skill.cooldown > 0)
-            skillCooldowns[skill] = skill.cooldown;
-
-        // Applique les effets dans l'ordre
-        if (skill.effects != null && skill.effects.Count > 0)
+        // Si le skill nécessite un ciblage explicite et qu'il y a plusieurs ennemis vivants
+        if (RequiertCiblage(skill))
         {
-            foreach (EffectData eff in skill.effects)
-                if (eff != null) ApplyEffect(eff, skill.skillName);
+            pendingSkill = skill;
+            // On déduit l'énergie et le cooldown maintenant (avant la sélection)
+            currentEnergy -= skill.energyCost;
+            if (skill.cooldown > 0) skillCooldowns[skill] = skill.cooldown;
+            UpdateSkillButtons();
+            UpdatePlayerUI();
+            EnterTargetSelectionMode();
+            return;
         }
+
+        // Exécution directe (AllEnemies, RandomEnemy, Self, ou seul ennemi vivant)
+        currentEnergy -= skill.energyCost;
+        if (skill.cooldown > 0) skillCooldowns[skill] = skill.cooldown;
+
+        if (skill.effects != null && skill.effects.Count > 0)
+            foreach (EffectData eff in skill.effects)
+                if (eff != null) ApplyEffect(eff, skill.skillName, null);
         else
             Log($"{GetPlayerName()} utilise {skill.skillName} — (aucun effet défini)");
 
-        UpdateUI();
+        UpdatePlayerUI();
         UpdateSkillButtons();
-
-        // Vérifie si l'ennemi est mort
-        if (currentEnemyHP <= 0)
-        {
-            EndCombat(victory: true);
-            return;
-        }
     }
 
-    /// <summary>
-    /// Utilise un consommable pendant le tour du joueur.
-    /// Applique son effet via ApplyConsumableEffect (valeurs brutes, sans stats de combat),
-    /// le retire de RunManager, puis recrée les boutons.
-    /// </summary>
     private void UseConsumable(ConsumableData consumable)
     {
         if (battleState != BattleState.PlayerTurn) return;
         if (consumable == null || !consumable.usableInCombat) return;
 
         if (consumable.effects != null && consumable.effects.Count > 0)
-        {
             foreach (EffectData eff in consumable.effects)
                 if (eff != null) ApplyConsumableEffect(eff, consumable.consumableName);
-        }
         else
             Log($"{GetPlayerName()} utilise {consumable.consumableName} — (aucun effet défini)");
 
         RunManager.Instance?.RemoveConsumable(consumable);
-
-        UpdateUI();
-
-        // Vérifie si l'ennemi est mort (ex : consommable offensif)
-        if (currentEnemyHP <= 0)
-        {
-            EndCombat(victory: true);
-            return;
-        }
-
-        // Recrée les boutons depuis RunManager (le consommable utilisé n'y est plus)
+        UpdatePlayerUI();
         SpawnConsumableButtons();
     }
 
     // -----------------------------------------------
-    // RÉSOLUTION DES EFFETS
+    // CIBLAGE (style Slay the Spire)
     // -----------------------------------------------
 
     /// <summary>
-    /// Applique un EffectData en combat.
-    /// Pour l'instant, seules les actions DealDamage et Heal sont implémentées.
-    /// Les autres (ApplyStatus, ModifyStat...) seront ajoutées progressivement.
+    /// Retourne true si le skill contient un effet SingleEnemy ET qu'il y a plus d'un ennemi vivant.
+    /// Si un seul ennemi est vivant, le ciblage est automatique (pas de sélection requise).
     /// </summary>
-    private void ApplyEffect(EffectData effect, string sourceName)
+    private bool RequiertCiblage(SkillData skill)
+    {
+        if (skill?.effects == null) return false;
+        if (GetAliveEnemies().Count <= 1) return false;
+
+        foreach (EffectData eff in skill.effects)
+            if (eff != null && eff.target == EffectTarget.SingleEnemy) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// Active le mode sélection de cible : affiche la flèche, rend les boutons ennemis cliquables.
+    /// </summary>
+    private void EnterTargetSelectionMode()
+    {
+        isSelectingTarget = true;
+
+        if (arrowTransform != null) arrowTransform.gameObject.SetActive(true);
+
+        // Autorise les raycasts sur les ennemis vivants (bloque les clics vers l'arrière-plan)
+        foreach (EnemyInstance e in enemies)
+            if (e.canvasGroup != null) e.canvasGroup.blocksRaycasts = e.IsAlive;
+
+        if (turnText != null) turnText.text = "Choisir une cible...";
+        Log($"{GetPlayerName()} vise avec {pendingSkill?.skillName} — cliquez sur un ennemi.");
+    }
+
+    /// <summary>
+    /// Annule la sélection de cible en cours et rembourse énergie + cooldown.
+    /// </summary>
+    private void CancelTargetSelection()
+    {
+        if (!isSelectingTarget) return;
+        isSelectingTarget = false;
+
+        if (arrowTransform != null) arrowTransform.gameObject.SetActive(false);
+
+        // Rembourse l'énergie et remet le cooldown à 0
+        if (pendingSkill != null)
+        {
+            currentEnergy += pendingSkill.energyCost;
+            skillCooldowns[pendingSkill] = 0;
+            pendingSkill = null;
+        }
+
+        // Désactive les boutons de ciblage ennemis + bloque plus les raycasts
+        foreach (EnemyInstance e in enemies)
+        {
+            if (e.targetButton != null) e.targetButton.interactable = false;
+            if (e.canvasGroup  != null) e.canvasGroup.blocksRaycasts = false;
+        }
+
+        if (turnText != null) turnText.text = "Tour du joueur";
+        UpdatePlayerUI();
+        UpdateSkillButtons();
+    }
+
+    /// <summary>
+    /// Appelé quand le joueur clique sur le bloc UI d'un ennemi en mode sélection.
+    /// </summary>
+    private void OnEnemyCibleClique(EnemyInstance cible)
+    {
+        if (!isSelectingTarget || cible == null || !cible.IsAlive) return;
+
+        isSelectingTarget = false;
+        if (arrowTransform != null) arrowTransform.gameObject.SetActive(false);
+
+        // Désactive les boutons de ciblage ennemis
+        foreach (EnemyInstance e in enemies)
+        {
+            if (e.targetButton != null) e.targetButton.interactable = false;
+            if (e.canvasGroup  != null) e.canvasGroup.blocksRaycasts = false;
+        }
+
+        if (turnText != null) turnText.text = "Tour du joueur";
+
+        SkillData skill = pendingSkill;
+        pendingSkill = null;
+
+        if (skill != null && skill.effects != null)
+        {
+            foreach (EffectData eff in skill.effects)
+                if (eff != null) ApplyEffect(eff, skill.skillName, cible);
+        }
+
+        UpdatePlayerUI();
+        UpdateSkillButtons();
+    }
+
+    /// <summary>
+    /// Met à jour la flèche de ciblage à chaque frame : pointe vers la souris depuis le sprite joueur.
+    /// </summary>
+    private void UpdateTargetingArrow()
+    {
+        if (arrowTransform == null || playerSpriteTransform == null) return;
+
+        Vector2 origin    = playerSpriteTransform.position;  // pixels écran
+        Vector2 mousePos  = Input.mousePosition;              // pixels écran
+        Vector2 direction = mousePos - origin;
+
+        float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
+        arrowTransform.position = origin;
+        arrowTransform.rotation = Quaternion.AngleAxis(angle, Vector3.forward);
+
+        // direction.magnitude est en pixels écran, mais sizeDelta est en unités canvas.
+        // Le scaleFactor convertit : unités canvas × scaleFactor = pixels écran.
+        // → on divise pour que la pointe de la flèche arrive exactement sur la souris.
+        float scaleFactor = (_rootCanvas != null) ? _rootCanvas.scaleFactor : 1f;
+        arrowTransform.sizeDelta = new Vector2(direction.magnitude / scaleFactor, arrowTransform.sizeDelta.y);
+    }
+
+    // -----------------------------------------------
+    // RÉSOLUTION DES EFFETS JOUEUR → ENNEMI(S)
+    // -----------------------------------------------
+
+    /// <summary>
+    /// Applique un EffectData du joueur.
+    /// explicitTarget : ennemi sélectionné explicitement (null = résolution automatique).
+    /// </summary>
+    private void ApplyEffect(EffectData effect, string sourceName, EnemyInstance explicitTarget)
     {
         switch (effect.action)
         {
             case EffectAction.DealDamage:
             {
-                // Formule : (valeur du coup + attaque + modificateurs plats) × multiplicateurs - défense ennemie
-                // La valeur de compétence est incluse dans la multiplication pour que les malus
-                // de stat (ex : Affaiblissement en %) s'appliquent aussi aux dégâts de base.
-                int enemyDef  = enemyData != null ? enemyData.defense : 0;
-                int rawDamage = Mathf.Max(1, CalculerDegatsJoueur(effect.value) - enemyDef);
-
-                // Mise à l'échelle par stacks (optionnel) — bonus appliqué avant le calcul du critique
-                // secondaryValue = bonus de dégâts par stack du scalingStatus sur la cible (l'ennemi ici)
-                string stackInfo = "";
-                if (effect.scalingStatus != null)
-                {
-                    int stacks = GetStatusStacks(effect.scalingStatus, onEnemy: true);
-                    if (stacks > 0)
-                    {
-                        int bonus = Mathf.RoundToInt(effect.secondaryValue * stacks);
-                        rawDamage += bonus;
-
-                        // "dont +12 Explo×6" → le bonus est inclus dans le total affiché, pas additionné
-                        string consumeText = effect.consumeStacks ? " [consommés]" : "";
-                        stackInfo = $", dont +{bonus} {effect.scalingStatus.statusName}×{stacks}{consumeText}";
-
-                        if (effect.consumeStacks)
-                            enemyStatuses.Remove(effect.scalingStatus);
-                    }
-                }
-
-                // Coup critique : tirage aléatoire contre la chance de critique effective (avec modificateurs actifs)
                 float critChance = GetCurrentCritChance();
-                bool isCrit = critChance > 0f && Random.value < critChance;
-                if (isCrit)
-                    rawDamage = Mathf.RoundToInt(rawDamage * GetCurrentCritMultiplier());
+                bool  isCrit     = critChance > 0f && Random.value < critChance;
 
-                // Sécurité : les dégâts ne peuvent pas dépasser 9999 ni être négatifs
-                rawDamage = Mathf.Clamp(rawDamage, 0, 9999);
-
-                // L'armure absorbe les dégâts directs avant les HP
-                int armorAbsorbed = Mathf.Min(currentEnemyArmor, rawDamage);
-                int hpDamage      = rawDamage - armorAbsorbed;
-                currentEnemyArmor = Mathf.Max(0, currentEnemyArmor - armorAbsorbed);
-                currentEnemyHP    = Mathf.Max(0, currentEnemyHP    - hpDamage);
-
-                string critInfo  = isCrit ? " [CRITIQUE !]" : "";
-                string armorInfo = armorAbsorbed > 0 ? $", dont {armorAbsorbed} absorbés par l'armure" : "";
-                // Le total affiché inclut déjà tous les bonus — stackInfo et armorInfo précisent la composition
-                string detailInfo = (stackInfo.Length > 0 || armorInfo.Length > 0)
-                    ? $" ({stackInfo.TrimStart(',', ' ')}{armorInfo})" : "";
-                string logMsg = $"{GetPlayerName()} utilise {sourceName}{critInfo} — {rawDamage} dégâts{detailInfo} → {currentEnemyHP}/{GetEnemyMaxHP()} HP";
-
-                // Notifie les modules abonnés aux dégâts infligés par le joueur
-                if (hpDamage > 0)
-                    GameEvents.TriggerPlayerDealtDamage(hpDamage);
-
-                // Vol de vie : soigne le joueur d'une fraction des HP réellement infligés à l'ennemi
-                // On ne vole que les HP perdus par l'ennemi, pas les dégâts absorbés par l'armure
-                float lifeSteal = GetCurrentLifeSteal();
-                if (lifeSteal > 0f && hpDamage > 0)
+                foreach (EnemyInstance cible in GetEffectTargets(effect.target, explicitTarget))
                 {
-                    int stolen = Mathf.Max(1, Mathf.RoundToInt(hpDamage * lifeSteal));
-                    stolen = Mathf.Min(stolen, GetPlayerMaxHP() - currentPlayerHP);
-                    if (stolen > 0)
-                    {
-                        currentPlayerHP += stolen;
-                        logMsg += $" | Vol de vie +{stolen} HP";
-                    }
+                    AppliquerDegatsEnnemi(cible, effect, sourceName, isCrit);
+                    CheckEnemyDeath(cible);
+                    if (combatEnded) return;
                 }
-
-                Log(logMsg);
                 break;
             }
 
@@ -815,7 +874,6 @@ public class CombatManager : MonoBehaviour
 
             case EffectAction.AddArmor:
             {
-                // Le joueur gagne de l'armure (s'accumule dans le tour, repart à 0 au suivant)
                 int armor = Mathf.RoundToInt(effect.value);
                 currentPlayerArmor += armor;
                 Log($"{GetPlayerName()} utilise {sourceName} — +{armor} armure → {currentPlayerArmor} armure totale");
@@ -824,21 +882,22 @@ public class CombatManager : MonoBehaviour
 
             case EffectAction.ApplyStatus:
             {
-                if (effect.statusToApply == null)
-                {
-                    Log($"{GetPlayerName()} utilise {sourceName} — Aucun statut défini sur cet effet.");
-                    break;
-                }
+                if (effect.statusToApply == null) break;
                 int stacks = Mathf.RoundToInt(effect.value);
-                // Self → applique sur le joueur lui-même, sinon sur l'ennemi
-                bool toEnemy = effect.target != EffectTarget.Self;
-                ApplyStatus(effect.statusToApply, stacks, toEnemy);
+                if (effect.target == EffectTarget.Self)
+                {
+                    ApplyStatusAuJoueur(effect.statusToApply, stacks);
+                }
+                else
+                {
+                    foreach (EnemyInstance cible in GetEffectTargets(effect.target, explicitTarget))
+                        ApplyStatusAEnnemi(cible, effect.statusToApply, stacks);
+                }
                 break;
             }
 
             case EffectAction.ModifyStat:
             {
-                // Modificateur temporaire pour ce combat — s'accumule dans combatStatModifiers
                 float val = effect.value;
                 if (!combatStatModifiers.ContainsKey(effect.statToModify))
                     combatStatModifiers[effect.statToModify] = 0f;
@@ -850,10 +909,9 @@ public class CombatManager : MonoBehaviour
 
             case EffectAction.GainEnergy:
             {
-                int gain     = Mathf.Max(0, Mathf.RoundToInt(effect.value));
                 int maxEnerg = GetCurrentMaxEnergy();
-                int gained   = Mathf.Min(gain, maxEnerg - currentEnergy);
-                currentEnergy = Mathf.Min(currentEnergy + gain, maxEnerg);
+                int gained   = Mathf.Min(Mathf.Max(0, Mathf.RoundToInt(effect.value)), maxEnerg - currentEnergy);
+                currentEnergy = Mathf.Min(currentEnergy + Mathf.RoundToInt(effect.value), maxEnerg);
                 Log($"{GetPlayerName()} utilise {sourceName} — +{gained} énergie → {currentEnergy}/{maxEnerg}");
                 break;
             }
@@ -864,8 +922,7 @@ public class CombatManager : MonoBehaviour
                 if (RunManager.Instance != null)
                 {
                     RunManager.Instance.AddCredits(montant);
-                    string signe = montant >= 0 ? "+" : "";
-                    Log($"{GetPlayerName()} utilise {sourceName} — {signe}{montant} credits → {RunManager.Instance.credits}");
+                    Log($"{GetPlayerName()} utilise {sourceName} — {(montant >= 0 ? "+" : "")}{montant} credits");
                 }
                 break;
             }
@@ -877,95 +934,153 @@ public class CombatManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Applique un effet depuis le point de vue de l'ennemi.
-    /// DealDamage → blesse le joueur. Heal → soigne l'ennemi.
-    /// Séparé de ApplyEffect pour garder chaque méthode lisible et simple.
+    /// Applique des dégâts du joueur sur un ennemi spécifique (helpers pour ApplyEffect).
     /// </summary>
-    private void ApplyEnemyEffect(EffectData effect, string sourceName)
+    private void AppliquerDegatsEnnemi(EnemyInstance ennemi, EffectData effect, string sourceName, bool isCrit)
+    {
+        int enemyDef  = ennemi.data != null ? ennemi.data.defense : 0;
+        int rawDamage = Mathf.Max(1, CalculerDegatsJoueur(effect.value) - enemyDef);
+
+        // Mise à l'échelle par stacks (scalingStatus sur l'ennemi)
+        string stackInfo = "";
+        if (effect.scalingStatus != null)
+        {
+            int stacks = GetEnemyStatusStacks(ennemi, effect.scalingStatus);
+            if (stacks > 0)
+            {
+                int bonus = Mathf.RoundToInt(effect.secondaryValue * stacks);
+                rawDamage += bonus;
+                string consumeText = effect.consumeStacks ? " [consommés]" : "";
+                stackInfo = $", dont +{bonus} {effect.scalingStatus.statusName}×{stacks}{consumeText}";
+                if (effect.consumeStacks) ennemi.statuses.Remove(effect.scalingStatus);
+            }
+        }
+
+        if (isCrit) rawDamage = Mathf.RoundToInt(rawDamage * GetCurrentCritMultiplier());
+        rawDamage = Mathf.Clamp(rawDamage, 0, 9999);
+
+        int armorAbsorbed  = Mathf.Min(ennemi.currentArmor, rawDamage);
+        int hpDamage       = rawDamage - armorAbsorbed;
+        ennemi.currentArmor = Mathf.Max(0, ennemi.currentArmor - armorAbsorbed);
+        ennemi.currentHP    = Mathf.Max(0, ennemi.currentHP    - hpDamage);
+
+        string critInfo   = isCrit ? " [CRITIQUE !]" : "";
+        string armorInfo  = armorAbsorbed > 0 ? $", dont {armorAbsorbed} absorbés par l'armure" : "";
+        string detailInfo = (stackInfo.Length > 0 || armorInfo.Length > 0)
+            ? $" ({stackInfo.TrimStart(',', ' ')}{armorInfo})" : "";
+        Log($"{GetPlayerName()} utilise {sourceName} sur {ennemi.GetName()}{critInfo} — {rawDamage} dégâts{detailInfo} → {ennemi.currentHP}/{ennemi.MaxHP} HP");
+
+        if (hpDamage > 0)
+            GameEvents.TriggerPlayerDealtDamage(hpDamage);
+
+        // Vol de vie
+        float lifeSteal = GetCurrentLifeSteal();
+        if (lifeSteal > 0f && hpDamage > 0)
+        {
+            int stolen = Mathf.Max(1, Mathf.RoundToInt(hpDamage * lifeSteal));
+            stolen = Mathf.Min(stolen, GetPlayerMaxHP() - currentPlayerHP);
+            if (stolen > 0)
+            {
+                currentPlayerHP += stolen;
+                Log($"Vol de vie +{stolen} HP → {currentPlayerHP}/{GetPlayerMaxHP()}");
+            }
+        }
+
+        UpdateEnemyUI(ennemi);
+    }
+
+    // -----------------------------------------------
+    // RÉSOLUTION DES EFFETS ENNEMI → JOUEUR
+    // -----------------------------------------------
+
+    /// <summary>
+    /// Applique un EffectData depuis le point de vue d'un ennemi.
+    /// </summary>
+    private void ApplyEnemyEffect(EffectData effect, string sourceName, EnemyInstance attacker)
     {
         switch (effect.action)
         {
             case EffectAction.DealDamage:
             {
-                // Formule : dégâts = valeur du coup + attaque ennemie - défense effective du joueur (avec modificateurs actifs)
-                int enemyAtk  = enemyData != null ? enemyData.attack : 5;
-                int rawDamage = Mathf.Max(1, Mathf.RoundToInt(effect.value) + enemyAtk - GetCurrentDefense());
+                int atk      = attacker.data != null ? attacker.data.attack : 5;
+                int rawDmg   = Mathf.Max(1, Mathf.RoundToInt(effect.value) + atk - GetCurrentDefense());
 
-                // Mise à l'échelle par stacks (optionnel) — stacks lus sur le joueur (la cible ici)
+                // Mise à l'échelle par stacks (scalingStatus sur le joueur)
                 string stackInfo = "";
                 if (effect.scalingStatus != null)
                 {
-                    int stacks = GetStatusStacks(effect.scalingStatus, onEnemy: false);
+                    int stacks = GetPlayerStatusStacks(effect.scalingStatus);
                     if (stacks > 0)
                     {
                         int bonus = Mathf.RoundToInt(effect.secondaryValue * stacks);
-                        rawDamage += bonus;
-
+                        rawDmg += bonus;
                         string consumeText = effect.consumeStacks ? " [consommés]" : "";
                         stackInfo = $", dont +{bonus} {effect.scalingStatus.statusName}×{stacks}{consumeText}";
-
-                        if (effect.consumeStacks)
-                            playerStatuses.Remove(effect.scalingStatus);
+                        if (effect.consumeStacks) playerStatuses.Remove(effect.scalingStatus);
                     }
                 }
 
-                // Sécurité : les dégâts ne peuvent pas dépasser 9999 ni être négatifs
-                rawDamage = Mathf.Clamp(rawDamage, 0, 9999);
-
-                // L'armure du joueur absorbe les dégâts directs avant les HP
-                int armorAbsorbed = Mathf.Min(currentPlayerArmor, rawDamage);
-                int hpDamage      = rawDamage - armorAbsorbed;
-                currentPlayerArmor = Mathf.Max(0, currentPlayerArmor - armorAbsorbed);
-                currentPlayerHP    = Mathf.Max(0, currentPlayerHP    - hpDamage);
-
-                string armorInfo  = armorAbsorbed > 0 ? $", dont {armorAbsorbed} absorbés par l'armure" : "";
-                string detailInfo = (stackInfo.Length > 0 || armorInfo.Length > 0)
-                    ? $" ({stackInfo.TrimStart(',', ' ')}{armorInfo})" : "";
-                Log($"{GetEnemyName()} utilise {sourceName} — {rawDamage} dégâts{detailInfo} → {currentPlayerHP}/{GetPlayerMaxHP()} HP");
-
-                // Notifie les modules abonnés aux dégâts reçus par le joueur
-                if (hpDamage > 0)
-                    GameEvents.TriggerPlayerDamaged(hpDamage);
-
+                rawDmg = Mathf.Clamp(rawDmg, 0, 9999);
+                AppliquerDegatsAuJoueur(rawDmg, attacker.GetName(), sourceName, stackInfo);
                 break;
             }
 
             case EffectAction.Heal:
             {
-                int healed = Mathf.Min(Mathf.RoundToInt(effect.value), GetEnemyMaxHP() - currentEnemyHP);
-                currentEnemyHP += healed;
-                Log($"{GetEnemyName()} utilise {sourceName} — Soin de {healed} HP → {currentEnemyHP}/{GetEnemyMaxHP()}");
+                int healed = Mathf.Min(Mathf.RoundToInt(effect.value), attacker.MaxHP - attacker.currentHP);
+                if (healed > 0)
+                {
+                    attacker.currentHP += healed;
+                    Log($"{attacker.GetName()} utilise {sourceName} — Soin de {healed} HP → {attacker.currentHP}/{attacker.MaxHP}");
+                    UpdateEnemyUI(attacker);
+                }
                 break;
             }
 
             case EffectAction.AddArmor:
             {
-                // L'ennemi gagne de l'armure
                 int armor = Mathf.RoundToInt(effect.value);
-                currentEnemyArmor += armor;
-                Log($"{GetEnemyName()} utilise {sourceName} — +{armor} armure → {currentEnemyArmor} armure totale");
+                attacker.currentArmor += armor;
+                Log($"{attacker.GetName()} utilise {sourceName} — +{armor} armure");
+                UpdateEnemyUI(attacker);
                 break;
             }
 
             case EffectAction.ApplyStatus:
             {
-                if (effect.statusToApply == null)
-                {
-                    Log($"{GetEnemyName()} utilise {sourceName} — Aucun statut défini sur cet effet.");
-                    break;
-                }
+                if (effect.statusToApply == null) break;
                 int stacks = Mathf.RoundToInt(effect.value);
-                // Ici "Self" = l'ennemi lui-même → toEnemy: true
-                // "SingleEnemy" = le joueur (la cible de l'ennemi) → toEnemy: false
-                bool toEnemy = effect.target == EffectTarget.Self;
-                ApplyStatus(effect.statusToApply, stacks, toEnemy);
+                // Self (depuis l'ennemi) = l'ennemi lui-même, SingleEnemy = le joueur
+                if (effect.target == EffectTarget.Self)
+                    ApplyStatusAEnnemi(attacker, effect.statusToApply, stacks);
+                else
+                    ApplyStatusAuJoueur(effect.statusToApply, stacks);
                 break;
             }
 
             default:
-                Log($"{GetEnemyName()} utilise {sourceName} — Effet '{effect.action}' non encore implémenté.");
+                Log($"{attacker.GetName()} utilise {sourceName} — Effet '{effect.action}' non implémenté pour les ennemis.");
                 break;
         }
+    }
+
+    /// <summary>
+    /// Applique des dégâts bruts au joueur (armure + HP), avec logs.
+    /// </summary>
+    private void AppliquerDegatsAuJoueur(int rawDmg, string sourceName, string skillName, string stackInfo = "")
+    {
+        int armorAbsorbed  = Mathf.Min(currentPlayerArmor, rawDmg);
+        int hpDamage       = rawDmg - armorAbsorbed;
+        currentPlayerArmor = Mathf.Max(0, currentPlayerArmor - armorAbsorbed);
+        currentPlayerHP    = Mathf.Max(0, currentPlayerHP    - hpDamage);
+
+        string armorInfo  = armorAbsorbed > 0 ? $", dont {armorAbsorbed} absorbés par l'armure" : "";
+        string detailInfo = (stackInfo.Length > 0 || armorInfo.Length > 0)
+            ? $" ({stackInfo.TrimStart(',', ' ')}{armorInfo})" : "";
+        Log($"{sourceName} utilise {skillName} — {rawDmg} dégâts{detailInfo} → {currentPlayerHP}/{GetPlayerMaxHP()} HP");
+
+        if (hpDamage > 0)
+            GameEvents.TriggerPlayerDamaged(hpDamage);
     }
 
     // -----------------------------------------------
@@ -973,10 +1088,8 @@ public class CombatManager : MonoBehaviour
     // -----------------------------------------------
 
     /// <summary>
-    /// Applique l'effet d'un consommable avec des valeurs brutes — sans les stats de combat.
-    /// Contrairement à ApplyEffect() (compétences), les dégâts ne tiennent pas compte de
-    /// l'attaque du joueur ni de la défense ennemie : une bombe fait toujours ses X dégâts,
-    /// une potion soigne toujours ses X HP, quelle que soit la build du personnage.
+    /// Applique l'effet d'un consommable — valeurs brutes, sans stats combat.
+    /// DealDamage cible le premier ennemi vivant (consommables offensifs).
     /// </summary>
     private void ApplyConsumableEffect(EffectData effect, string sourceName)
     {
@@ -984,22 +1097,26 @@ public class CombatManager : MonoBehaviour
         {
             case EffectAction.DealDamage:
             {
-                // Dégâts bruts — ni attaque ajoutée, ni défense soustraite, ni critique
+                // Les consommables DealDamage sont bruts — pas de stats, pas de crit
                 int dmg = Mathf.Clamp(Mathf.RoundToInt(effect.value), 0, 9999);
-
-                int armorAbsorbed = Mathf.Min(currentEnemyArmor, dmg);
-                int hpDamage      = dmg - armorAbsorbed;
-                currentEnemyArmor = Mathf.Max(0, currentEnemyArmor - armorAbsorbed);
-                currentEnemyHP    = Mathf.Max(0, currentEnemyHP    - hpDamage);
-
-                string armorInfo = armorAbsorbed > 0 ? $" (dont {armorAbsorbed} absorbés par l'armure)" : "";
-                Log($"{GetPlayerName()} utilise {sourceName} — {dmg} dégâts{armorInfo} → {currentEnemyHP}/{GetEnemyMaxHP()} HP");
+                List<EnemyInstance> cibles = GetEffectTargets(effect.target, GetDefaultTarget());
+                foreach (EnemyInstance cible in cibles)
+                {
+                    int armorAbsorbed  = Mathf.Min(cible.currentArmor, dmg);
+                    int hpDamage       = dmg - armorAbsorbed;
+                    cible.currentArmor = Mathf.Max(0, cible.currentArmor - armorAbsorbed);
+                    cible.currentHP    = Mathf.Max(0, cible.currentHP    - hpDamage);
+                    string armorInfo   = armorAbsorbed > 0 ? $" (dont {armorAbsorbed} absorbés par l'armure)" : "";
+                    Log($"{GetPlayerName()} utilise {sourceName} sur {cible.GetName()} — {dmg} dégâts{armorInfo}");
+                    UpdateEnemyUI(cible);
+                    CheckEnemyDeath(cible);
+                    if (combatEnded) return;
+                }
                 break;
             }
 
             case EffectAction.Heal:
             {
-                // Soin brut — plafonné aux HP max
                 int healed = Mathf.Min(Mathf.RoundToInt(effect.value), GetPlayerMaxHP() - currentPlayerHP);
                 currentPlayerHP += healed;
                 Log($"{GetPlayerName()} utilise {sourceName} — Soin de {healed} HP → {currentPlayerHP}/{GetPlayerMaxHP()}");
@@ -1010,42 +1127,39 @@ public class CombatManager : MonoBehaviour
             {
                 int armor = Mathf.RoundToInt(effect.value);
                 currentPlayerArmor += armor;
-                Log($"{GetPlayerName()} utilise {sourceName} — +{armor} armure → {currentPlayerArmor} armure totale");
+                Log($"{GetPlayerName()} utilise {sourceName} — +{armor} armure");
                 break;
             }
 
             case EffectAction.ApplyStatus:
             {
-                if (effect.statusToApply == null)
-                {
-                    Log($"{GetPlayerName()} utilise {sourceName} — Aucun statut défini sur cet effet.");
-                    break;
-                }
+                if (effect.statusToApply == null) break;
                 int stacks = Mathf.RoundToInt(effect.value);
-                // Self → applique sur le joueur lui-même, sinon sur l'ennemi
-                bool toEnemy = effect.target != EffectTarget.Self;
-                ApplyStatus(effect.statusToApply, stacks, toEnemy);
+                if (effect.target == EffectTarget.Self)
+                    ApplyStatusAuJoueur(effect.statusToApply, stacks);
+                else
+                {
+                    foreach (EnemyInstance cible in GetEffectTargets(effect.target, GetDefaultTarget()))
+                        ApplyStatusAEnnemi(cible, effect.statusToApply, stacks);
+                }
                 break;
             }
 
             case EffectAction.ModifyStat:
             {
-                // Modificateur temporaire pour ce combat
                 float val = effect.value;
                 if (!combatStatModifiers.ContainsKey(effect.statToModify))
                     combatStatModifiers[effect.statToModify] = 0f;
                 combatStatModifiers[effect.statToModify] += val;
-                Log($"{GetPlayerName()} utilise {sourceName} — {effect.statToModify} " +
-                    $"{(val >= 0 ? "+" : "")}{val:F1} (ce combat)");
+                Log($"{GetPlayerName()} utilise {sourceName} — {effect.statToModify} {(val >= 0 ? "+" : "")}{val:F1} (ce combat)");
                 break;
             }
 
             case EffectAction.GainEnergy:
             {
-                int gain     = Mathf.Max(0, Mathf.RoundToInt(effect.value));
                 int maxEnerg = GetCurrentMaxEnergy();
-                int gained   = Mathf.Min(gain, maxEnerg - currentEnergy);
-                currentEnergy = Mathf.Min(currentEnergy + gain, maxEnerg);
+                int gained   = Mathf.Min(Mathf.Max(0, Mathf.RoundToInt(effect.value)), maxEnerg - currentEnergy);
+                currentEnergy = Mathf.Min(currentEnergy + Mathf.RoundToInt(effect.value), maxEnerg);
                 Log($"{GetPlayerName()} utilise {sourceName} — +{gained} énergie → {currentEnergy}/{maxEnerg}");
                 break;
             }
@@ -1056,14 +1170,13 @@ public class CombatManager : MonoBehaviour
                 if (RunManager.Instance != null)
                 {
                     RunManager.Instance.AddCredits(montant);
-                    string signe = montant >= 0 ? "+" : "";
-                    Log($"{GetPlayerName()} utilise {sourceName} — {signe}{montant} credits → {RunManager.Instance.credits}");
+                    Log($"{GetPlayerName()} utilise {sourceName} — {(montant >= 0 ? "+" : "")}{montant} credits");
                 }
                 break;
             }
 
             default:
-                Log($"{GetPlayerName()} utilise {sourceName} — Effet '{effect.action}' non encore implémenté.");
+                Log($"{GetPlayerName()} utilise {sourceName} — Effet '{effect.action}' non encore implémenté (consommable).");
                 break;
         }
     }
@@ -1074,13 +1187,7 @@ public class CombatManager : MonoBehaviour
 
     /// <summary>
     /// Applique l'effet d'un module passif ou déclenché.
-    /// Appelé par ModuleManager quand un trigger correspondant est reçu.
-    ///
-    /// La cible est lue depuis EffectData.target :
-    ///   - Self                               → cible le joueur
-    ///   - SingleEnemy / AllEnemies / Random  → cible l'ennemi
-    ///
-    /// Les dégâts sont bruts — pas d'ATK ajoutée, pas de critique.
+    /// DealDamage cible l'ennemi par défaut (premier vivant).
     /// </summary>
     public void ApplyModuleEffect(EffectData effect, string moduleName)
     {
@@ -1093,16 +1200,20 @@ public class CombatManager : MonoBehaviour
         {
             case EffectAction.DealDamage:
             {
-                // DealDamage cible toujours l'ennemi
                 int dmg = Mathf.Clamp(Mathf.RoundToInt(effect.value), 0, 9999);
-
-                int armorAbsorbed = Mathf.Min(currentEnemyArmor, dmg);
-                int hpDamage      = dmg - armorAbsorbed;
-                currentEnemyArmor = Mathf.Max(0, currentEnemyArmor - armorAbsorbed);
-                currentEnemyHP    = Mathf.Max(0, currentEnemyHP    - hpDamage);
-
-                string armorInfo = armorAbsorbed > 0 ? $" (dont {armorAbsorbed} absorbés par l'armure)" : "";
-                Log($"{source} — {dmg} dégâts{armorInfo} → {currentEnemyHP}/{GetEnemyMaxHP()} HP");
+                List<EnemyInstance> cibles = GetEffectTargets(effect.target, GetDefaultTarget());
+                foreach (EnemyInstance cible in cibles)
+                {
+                    int armorAbsorbed  = Mathf.Min(cible.currentArmor, dmg);
+                    int hpDamage       = dmg - armorAbsorbed;
+                    cible.currentArmor = Mathf.Max(0, cible.currentArmor - armorAbsorbed);
+                    cible.currentHP    = Mathf.Max(0, cible.currentHP    - hpDamage);
+                    string armorInfo   = armorAbsorbed > 0 ? $" (dont {armorAbsorbed} absorbés par l'armure)" : "";
+                    Log($"{source} — {dmg} dégâts{armorInfo} sur {cible.GetName()} → {cible.currentHP}/{cible.MaxHP} HP");
+                    UpdateEnemyUI(cible);
+                    CheckEnemyDeath(cible);
+                    if (combatEnded) return;
+                }
                 break;
             }
 
@@ -1111,19 +1222,15 @@ public class CombatManager : MonoBehaviour
                 if (targetsSelf)
                 {
                     int healed = Mathf.Min(Mathf.RoundToInt(effect.value), GetPlayerMaxHP() - currentPlayerHP);
-                    if (healed > 0)
-                    {
-                        currentPlayerHP += healed;
-                        Log($"{source} — +{healed} HP joueur → {currentPlayerHP}/{GetPlayerMaxHP()}");
-                    }
+                    if (healed > 0) { currentPlayerHP += healed; Log($"{source} — +{healed} HP joueur"); }
                 }
                 else
                 {
-                    int healed = Mathf.Min(Mathf.RoundToInt(effect.value), GetEnemyMaxHP() - currentEnemyHP);
-                    if (healed > 0)
+                    EnemyInstance cible = GetDefaultTarget();
+                    if (cible != null)
                     {
-                        currentEnemyHP += healed;
-                        Log($"{source} — +{healed} HP ennemi → {currentEnemyHP}/{GetEnemyMaxHP()}");
+                        int healed = Mathf.Min(Mathf.RoundToInt(effect.value), cible.MaxHP - cible.currentHP);
+                        if (healed > 0) { cible.currentHP += healed; Log($"{source} — +{healed} HP {cible.GetName()}"); UpdateEnemyUI(cible); }
                     }
                 }
                 break;
@@ -1132,50 +1239,43 @@ public class CombatManager : MonoBehaviour
             case EffectAction.AddArmor:
             {
                 int armor = Mathf.RoundToInt(effect.value);
-                if (targetsSelf)
-                {
-                    currentPlayerArmor += armor;
-                    Log($"{source} — +{armor} armure joueur → {currentPlayerArmor} armure totale");
-                }
+                if (targetsSelf) { currentPlayerArmor += armor; Log($"{source} — +{armor} armure joueur"); }
                 else
                 {
-                    currentEnemyArmor += armor;
-                    Log($"{source} — +{armor} armure ennemi → {currentEnemyArmor} armure totale");
+                    EnemyInstance cible = GetDefaultTarget();
+                    if (cible != null) { cible.currentArmor += armor; Log($"{source} — +{armor} armure {cible.GetName()}"); UpdateEnemyUI(cible); }
                 }
                 break;
             }
 
             case EffectAction.ApplyStatus:
             {
-                if (effect.statusToApply == null)
-                {
-                    Log($"{source} — Aucun statut défini sur cet effet.");
-                    break;
-                }
+                if (effect.statusToApply == null) break;
                 int stacks = Mathf.RoundToInt(effect.value);
-                // Self = applique sur le joueur, sinon sur l'ennemi
-                ApplyStatus(effect.statusToApply, stacks, toEnemy: !targetsSelf);
+                if (targetsSelf)
+                    ApplyStatusAuJoueur(effect.statusToApply, stacks);
+                else
+                {
+                    foreach (EnemyInstance cible in GetEffectTargets(effect.target, GetDefaultTarget()))
+                        ApplyStatusAEnnemi(cible, effect.statusToApply, stacks);
+                }
                 break;
             }
 
             case EffectAction.GainEnergy:
             {
-                int gain     = Mathf.Max(0, Mathf.RoundToInt(effect.value));
                 int maxEnerg = GetCurrentMaxEnergy();
-                int gained   = Mathf.Min(gain, maxEnerg - currentEnergy);
-                currentEnergy = Mathf.Min(currentEnergy + gain, maxEnerg);
+                int gained   = Mathf.Min(Mathf.Max(0, Mathf.RoundToInt(effect.value)), maxEnerg - currentEnergy);
+                currentEnergy = Mathf.Min(currentEnergy + Mathf.RoundToInt(effect.value), maxEnerg);
                 Log($"{source} — +{gained} énergie → {currentEnergy}/{maxEnerg}");
                 break;
             }
 
             case EffectAction.ModifyStat:
             {
-                // Les modules ajoutent un bonus PERMANENT sur le run (via RunManager)
-                // Le bonus sera intégré aux stats effectives au prochain ResolveEquipment()
                 if (RunManager.Instance != null)
                 {
                     RunManager.Instance.AddStatBonus(effect.statToModify, effect.value);
-                    // Applique aussi immédiatement à la stat effective de ce combat
                     switch (effect.statToModify)
                     {
                         case StatType.Attack:             effectiveAttack             += Mathf.RoundToInt(effect.value); break;
@@ -1197,8 +1297,7 @@ public class CombatManager : MonoBehaviour
                 if (RunManager.Instance != null)
                 {
                     RunManager.Instance.AddCredits(montant);
-                    string signe = montant >= 0 ? "+" : "";
-                    Log($"{source} — {signe}{montant} credits → {RunManager.Instance.credits}");
+                    Log($"{source} — {(montant >= 0 ? "+" : "")}{montant} credits");
                 }
                 break;
             }
@@ -1208,269 +1307,260 @@ public class CombatManager : MonoBehaviour
                 break;
         }
 
-        // Met à jour l'UI et vérifie si l'ennemi est mort suite à l'effet du module
-        UpdateUI();
-        if (currentEnemyHP <= 0 && battleState == BattleState.PlayerTurn)
-            EndCombat(victory: true);
+        UpdatePlayerUI();
+    }
+
+    // -----------------------------------------------
+    // HELPERS DE CIBLAGE
+    // -----------------------------------------------
+
+    /// <summary>
+    /// Retourne la liste des EnemyInstance à cibler selon le EffectTarget.
+    /// explicitTarget : ennemi sélectionné manuellement (pour SingleEnemy).
+    /// </summary>
+    private List<EnemyInstance> GetEffectTargets(EffectTarget target, EnemyInstance explicitTarget)
+    {
+        List<EnemyInstance> vivants = GetAliveEnemies();
+        switch (target)
+        {
+            case EffectTarget.SingleEnemy:
+                // Cible explicite si fournie, sinon premier vivant (cas 1 ennemi restant)
+                EnemyInstance cible = (explicitTarget != null && explicitTarget.IsAlive)
+                    ? explicitTarget
+                    : (vivants.Count > 0 ? vivants[0] : null);
+                return cible != null ? new List<EnemyInstance> { cible } : new List<EnemyInstance>();
+
+            case EffectTarget.AllEnemies:
+                return vivants;
+
+            case EffectTarget.RandomEnemy:
+                if (vivants.Count == 0) return new List<EnemyInstance>();
+                return new List<EnemyInstance> { vivants[Random.Range(0, vivants.Count)] };
+
+            default: // Self, etc.
+                return new List<EnemyInstance>();
+        }
+    }
+
+    /// <summary>
+    /// Retourne le premier ennemi vivant (cible par défaut pour modules et consommables).
+    /// </summary>
+    private EnemyInstance GetDefaultTarget()
+    {
+        foreach (EnemyInstance e in enemies)
+            if (e.IsAlive) return e;
+        return null;
+    }
+
+    /// <summary>Retourne la liste des ennemis encore en vie.</summary>
+    private List<EnemyInstance> GetAliveEnemies()
+    {
+        List<EnemyInstance> vivants = new List<EnemyInstance>();
+        foreach (EnemyInstance e in enemies)
+            if (e.IsAlive) vivants.Add(e);
+        return vivants;
     }
 
     // -----------------------------------------------
     // STATUTS
     // -----------------------------------------------
 
-    /// <summary>
-    /// Applique un nombre de stacks d'un statut à une entité (joueur ou ennemi).
-    /// Respecte le plafond maxStacks si défini (> 0 dans StatusData).
-    /// </summary>
-    private void ApplyStatus(StatusData status, int stacks, bool toEnemy)
+    private void ApplyStatusAuJoueur(StatusData status, int stacks)
     {
         if (status == null || stacks <= 0) return;
-
-        Dictionary<StatusData, int> target = toEnemy ? enemyStatuses : playerStatuses;
-        string entityName = toEnemy ? GetEnemyName() : GetPlayerName();
-
-        if (!target.ContainsKey(status))
-            target[status] = 0;
-
-        target[status] += stacks;
-
-        // Plafonne les stacks si maxStacks est défini
-        if (status.maxStacks > 0)
-            target[status] = Mathf.Min(target[status], status.maxStacks);
-
-        Log($"{entityName} reçoit {stacks} stack(s) de {status.statusName} " +
-            $"→ {target[status]} stack(s) au total");
+        if (!playerStatuses.ContainsKey(status)) playerStatuses[status] = 0;
+        playerStatuses[status] += stacks;
+        if (status.maxStacks > 0) playerStatuses[status] = Mathf.Min(playerStatuses[status], status.maxStacks);
+        Log($"{GetPlayerName()} reçoit {stacks} stack(s) de {status.statusName} → {playerStatuses[status]} total");
     }
 
-    /// <summary>
-    /// Retourne le nombre de stacks actifs d'un statut sur une entité.
-    /// Renvoie 0 si le statut n'est pas présent.
-    /// </summary>
-    private int GetStatusStacks(StatusData status, bool onEnemy)
+    private void ApplyStatusAEnnemi(EnemyInstance ennemi, StatusData status, int stacks)
+    {
+        if (status == null || stacks <= 0 || ennemi == null) return;
+        if (!ennemi.statuses.ContainsKey(status)) ennemi.statuses[status] = 0;
+        ennemi.statuses[status] += stacks;
+        if (status.maxStacks > 0) ennemi.statuses[status] = Mathf.Min(ennemi.statuses[status], status.maxStacks);
+        Log($"{ennemi.GetName()} reçoit {stacks} stack(s) de {status.statusName} → {ennemi.statuses[status]} total");
+    }
+
+    private int GetPlayerStatusStacks(StatusData status)
     {
         if (status == null) return 0;
-        Dictionary<StatusData, int> source = onEnemy ? enemyStatuses : playerStatuses;
-        return source.TryGetValue(status, out int stacks) ? stacks : 0;
+        return playerStatuses.TryGetValue(status, out int s) ? s : 0;
     }
 
-    /// <summary>
-    /// Exécute les effets automatiques de comportement PerTurnStart (poison, soin par tour, etc.)
-    /// pour une entité. N'applique PAS la décroissance — voir DecayStatuses().
-    ///
-    /// Les statuts StackOnly et ModifyStat sont ignorés ici : ils n'ont pas d'effet automatique,
-    /// ils sont consultés à la demande (StackOnly) ou calculés dynamiquement (ModifyStat).
-    /// </summary>
-    private void ApplyPerTurnEffects(bool forEnemy)
+    private int GetEnemyStatusStacks(EnemyInstance ennemi, StatusData status)
     {
-        Dictionary<StatusData, int> statuses = forEnemy ? enemyStatuses : playerStatuses;
-        if (statuses.Count == 0) return;
+        if (status == null || ennemi == null) return 0;
+        return ennemi.statuses.TryGetValue(status, out int s) ? s : 0;
+    }
 
-        List<StatusData> keys = new List<StatusData>(statuses.Keys);
-
+    private void ApplyPlayerPerTurnEffects()
+    {
+        if (playerStatuses.Count == 0) return;
+        List<StatusData> keys = new List<StatusData>(playerStatuses.Keys);
         foreach (StatusData status in keys)
         {
-            if (!statuses.ContainsKey(status)) continue;
-            int stacks = statuses[status];
-            if (stacks <= 0) continue;
-            if (status.behavior != StatusBehavior.PerTurnStart) continue;
+            if (!playerStatuses.ContainsKey(status)) continue;
+            int stacks = playerStatuses[status];
+            if (stacks <= 0 || status.behavior != StatusBehavior.PerTurnStart) continue;
 
             float totalEffect = status.effectPerStack * stacks;
-            string entityName = forEnemy ? GetEnemyName() : GetPlayerName();
-
             switch (status.perTurnAction)
             {
                 case EffectAction.DealDamage:
-                {
-                    // Dégâts bruts — ignorent l'armure (comportement type poison dans Slay the Spire)
                     int dmg = Mathf.Max(1, Mathf.RoundToInt(totalEffect));
-                    if (forEnemy)
-                        currentEnemyHP = Mathf.Max(0, currentEnemyHP - dmg);
-                    else
-                        currentPlayerHP = Mathf.Max(0, currentPlayerHP - dmg);
-
-                    Log($"{entityName} subit {dmg} dégâts de {status.statusName} ({stacks} stack(s))");
+                    currentPlayerHP = Mathf.Max(0, currentPlayerHP - dmg);
+                    Log($"{GetPlayerName()} subit {dmg} dégâts de {status.statusName} ({stacks} stack(s))");
                     break;
-                }
-
                 case EffectAction.Heal:
-                {
-                    int healed;
-                    if (forEnemy)
-                    {
-                        healed = Mathf.Min(Mathf.RoundToInt(totalEffect), GetEnemyMaxHP() - currentEnemyHP);
-                        currentEnemyHP += healed;
-                    }
-                    else
-                    {
-                        healed = Mathf.Min(Mathf.RoundToInt(totalEffect), GetPlayerMaxHP() - currentPlayerHP);
-                        currentPlayerHP += healed;
-                    }
-                    Log($"{entityName} récupère {healed} HP grâce à {status.statusName} ({stacks} stack(s))");
-                    break;
-                }
-
-                default:
-                    Log($"{status.statusName} — action automatique '{status.perTurnAction}' non implémentée.");
+                    int healed = Mathf.Min(Mathf.RoundToInt(totalEffect), GetPlayerMaxHP() - currentPlayerHP);
+                    currentPlayerHP += healed;
+                    Log($"{GetPlayerName()} récupère {healed} HP grâce à {status.statusName}");
                     break;
             }
         }
     }
 
-    /// <summary>
-    /// Applique la décroissance (decayPerTurn) des statuts d'une entité dont le timing
-    /// correspond au paramètre. Appelé deux fois par cycle complet :
-    ///   - En début de tour (timing OnTurnStart) : comportement par défaut — pour le poison, etc.
-    ///   - En fin de tour  (timing OnTurnEnd)    : pour les debuffs qui durent le nombre de tours annoncé.
-    ///
-    /// La durée effective d'un statut OnTurnEnd appliqué au tour T est T, T+1, T+2 ... complets.
-    /// </summary>
-    private void DecayStatuses(bool forEnemy, StatusDecayTiming timing)
+    private void ApplyEnemyPerTurnEffects(EnemyInstance ennemi)
     {
-        Dictionary<StatusData, int> statuses = forEnemy ? enemyStatuses : playerStatuses;
-        if (statuses.Count == 0) return;
-
-        List<StatusData> keys = new List<StatusData>(statuses.Keys);
-
+        if (ennemi.statuses.Count == 0) return;
+        List<StatusData> keys = new List<StatusData>(ennemi.statuses.Keys);
         foreach (StatusData status in keys)
         {
-            if (!statuses.ContainsKey(status)) continue;
-            if (status.decayPerTurn <= 0) continue;
-            if (status.decayTiming != timing) continue;
+            if (!ennemi.statuses.ContainsKey(status)) continue;
+            int stacks = ennemi.statuses[status];
+            if (stacks <= 0 || status.behavior != StatusBehavior.PerTurnStart) continue;
 
-            int stacks = statuses[status];
-            if (stacks <= 0) continue;
-
-            statuses[status] = Mathf.Max(0, stacks - status.decayPerTurn);
-            if (statuses[status] == 0)
+            float totalEffect = status.effectPerStack * stacks;
+            switch (status.perTurnAction)
             {
-                string entityName = forEnemy ? GetEnemyName() : GetPlayerName();
-                Log($"{entityName} n'a plus de {status.statusName}");
+                case EffectAction.DealDamage:
+                    int dmg = Mathf.Max(1, Mathf.RoundToInt(totalEffect));
+                    ennemi.currentHP = Mathf.Max(0, ennemi.currentHP - dmg);
+                    Log($"{ennemi.GetName()} subit {dmg} dégâts de {status.statusName} ({stacks} stack(s))");
+                    break;
+                case EffectAction.Heal:
+                    int healed = Mathf.Min(Mathf.RoundToInt(totalEffect), ennemi.MaxHP - ennemi.currentHP);
+                    ennemi.currentHP += healed;
+                    Log($"{ennemi.GetName()} récupère {healed} HP grâce à {status.statusName}");
+                    break;
             }
         }
+    }
 
-        // Nettoie les entrées à 0 stacks
+    private void DecayPlayerStatuses(StatusDecayTiming timing)
+    {
+        if (playerStatuses.Count == 0) return;
+        List<StatusData> keys = new List<StatusData>(playerStatuses.Keys);
+        foreach (StatusData status in keys)
+        {
+            if (!playerStatuses.ContainsKey(status) || status.decayPerTurn <= 0) continue;
+            if (status.decayTiming != timing) continue;
+            playerStatuses[status] = Mathf.Max(0, playerStatuses[status] - status.decayPerTurn);
+            if (playerStatuses[status] == 0) Log($"{GetPlayerName()} n'a plus de {status.statusName}");
+        }
         List<StatusData> toRemove = new List<StatusData>();
-        foreach (var kvp in statuses)
-            if (kvp.Value <= 0) toRemove.Add(kvp.Key);
-        foreach (StatusData key in toRemove)
-            statuses.Remove(key);
+        foreach (var kvp in playerStatuses) if (kvp.Value <= 0) toRemove.Add(kvp.Key);
+        foreach (StatusData key in toRemove) playerStatuses.Remove(key);
+    }
+
+    private void DecayEnemyStatuses(EnemyInstance ennemi, StatusDecayTiming timing)
+    {
+        if (ennemi.statuses.Count == 0) return;
+        List<StatusData> keys = new List<StatusData>(ennemi.statuses.Keys);
+        foreach (StatusData status in keys)
+        {
+            if (!ennemi.statuses.ContainsKey(status) || status.decayPerTurn <= 0) continue;
+            if (status.decayTiming != timing) continue;
+            ennemi.statuses[status] = Mathf.Max(0, ennemi.statuses[status] - status.decayPerTurn);
+            if (ennemi.statuses[status] == 0) Log($"{ennemi.GetName()} n'a plus de {status.statusName}");
+        }
+        List<StatusData> toRemove = new List<StatusData>();
+        foreach (var kvp in ennemi.statuses) if (kvp.Value <= 0) toRemove.Add(kvp.Key);
+        foreach (StatusData key in toRemove) ennemi.statuses.Remove(key);
     }
 
     // -----------------------------------------------
-    // STATS DYNAMIQUES (effectives + modificateurs actifs)
+    // MORT D'UN ENNEMI
     // -----------------------------------------------
 
     /// <summary>
-    /// Calcule les dégâts bruts du joueur (avant défense ennemie et critique) en incluant
-    /// la valeur de compétence dans le calcul multiplicatif.
-    ///
-    /// Formule : (skillValue + effectiveAttack + modificateurs plats) × (1 + modificateurs %)
-    ///
-    /// Inclure skillValue dans la multiplication garantit que les malus en pourcentage
-    /// (ex : Affaiblissement −50%) s'appliquent aussi aux dégâts de base de la compétence,
-    /// et pas uniquement au bonus d'attaque.
+    /// Appelé après chaque modification des HP d'un ennemi.
+    /// Gère les événements de mort et vérifie si le combat est terminé.
     /// </summary>
+    private void CheckEnemyDeath(EnemyInstance ennemi)
+    {
+        if (combatEnded || ennemi == null || ennemi.currentHP > 0) return;
+
+        Log($"{ennemi.GetName()} est vaincu !");
+
+        // Désactive le bouton de ciblage
+        if (ennemi.targetButton != null) ennemi.targetButton.interactable = false;
+
+        // Déclenche les événements de mort pour les modules
+        GameEvents.TriggerEnemyDied();
+
+        // Recharge les cooldowns de nav liés aux tags de l'ennemi
+        if (ennemi.data?.tags != null && ennemi.data.tags.Count > 0 && RunManager.Instance != null)
+            RunManager.Instance.TickCooldownsAvecTag(ennemi.data.tags);
+
+        // Tous les ennemis morts → victoire
+        if (AllEnemiesDead())
+            EndCombat(victory: true);
+    }
+
+    private bool AllEnemiesDead()
+    {
+        foreach (EnemyInstance e in enemies)
+            if (e.IsAlive) return false;
+        return true;
+    }
+
+    // -----------------------------------------------
+    // STATS DYNAMIQUES
+    // -----------------------------------------------
+
     private int CalculerDegatsJoueur(float skillValue)
     {
         var (flat, pct) = GetPlayerStatModifiers(StatType.Attack);
         return Mathf.Max(0, Mathf.RoundToInt((skillValue + effectiveAttack + flat) * (1f + pct)));
     }
 
-    /// <summary>
-    /// Calcule les modificateurs plats et en pourcentage actifs pour une stat du joueur.
-    /// Somme les combatStatModifiers (skills/consommables) ET les statuts ModifyStat actifs.
-    /// </summary>
     private (float flat, float pct) GetPlayerStatModifiers(StatType stat)
     {
         float flat = 0f, pct = 0f;
-
-        // Modificateurs directs (skills, consommables en combat)
         if (combatStatModifiers.TryGetValue(stat, out float directMod))
             flat += directMod;
-
-        // Statuts actifs de type ModifyStat sur le joueur
         foreach (var kvp in playerStatuses)
         {
             StatusData status = kvp.Key;
             int stacks = kvp.Value;
-            if (stacks <= 0 || status == null) continue;
-            if (status.behavior != StatusBehavior.ModifyStat) continue;
+            if (stacks <= 0 || status == null || status.behavior != StatusBehavior.ModifyStat) continue;
             if (status.statToModify != stat) continue;
-
-            // valueScalesWithStacks = true  → valeur variable (cas 3)
-            // valueScalesWithStacks = false → valeur fixe, stacks = durée (cas 2)
-            float amount = status.valueScalesWithStacks
-                ? status.effectPerStack * stacks
-                : status.effectPerStack;
-
-            if (status.statModifierType == StatModifierType.Percentage)
-                pct += amount;
-            else
-                flat += amount;
+            float amount = status.valueScalesWithStacks ? status.effectPerStack * stacks : status.effectPerStack;
+            if (status.statModifierType == StatModifierType.Percentage) pct += amount;
+            else flat += amount;
         }
-
         return (flat, pct);
     }
 
-    /// <summary>Attaque effective incluant les modificateurs actifs du combat.</summary>
-    private int GetCurrentAttack()
-    {
-        var (flat, pct) = GetPlayerStatModifiers(StatType.Attack);
-        return Mathf.Max(0, Mathf.RoundToInt((effectiveAttack + flat) * (1f + pct)));
-    }
-
-    /// <summary>Défense effective incluant les modificateurs actifs du combat.</summary>
-    private int GetCurrentDefense()
-    {
-        var (flat, pct) = GetPlayerStatModifiers(StatType.Defense);
-        return Mathf.Max(0, Mathf.RoundToInt((effectiveDefense + flat) * (1f + pct)));
-    }
-
-    /// <summary>Chance de critique effective incluant les modificateurs actifs du combat.</summary>
-    private float GetCurrentCritChance()
-    {
-        var (flat, pct) = GetPlayerStatModifiers(StatType.CriticalChance);
-        return Mathf.Clamp01((effectiveCriticalChance + flat) * (1f + pct));
-    }
-
-    /// <summary>Multiplicateur de critique effectif incluant les modificateurs actifs du combat.</summary>
-    private float GetCurrentCritMultiplier()
-    {
-        var (flat, pct) = GetPlayerStatModifiers(StatType.CriticalMultiplier);
-        return Mathf.Max(1f, (effectiveCriticalMultiplier + flat) * (1f + pct));
-    }
-
-    /// <summary>Vol de vie effectif incluant les modificateurs actifs du combat.</summary>
-    private float GetCurrentLifeSteal()
-    {
-        var (flat, pct) = GetPlayerStatModifiers(StatType.LifeSteal);
-        return Mathf.Clamp01((effectiveLifeSteal + flat) * (1f + pct));
-    }
-
-    /// <summary>Énergie max effective incluant les modificateurs actifs du combat.</summary>
-    private int GetCurrentMaxEnergy()
-    {
-        var (flat, pct) = GetPlayerStatModifiers(StatType.MaxEnergy);
-        return Mathf.Max(1, Mathf.RoundToInt((effectiveMaxEnergy + flat) * (1f + pct)));
-    }
+    private int   GetCurrentAttack()        { var (f,p) = GetPlayerStatModifiers(StatType.Attack);             return Mathf.Max(0, Mathf.RoundToInt((effectiveAttack + f) * (1f + p))); }
+    private int   GetCurrentDefense()       { var (f,p) = GetPlayerStatModifiers(StatType.Defense);            return Mathf.Max(0, Mathf.RoundToInt((effectiveDefense + f) * (1f + p))); }
+    private float GetCurrentCritChance()    { var (f,p) = GetPlayerStatModifiers(StatType.CriticalChance);     return Mathf.Clamp01((effectiveCriticalChance + f) * (1f + p)); }
+    private float GetCurrentCritMultiplier(){ var (f,p) = GetPlayerStatModifiers(StatType.CriticalMultiplier); return Mathf.Max(1f, (effectiveCriticalMultiplier + f) * (1f + p)); }
+    private float GetCurrentLifeSteal()     { var (f,p) = GetPlayerStatModifiers(StatType.LifeSteal);          return Mathf.Clamp01((effectiveLifeSteal + f) * (1f + p)); }
+    private int   GetCurrentMaxEnergy()     { var (f,p) = GetPlayerStatModifiers(StatType.MaxEnergy);          return Mathf.Max(1, Mathf.RoundToInt((effectiveMaxEnergy + f) * (1f + p))); }
 
     // -----------------------------------------------
     // COOLDOWNS
     // -----------------------------------------------
 
-    /// <summary>
-    /// Décrémente tous les cooldowns actifs de 1 au début du tour joueur.
-    /// </summary>
     private void DecrementCooldowns()
     {
-        // On ne peut pas modifier un Dictionary pendant qu'on l'itère —
-        // on collecte d'abord les clés, puis on les modifie.
         List<SkillData> keys = new List<SkillData>(skillCooldowns.Keys);
         foreach (SkillData skill in keys)
-        {
-            if (skillCooldowns[skill] > 0)
-                skillCooldowns[skill]--;
-        }
+            if (skillCooldowns[skill] > 0) skillCooldowns[skill]--;
     }
 
     // -----------------------------------------------
@@ -1479,47 +1569,55 @@ public class CombatManager : MonoBehaviour
 
     private void OnVictoireCheat()
     {
-        currentEnemyHP = 0;
-        UpdateUI();
-        Log("(Cheat) Ennemi éliminé instantanément.");
+        foreach (EnemyInstance e in enemies) e.currentHP = 0;
+        foreach (EnemyInstance e in enemies) UpdateEnemyUI(e);
+        Log("(Cheat) Tous les ennemis éliminés instantanément.");
         EndCombat(victory: true);
     }
 
     private void EndCombat(bool victory)
     {
+        if (combatEnded) return;
+        combatEnded = true;
+
+        // Annule le ciblage si en cours
+        if (isSelectingTarget)
+        {
+            isSelectingTarget = false;
+            if (arrowTransform != null) arrowTransform.gameObject.SetActive(false);
+            foreach (EnemyInstance e in enemies)
+            {
+                if (e.targetButton != null) e.targetButton.interactable = false;
+                if (e.canvasGroup  != null) e.canvasGroup.blocksRaycasts = false;
+            }
+        }
+
         battleState = victory ? BattleState.Victory : BattleState.Defeat;
 
         if (endTurnButton != null) endTurnButton.interactable = false;
-        foreach (SkillButton sb in spawnedSkillButtons)
-            sb.SetInteractable(false);
-        foreach (ConsumableButton cb in spawnedConsumableButtons)
-            cb.SetInteractable(false);
+        foreach (SkillButton   sb in spawnedSkillButtons)      sb.SetInteractable(false);
+        foreach (ConsumableButton cb in spawnedConsumableButtons) cb.SetInteractable(false);
 
         if (combatActivePanel != null) combatActivePanel.SetActive(false);
 
         if (victory)
         {
-            // Notifie les modules abonnés à la mort de l'ennemi
-            GameEvents.TriggerEnemyDied();
+            // Crédits de loot
+            int totalCredits = currentGroup != null
+                ? currentGroup.creditsLoot
+                : enemies.Sum(e => e.data?.creditsLoot ?? 0);
 
-            // Recharge les skills de navigation en attente d'un kill avec tag spécifique
-            if (RunManager.Instance != null && enemyData?.tags != null && enemyData.tags.Count > 0)
-                RunManager.Instance.TickCooldownsAvecTag(enemyData.tags);
-
-            // Attribue les crédits de loot de l'ennemi
-            if (RunManager.Instance != null && enemyData != null && enemyData.creditsLoot > 0)
+            if (RunManager.Instance != null && totalCredits > 0)
             {
-                RunManager.Instance.AddCredits(enemyData.creditsLoot);
-                Log($"Loot — +{enemyData.creditsLoot} credits → {RunManager.Instance.credits} total");
+                RunManager.Instance.AddCredits(totalCredits);
+                Log($"Loot — +{totalCredits} credits → {RunManager.Instance.credits} total");
             }
 
-            // Victoire → panel de loot avant de continuer
             ShowLootPanel();
             Log("Combat terminé — Victoire !");
         }
         else
         {
-            // Défaite → panel de fin classique
             if (endPanel      != null) endPanel.SetActive(true);
             if (endTitleText  != null) endTitleText.text  = "Défaite...";
             if (endButtonText != null) endButtonText.text = "Retour au menu";
@@ -1527,7 +1625,6 @@ public class CombatManager : MonoBehaviour
         }
     }
 
-    // Appelé par le bouton "Continuer" du panel de loot (victoire)
     private void OnLootContinueClicked()
     {
         if (RunManager.Instance != null)
@@ -1535,7 +1632,6 @@ public class CombatManager : MonoBehaviour
             RunManager.Instance.currentHP = currentPlayerHP;
             RunManager.Instance.maxHP     = GetPlayerMaxHP();
 
-            // Victoire sur le boss → fin de run, retour au menu principal
             if (RunManager.Instance.currentCellType == CellType.Boss)
             {
                 Log("Boss vaincu — fin de la run.");
@@ -1552,13 +1648,10 @@ public class CombatManager : MonoBehaviour
         SceneLoader.Instance.GoToNavigation();
     }
 
-    // Appelé par le bouton du panel de fin (défaite uniquement)
     private void OnEndButtonClicked()
     {
         if (battleState == BattleState.Defeat)
         {
-            // Signaler au RunManager que la run est terminée
-            // pour que le MainMenu grise correctement "Continuer"
             RunManager.Instance?.EndRun();
             SceneLoader.Instance.GoToMainMenu();
         }
@@ -1568,23 +1661,13 @@ public class CombatManager : MonoBehaviour
     // LOOT
     // -----------------------------------------------
 
-    /// <summary>
-    /// Affiche le panel de loot avec 2-3 pièces tirées au hasard dans le lootPool de l'ennemi.
-    /// Délègue l'affichage des cartes et la résolution à EquipmentOfferController.
-    /// Le bouton "Continuer" est toujours actif : le joueur peut ignorer le loot.
-    /// </summary>
     private void ShowLootPanel()
     {
         if (lootPanel == null) return;
         lootPanel.SetActive(true);
 
-        // Tente d'accorder un consommable depuis le pool de l'ennemi (si slot libre)
-        // Fait avant l'affichage des cartes pour que le log soit cohérent
         TryGrantConsumableLoot();
 
-        // Le bouton "Continuer" est toujours visible et cliquable dès l'ouverture du panel.
-        // SetActive(true) est nécessaire en plus de interactable : si le bouton est enfant de
-        // EquipmentOfferArea (désactivé par Awake), il reste invisible sans ce SetActive explicite.
         if (lootContinueButton != null)
         {
             lootContinueButton.gameObject.SetActive(true);
@@ -1593,23 +1676,44 @@ public class CombatManager : MonoBehaviour
 
         List<EquipmentData> offers = PickLootOffers();
         if (offers.Count == 0 || equipmentOfferController == null) return;
-
-        // Délègue l'affichage et la résolution au controller partagé
-        // Callback null : "Continuer" était déjà actif, aucune action supplémentaire requise
         equipmentOfferController.StartOffresSimultanées(offers, null);
     }
 
     /// <summary>
-    /// Tire aléatoirement lootOfferCount pièces dans le lootPool de l'ennemi.
-    /// Si le pool contient moins de pièces que le nombre demandé, toutes sont retournées.
+    /// Résout les offres d'équipement dans l'ordre de priorité :
+    ///   EnemyGroup.lootPool > EnemyData.lootPool > MapData.defaultCombatLootTable
     /// </summary>
     private List<EquipmentData> PickLootOffers()
     {
-        if (enemyData == null || enemyData.lootPool == null || enemyData.lootPool.Count == 0)
-            return new List<EquipmentData>();
+        List<EquipmentData> pool       = null;
+        int                 offerCount = 2;
 
-        // Copie du pool pour pouvoir le mélanger sans le modifier
-        List<EquipmentData> pool = new List<EquipmentData>(enemyData.lootPool);
+        if (currentGroup != null && currentGroup.lootPool != null && currentGroup.lootPool.Count > 0)
+        {
+            pool       = new List<EquipmentData>(currentGroup.lootPool);
+            offerCount = currentGroup.lootOfferCount;
+        }
+        else if (enemies.Count == 1 && enemies[0].data?.lootPool != null && enemies[0].data.lootPool.Count > 0)
+        {
+            pool       = new List<EquipmentData>(enemies[0].data.lootPool);
+            offerCount = enemies[0].data.lootOfferCount;
+        }
+        else if (RunManager.Instance?.currentMapData?.defaultCombatLootTable != null)
+        {
+            // Fallback MapData : on tire offerCount fois depuis la table
+            EquipmentLootTable table = RunManager.Instance.currentMapData.defaultCombatLootTable;
+            int count = RunManager.Instance.currentMapData.defaultLootOfferCount;
+            List<EquipmentData> fallbackOffers = new List<EquipmentData>();
+            for (int i = 0; i < count; i++)
+            {
+                EquipmentData item = table.GetRandom();
+                if (item != null && !fallbackOffers.Contains(item))
+                    fallbackOffers.Add(item);
+            }
+            return fallbackOffers;
+        }
+
+        if (pool == null || pool.Count == 0) return new List<EquipmentData>();
 
         // Mélange Fisher-Yates
         for (int i = pool.Count - 1; i > 0; i--)
@@ -1617,94 +1721,65 @@ public class CombatManager : MonoBehaviour
             int j = Random.Range(0, i + 1);
             (pool[i], pool[j]) = (pool[j], pool[i]);
         }
-
-        int count = Mathf.Min(enemyData.lootOfferCount, pool.Count);
-        return pool.GetRange(0, count);
+        return pool.GetRange(0, Mathf.Min(offerCount, pool.Count));
     }
 
-    /// <summary>
-    /// Accorde automatiquement un consommable aléatoire tiré dans consumableLootPool de l'ennemi,
-    /// mais uniquement si le joueur a un slot libre.
-    /// Un seul consommable est accordé par victoire — pas de choix proposé au joueur.
-    /// </summary>
     private void TryGrantConsumableLoot()
     {
-        if (enemyData == null
-            || enemyData.consumableLootPool == null
-            || enemyData.consumableLootPool.Count == 0) return;
-
         if (RunManager.Instance == null || !RunManager.Instance.HasConsumableSlotFree()) return;
 
-        // Tire un consommable aléatoire dans le pool
-        int index = Random.Range(0, enemyData.consumableLootPool.Count);
-        ConsumableData granted = enemyData.consumableLootPool[index];
-        if (granted == null) return;
+        List<ConsumableData> consPool = null;
+        if (currentGroup != null && currentGroup.consumableLootPool != null && currentGroup.consumableLootPool.Count > 0)
+            consPool = currentGroup.consumableLootPool;
+        else if (enemies.Count == 1 && enemies[0].data?.consumableLootPool != null && enemies[0].data.consumableLootPool.Count > 0)
+            consPool = enemies[0].data.consumableLootPool;
 
-        bool added = RunManager.Instance.AddConsumable(granted);
-        if (added)
+        if (consPool == null || consPool.Count == 0) return;
+
+        ConsumableData granted = consPool[Random.Range(0, consPool.Count)];
+        if (granted == null) return;
+        if (RunManager.Instance.AddConsumable(granted))
             Log($"Consommable obtenu : {granted.consumableName}");
     }
-
 
     // -----------------------------------------------
     // MISE À JOUR DE L'UI
     // -----------------------------------------------
 
-    private void UpdateUI()
+    private void UpdatePlayerUI()
     {
-        if (playerNameText  != null) playerNameText.text  = GetPlayerName();
         if (playerHPText    != null) playerHPText.text    = $"HP : {currentPlayerHP} / {GetPlayerMaxHP()}";
-
-        // Armure joueur : affiche uniquement si > 0, ou "Armure : 0" si le champ est assigné
-        if (playerArmorText != null) playerArmorText.text = currentPlayerArmor > 0
-            ? $"Armure : {currentPlayerArmor}"
-            : "";
-
-        if (enemyNameText   != null) enemyNameText.text   = GetEnemyName();
-        if (enemyHPText     != null) enemyHPText.text     = $"HP : {currentEnemyHP} / {GetEnemyMaxHP()}";
-
-        if (enemyArmorText  != null) enemyArmorText.text  = currentEnemyArmor > 0
-            ? $"Armure : {currentEnemyArmor}"
-            : "";
-
-        if (energyText   != null) energyText.text   = $"Énergie : {currentEnergy} / {GetCurrentMaxEnergy()}";
-        if (creditsText  != null && RunManager.Instance != null)
+        if (playerArmorText != null) playerArmorText.text = currentPlayerArmor > 0 ? $"Armure : {currentPlayerArmor}" : "";
+        if (energyText      != null) energyText.text      = $"Énergie : {currentEnergy} / {GetCurrentMaxEnergy()}";
+        if (creditsText     != null && RunManager.Instance != null)
             creditsText.text = $"Credits : {RunManager.Instance.credits}";
     }
 
-    /// <summary>
-    /// Met à jour l'état de chaque bouton de compétence :
-    /// - Désactivé si cooldown > 0 ou énergie insuffisante ou ce n'est pas le tour du joueur
-    /// </summary>
+    private void UpdateEnemyUI(EnemyInstance ennemi)
+    {
+        if (ennemi == null) return;
+        if (ennemi.hpText         != null) ennemi.hpText.text         = $"HP : {ennemi.currentHP} / {ennemi.MaxHP}";
+        if (ennemi.armorText      != null) ennemi.armorText.text      = ennemi.currentArmor > 0 ? $"Armure : {ennemi.currentArmor}" : "";
+        if (ennemi.nextActionText != null)
+        {
+            SkillData next = ennemi.ai?.PeekNextSkill();
+            ennemi.nextActionText.text = next != null ? $"Prochain : {next.skillName}" : "Prochain : Attaque de base";
+        }
+    }
+
     private void UpdateSkillButtons()
     {
         foreach (SkillButton sb in spawnedSkillButtons)
         {
             if (sb.Skill == null) continue;
-
             int cd = skillCooldowns.TryGetValue(sb.Skill, out int val) ? val : 0;
             sb.SetCooldown(cd);
-
             bool canUse = battleState == BattleState.PlayerTurn
+                       && !isSelectingTarget
                        && cd == 0
                        && currentEnergy >= sb.Skill.energyCost;
-
             sb.SetInteractable(canUse);
         }
-    }
-
-    /// <summary>
-    /// Affiche la prochaine action que l'ennemi va exécuter.
-    /// Utilise PeekNextSkill() pour lire la tête de file sans l'avancer.
-    /// </summary>
-    private void UpdateEnemyNextActionUI()
-    {
-        if (enemyNextActionText == null) return;
-
-        SkillData next = enemyAI != null ? enemyAI.PeekNextSkill() : null;
-        enemyNextActionText.text = next != null
-            ? $"Prochain : {next.skillName}"
-            : "Prochain : Attaque de base";
     }
 
     private void Log(string message)
@@ -1717,8 +1792,47 @@ public class CombatManager : MonoBehaviour
     // UTILITAIRES
     // -----------------------------------------------
 
-    private string GetPlayerName()  => characterData != null ? characterData.characterName : "Joueur";
-    private string GetEnemyName()   => enemyData     != null ? enemyData.enemyName         : "Ennemi";
-    private int    GetPlayerMaxHP() => effectiveMaxHP;   // stat effective, pas la base brute
-    private int    GetEnemyMaxHP()  => enemyData != null ? enemyData.maxHP : 30;
+    private string GetPlayerName()    => characterData != null ? characterData.characterName : "Joueur";
+    private string GetRencontreName() => currentGroup != null  ? currentGroup.groupName
+                                       : enemies.Count > 0     ? enemies[0].GetName()
+                                       : "Ennemi";
+    private int    GetPlayerMaxHP()   => effectiveMaxHP;
+
+    // -----------------------------------------------
+    // CLASSE INTERNE — ÉTAT RUNTIME D'UN ENNEMI
+    // -----------------------------------------------
+
+    /// <summary>
+    /// Encapsule l'état runtime d'un ennemi pendant le combat.
+    /// Séparé du ScriptableObject EnemyData pour ne jamais modifier l'asset.
+    /// </summary>
+    private class EnemyInstance
+    {
+        public EnemyData data;
+        public int       currentHP;
+        public int       currentArmor;
+        public Dictionary<StatusData, int> statuses = new Dictionary<StatusData, int>();
+        public EnemyAI   ai;
+
+        // Références UI (peuplées par SpawnEnemyUI)
+        public GameObject      uiRoot;
+        public CanvasGroup     canvasGroup;   // contrôle blocksRaycasts pour ne pas bloquer les autres boutons
+        public Image           spriteImage;
+        public TextMeshProUGUI hpText;
+        public TextMeshProUGUI armorText;
+        public TextMeshProUGUI nextActionText;
+        public Button          targetButton;
+
+        public bool IsAlive => currentHP > 0;
+        public int  MaxHP   => data != null ? data.maxHP : 0;
+        public string GetName() => data != null ? data.enemyName : "Ennemi";
+
+        public EnemyInstance(EnemyData d)
+        {
+            data       = d;
+            currentHP  = d != null ? d.maxHP : 0;
+            currentArmor = 0;
+            ai         = d != null ? new EnemyAI(d) : null;
+        }
+    }
 }

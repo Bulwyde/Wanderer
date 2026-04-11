@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::EnemyData
   enemyID: boss
   enemyName: Boss
-  portrait: {fileID: 0}
+  portrait: {fileID: 5899364741229539411, guid: 4f3e2c3fadb4b024d824a3afe409e16c, type: 3}
   maxHP: 2000
   attack: 20
   defense: 0
@@ -29,6 +29,7 @@ MonoBehaviour:
     maxUses: 0
   - skill: {fileID: 11400000, guid: 4b25ffd099ed020429fccedbef9834c8, type: 2}
     maxUses: 0
+  tags: []
   creditsLoot: 500
   lootPool:
   - {fileID: 11400000, guid: 00bfed72720722c4a87df02eb7371be4, type: 2}

@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 19f9f454a116fcc47b71120bd5a13bd7, type: 3}
+  m_Name: EnemyGroupBasic
+  m_EditorClassIdentifier: Assembly-CSharp::EnemyGroup
+  groupID: EnemyGroupBasic
+  groupName: EnemyGroupBasic
+  enemies:
+  - {fileID: 11400000, guid: 68c13da0aa4d4074e8240a674d9b9b9e, type: 2}
+  - {fileID: 11400000, guid: 68c13da0aa4d4074e8240a674d9b9b9e, type: 2}
+  - {fileID: 11400000, guid: 7c906a44287ea6c4b808ba33aeaf5398, type: 2}
+  - {fileID: 11400000, guid: 0bf10eedcff22f24b969939af22ba4f3, type: 2}
+  creditsLoot: 500
+  lootPool:
+  - {fileID: 11400000, guid: 7240fdddf83b30d4e95f7ccaf85c0b17, type: 2}
+  - {fileID: 11400000, guid: 2647f9465eb987c4fa6aee338461b252, type: 2}
+  - {fileID: 11400000, guid: 5abf629468f06cf4b920d7b631a4809c, type: 2}
+  lootOfferCount: 2
+  consumableLootPool: []
+  tags: []

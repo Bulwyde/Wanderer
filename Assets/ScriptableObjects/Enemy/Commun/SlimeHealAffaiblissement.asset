@@ -14,8 +14,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::EnemyData
   enemyID: slime_support
   enemyName: Soigneur Debuff
-  portrait: {fileID: 0}
-  maxHP: 2000
+  portrait: {fileID: -5380739489725017918, guid: f38342e8668a7de439b66b9059567cf6, type: 3}
+  maxHP: 100
   attack: 5
   defense: 0
   actions:

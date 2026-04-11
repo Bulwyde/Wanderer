@@ -37,10 +37,11 @@ Roguelike tour par tour Unity/C#, inspiré Slay the Spire + Darkest Dungeon. Car
 **`RunManager.cs`** — État central de la run (character, HP, position, équipement, modules, consommables, flags, état nav).
 - `StartNewRun()` → `SeedDonneesDepart()` : équipement/module/consommables de départ + stats initialisés avant d'entrer en Navigation.
 - `EndRun()` : appelé sur défaite, victoire boss, et abandon MainMenu.
-- `EnterRoom(CellData)` : assigne `currentCellType`, `currentEnemyData` (priorité : `cell.specificEnemy` > `ResolveEnemyPool()` > null/fallback Inspector), logge l'ennemi résolu.
+- `EnterRoom(CellData)` : assigne `currentCellType`, résolution de l'ennemi/groupe (priorité : `cell.specificGroup` > `cell.specificEnemy` > `EnemyPool.PickRandom()` — retourne `EnemyPoolEntry` qui peut être groupe ou solo).
 - `ResolveEnemyPool(CellType)` : retourne `normalEnemyPool`/`eliteEnemyPool`/`bossEnemyPool` depuis `currentMapData`. Null si `currentMapData` null.
 - `currentMapData` : assigné par `NavigationManager` avant tout `GoToCombat()` ou `GoToShop()` — requis pour `ResolveEnemyPool()` et `ShopManager`.
-- `currentEnemyData` : lu par `CombatManager.Start()` en priorité sur le champ Inspector.
+- `currentEnemyData` : ennemi solo — lu par `CombatManager` si `currentEnemyGroup` est null.
+- `currentEnemyGroup` : groupe d'ennemis (EnemyGroup SO) — prioritaire sur `currentEnemyData`. Resetté dans `StartNewRun()`.
 - `EquipItem()` appelle automatiquement `RecalculerMaxHP()` si `maxHP > 0` (ignoré pendant le seeding initial).
 - `AddModule()` appelle automatiquement `ModuleManager.NotifyModulesChanged()`.
 - `GetOrCreateShopState(CellData, ShopData)` : génère l'inventaire shop à la 1ère visite, persiste dans `shopStates[x,y]`, reset dans `StartNewRun()`.
@@ -52,14 +53,26 @@ Roguelike tour par tour Unity/C#, inspiré Slay the Spire + Darkest Dungeon. Car
 
 **`NavigationManager.cs`** — Déplacements clavier, brouillard de guerre (3 sets), `AppliquerEffetsNav`, `RevealZoneChoice`, tirage d'events (`ChoisirEventAleatoire` + fallback `RandomEvents`). Assigne `currentMapData` avant `EnterRoom()` pour les cases Classic/Elite/Boss et avant `GoToShop()`. Gère les cooldowns des skills de navigation : `SpawnSkillsJambes()` grise les boutons selon `IsNavSkillReady`, `UtiliserSkillJambes()` appelle `SetNavSkillCooldown` après effet. Détecte la première visite d'un shop (`GetShopState == null`) pour déclencher `TickCooldownsDe(ShopDecouvert)`.
 
-**`MapData.cs`** — ScriptableObject grille. `CellData` a `specificEnemy` (EnemyData), `eventList`/`eventPool`, `shopData`. `MapData` a `normalEnemyPool`, `eliteEnemyPool`, `bossEnemyPool` (EnemyPool).
+**`MapData.cs`** — ScriptableObject grille. `CellData` a `specificEnemy` (EnemyData), `specificGroup` (EnemyGroup — prioritaire sur `specificEnemy`), `eventList`/`eventPool`, `shopData`. `MapData` a `normalEnemyPool`, `eliteEnemyPool`, `bossEnemyPool` (EnemyPool), `defaultCombatLootTable` (EquipmentLootTable fallback si l'ennemi/groupe n'a pas de lootPool), `defaultLootOfferCount` (int, 1–4).
 
 **`CellType` enum (ordre fixe — ne jamais insérer au milieu) :**
 `Empty(0)` `Start(1)` `Boss(2)` `Classic(3)` `Event(4)` `NonNavigable(5)` `Shop(6)` `Elite(7)`
 
 ### Combat
 
-**`CombatManager.cs`** — États `PlayerTurn → EnemyTurn → Victory/Defeat`. `ResolveEquipment()` au démarrage : lit `RunManager.selectedCharacter` + `currentEnemyData` (fallback Inspector). Seeding dans `ResolveEquipment()` = no-op en jeu normal (déjà fait par `StartNewRun()`). Sur victoire boss → `EndRun()` + `GoToMainMenu()` sans `ClearCurrentRoom()`.
+**`CombatManager.cs`** — États `PlayerTurn → EnemyTurn → Victory/Defeat`. Refactorisé pour le **multi-ennemis** (1 à 4 ennemis simultanés).
+- `List<EnemyInstance> enemies` : liste des ennemis actifs. `EnemyInstance` est une classe interne portant `data`, `currentHP/Armor`, `statuses` (Dictionary propre), `ai` (EnemyAI), `uiRoot`, `spriteImage`, TMP texts, `targetButton`.
+- `BuildEnemyList()` : construit les instances depuis `RunManager.currentEnemyGroup` (groupe, jusqu'à 4) ou `RunManager.currentEnemyData` (solo).
+- `SpawnEnemyUI(EnemyInstance)` : instancie `enemyUIPrefab` dans `enemiesContainer` (HorizontalLayoutGroup), cherche les TMP par nom exact ("EnemyNameText", "EnemyHPText", "EnemyArmorText", "EnemyNextActionText"), `spriteImage` = premier Image du prefab, root Button = bouton de ciblage.
+- **Ciblage** : `RequiertCiblage(skill)` → false si ≤ 1 ennemi vivant (auto-cible). Sinon → `EnterTargetSelectionMode()`, flèche RectTransform pivot (0, 0.5) étirée/tournée vers la souris chaque frame dans `Update()`, clic sur sprite ennemi → `OnEnemyCibleClique()`, annulation RMB/Escape rembourse énergie/cooldown.
+- **Tour ennemi** : `EnemyTurnRoutine()` — foreach séquentiel sur ennemis vivants avec `WaitForSeconds(EnemyActionDelay)` entre chaque.
+- `ApplyEffect(EffectData, source, EnemyInstance explicitTarget)` → `GetEffectTargets(EffectTarget, EnemyInstance)` : SingleEnemy = explicit ou premier vivant, AllEnemies = tous vivants, RandomEnemy = aléatoire parmi vivants.
+- Statuts/effets par tour : méthodes séparées joueur vs ennemi (`ApplyPlayerPerTurnEffects()` / `ApplyEnemyPerTurnEffects(EnemyInstance)`, etc.).
+- `CheckEnemyDeath(EnemyInstance)` : déclenche `GameEvents.TriggerEnemyDied()`, tick cooldowns nav avec les tags de cet ennemi, vérifie `AllEnemiesDead()`.
+- `combatEnded` bool : garde contre double-appel à `EndCombat()` (notamment sur AoE).
+- **Loot** : priorité `currentGroup.lootPool` > `enemies[0].data.lootPool` (solo) > `RunManager.currentMapData.defaultCombatLootTable`. Crédits : `currentGroup.creditsLoot` OU somme des `creditsLoot` individuels.
+- `ResolveEquipment()` au démarrage : lit `RunManager.selectedCharacter`. Seeding = no-op en jeu normal. Sur victoire boss → `EndRun()` + `GoToMainMenu()` sans `ClearCurrentRoom()`.
+- **Champs Inspector** : `enemiesContainer` (Transform), `enemyUIPrefab` (GameObject), `arrowTransform` (RectTransform), `playerSpriteTransform` (RectTransform). Anciens champs texte ennemi (`enemyNameText` etc.) supprimés — maintenant par instance.
 
 **`EquipmentOfferController.cs`** — Partagé Combat (simultané) / Event et Shop (séquentiel). Se désactive dans `Awake()`.
 - **Structure LootPanel** — identique dans les 3 scènes (Combat, Event, Shop) :
@@ -93,7 +106,8 @@ Roguelike tour par tour Unity/C#, inspiré Slay the Spire + Darkest Dungeon. Car
 |---|---|
 | `CharacterData` | Stats de base, équipement/module/consommables départ, `baseVisionRange`, `startingCredits` |
 | `EnemyData` | Stats, actions IA, lootPool, consumableLootPool, `creditsLoot` |
-| `EnemyPool` | Pool d'ennemis aléatoires (`PickRandom()`). Assigné sur `MapData` (3 pools) |
+| `EnemyGroup` | Groupe multi-ennemis (1 à 4 EnemyData). Loot propre : `lootPool`, `lootOfferCount`, `consumableLootPool`, `creditsLoot`. Tags. Prioritaire sur EnemyData dans CellData. |
+| `EnemyPool` | Pool mixte (`EnemyData` ou `EnemyGroup`) via `List<EnemyPoolEntry>`. `PickRandom()` → `EnemyPoolEntry`. Tirage pondéré si `weight > 0`. ⚠️ Migration : anciens assets (List\<EnemyData\>) à ré-assigner dans l'Inspector. |
 | `SkillData` | Compétence (coût énergie, cooldown, `List<EffectData> effects`). Navigation : `isNavigationSkill`, `navEffects`, `navCooldownType` (`NavCooldownType` enum), `navCooldownCount`, `navCooldownTag` |
 | `EffectData` | Effet universel (trigger, action, target, value) — skills/consommables/modules/passifs |
 | `StatusData` | Statut (behavior, perTurnAction, decayPerTurn, decayTiming, maxStacks) |
@@ -117,7 +131,7 @@ Roguelike tour par tour Unity/C#, inspiré Slay the Spire + Darkest Dungeon. Car
 **`EffectDataEditor` custom** : tout nouveau champ `EffectData` doit aussi être ajouté dans `EffectDataEditor.cs` sinon invisible dans l'Inspector.
 
 **Editors custom :** `EffectDataEditor`, `EventEffectDrawer`, `NavEffectDrawer`, `MapEditorWindow`, `TagDataEditor`, `SkillDataEditor`.
-**Editors Data (filtrage tags) :** `CharacterDataEditor`, `ConsumableDataEditor`, `EquipmentDataEditor`, `EventDataEditor`, `EnemyDataEditor`, `MapDataEditor`, `ModuleDataEditor` — tous s'appuient sur `TagListFilterUtil.DrawFilteredTagList(prop, categorie)` pour ne proposer que les tags de la catégorie correspondante (+ tags "Everything" = toutes catégories cochées). Cache statique par catégorie, invalidé à chaque recompilation.
+**Editors Data (filtrage tags) :** `CharacterDataEditor`, `ConsumableDataEditor`, `EquipmentDataEditor`, `EventDataEditor`, `EnemyDataEditor`, `EnemyGroupEditor`, `MapDataEditor`, `ModuleDataEditor` — tous s'appuient sur `TagListFilterUtil.DrawFilteredTagList(prop, categorie)` pour ne proposer que les tags de la catégorie correspondante (+ tags "Everything" = toutes catégories cochées). Cache statique par catégorie, invalidé à chaque recompilation. `EnemyGroupEditor` utilise `TagCategorie.Ennemi`, `[CanEditMultipleObjects]`.
 
 **Prefabs :** `ChoiceButton` (360×65px), `SkillButtonPrefab`, `LootCard`, `ConsumableButton`, `ModuleIcon` (48×48px).
 `ConsumableButton.SetInteractable(false)` grise + réduit taille d'un tiers. Désactiver `ChildControlSize` sur le container. `ModuleHUD` enfant direct du Canvas (jamais du `mapContainer`).
@@ -148,7 +162,7 @@ Roguelike tour par tour Unity/C#, inspiré Slay the Spire + Darkest Dungeon. Car
 ## État du développement
 
 ### Fonctionnel ✅
-Combat complet (tours, énergie, armure StS, cooldowns, statuts, crits, regen, lifesteal) · IA ennemie circulaire · Équipement (stats effectives, skills, passifs) · Loot post-combat · Navigation (brouillard, clavier, sauvegarde) · Modules (GameEvents, HUD, OnFightStart) · Consommables (3 scènes) · Events narratifs (tous effets) · Pool d'events (ManualList/FromPool, anti-doublon) · EquipmentOfferController partagé · NavEffect complets · MainMenu complet · Seeding au lancement · Boutons passifs équipement · Crédits · Marchand (ShopData, persistance par case) · Boss (victoire → EndRun + MainMenu) · EnemyPool + CellType.Elite · Sélection ennemi par case/pool · **Système de tags** (TagData sur tous les Data, sync nom asset ↔ tagName, multi-édition) · **Cooldowns skills de navigation** (5 types, bouton grisé, persist RunManager) · **Filtrage tags par catégorie dans l'Inspector** (8 editors Data + TagListFilterUtil)
+Combat complet (tours, énergie, armure StS, cooldowns, statuts, crits, regen, lifesteal) · IA ennemie circulaire · Équipement (stats effectives, skills, passifs) · Loot post-combat · Navigation (brouillard, clavier, sauvegarde) · Modules (GameEvents, HUD, OnFightStart) · Consommables (3 scènes) · Events narratifs (tous effets) · Pool d'events (ManualList/FromPool, anti-doublon) · EquipmentOfferController partagé · NavEffect complets · MainMenu complet · Seeding au lancement · Boutons passifs équipement · Crédits · Marchand (ShopData, persistance par case) · Boss (victoire → EndRun + MainMenu) · EnemyPool + CellType.Elite · Sélection ennemi par case/pool · **Système de tags** (TagData sur tous les Data, sync nom asset ↔ tagName, multi-édition) · **Cooldowns skills de navigation** (5 types, bouton grisé, persist RunManager) · **Filtrage tags par catégorie dans l'Inspector** (9 editors Data + TagListFilterUtil) · **Combat multi-ennemis** (jusqu'à 4, ciblage flèche souris, tour séquentiel, statuts par ennemi, loot priorité groupe > solo > MapData fallback, EnemyGroup SO, EnemyPool mixte EnemyData+EnemyGroup)
 
 ### À faire 🔧
 - Scène de sélection de personnage (`MainMenuManager.defaultCharacter` = placeholder)
@@ -202,3 +216,10 @@ Combat complet (tours, énergie, armure StS, cooldowns, statuts, crits, regen, l
 29. **Tags déjà assignés hors catégorie** : si un asset avait un tag non conforme avant l'ajout des editors filtrés, il apparaîtra comme `(aucun)` dans le popup et sera mis à null à la prochaine sauvegarde — vérifier les assets existants.
 30. **CanvasScaler résolution** : référence cible = 640×360, mode `Scale with Screen Size`, `Match = 0.5`. Ne pas utiliser `Constant Pixel Size` (aucun scaling) ni une référence 4:3 (800×600) ou 1080p.
 31. **`NavigationHUD`** : peut être mis en composant sur `NavigationManager` s'il n'y a pas de GO dédié — l'Update() fonctionne pareil. Les champs `hpText`/`creditsText` doivent être assignés dans l'Inspector.
+32. **`EnemyPool` migration** : `List<EnemyData> enemies` est devenu `List<EnemyPoolEntry> entries`. Les assets EnemyPool existants auront leur liste vide — ré-assigner dans l'Inspector (champ `enemyData` ou `enemyGroup` de chaque entrée).
+33. **`combatEnded` guard** : `EndCombat()` est protégé par un bool. Ne pas le contourner ni le reset manuellement — il est remis à false dans `Start()` du prochain combat.
+34. **Ciblage flèche + énergie** : l'énergie et le cooldown sont déduits AVANT d'entrer en mode ciblage. Si le joueur annule (RMB/Escape), ils sont remboursés. Ne jamais déduire à nouveau dans `OnEnemyCibleClique()`.
+35. **`EnemyInstance.uiRoot`** : instancié dynamiquement depuis `enemyUIPrefab` dans `enemiesContainer`. Ne pas le chercher par `FindFirstObjectByType` — utiliser `instance.uiRoot` directement.
+36. **`enemyUIPrefab` noms TMP** : `SpawnEnemyUI` cherche les TMP par `GetComponentsInChildren` et compare `name`. Les noms exacts attendus : "EnemyNameText", "EnemyHPText", "EnemyArmorText", "EnemyNextActionText". Un nom mal orthographié → champ null → NullRef silencieux.
+37. **`using System.Linq`** : ajouté dans `CombatManager.cs` pour `enemies.Sum(e => e.data?.creditsLoot ?? 0)`. Ne pas retirer.
+38. **Loot multi-ennemis** : la priorité est `currentGroup.lootPool` > `enemies[0].data.lootPool` (seulement si combat solo) > `MapData.defaultCombatLootTable`. Si aucun de ces trois n'est renseigné, aucune offre d'équipement n'est faite (pas d'erreur — juste pas de loot).

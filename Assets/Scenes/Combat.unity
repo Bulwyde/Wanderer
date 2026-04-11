@@ -575,6 +575,7 @@ MonoBehaviour:
   skillButtonPrefab: {fileID: 7306436943141010282, guid: 1005111fc10af3f4680b8a0520b81ea7, type: 3}
   consumableButtonContainer: {fileID: 1532463690}
   consumableButtonPrefab: {fileID: 7048912491923774506, guid: 8761e75a581df2642a8883058d518c79, type: 3}
+  fadeDureeMort: 1.5
   victoireButton: {fileID: 1569817115}
   combatActivePanel: {fileID: 75481599}
   endPanel: {fileID: 1337169118}

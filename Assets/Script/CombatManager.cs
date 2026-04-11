@@ -91,6 +91,10 @@ public class CombatManager : MonoBehaviour
     // UI — DEBUG
     // -----------------------------------------------
 
+    [Header("Mort d'ennemi")]
+    [Tooltip("Durée du fade visuel après la mort d'un ennemi (secondes)")]
+    public float fadeDureeMort = 3.5f;
+
     [Header("Debug / Tests")]
     public Button victoireButton;
 
@@ -337,6 +341,8 @@ public class CombatManager : MonoBehaviour
                 if (instance.data.portrait != null)
                     instance.spriteImage.sprite = instance.data.portrait;
             }
+            // Animator — trigger "Death" déclenché à la mort (fonctionnel dès que l'Animator est configuré)
+            instance.animator = spriteChild.GetComponent<Animator>();
         }
 
         // Textes TMP — cherchés par nom dans les enfants
@@ -1495,8 +1501,13 @@ public class CombatManager : MonoBehaviour
 
         Log($"{ennemi.GetName()} est vaincu !");
 
-        // Désactive le bouton de ciblage
+        // Exclut immédiatement l'ennemi du ciblage et de tout flux de combat
         if (ennemi.targetButton != null) ennemi.targetButton.interactable = false;
+        if (ennemi.canvasGroup  != null)
+        {
+            ennemi.canvasGroup.interactable  = false;
+            ennemi.canvasGroup.blocksRaycasts = false;
+        }
 
         // Déclenche les événements de mort pour les modules
         GameEvents.TriggerEnemyDied();
@@ -1505,9 +1516,43 @@ public class CombatManager : MonoBehaviour
         if (ennemi.data?.tags != null && ennemi.data.tags.Count > 0 && RunManager.Instance != null)
             RunManager.Instance.TickCooldownsAvecTag(ennemi.data.tags);
 
+        // Lance le fade visuel en parallèle — n'interrompt pas le flux de combat
+        StartCoroutine(MortEnnemiRoutine(ennemi));
+
         // Tous les ennemis morts → victoire
         if (AllEnemiesDead())
             EndCombat(victory: true);
+    }
+
+    /// <summary>
+    /// Coroutine de mort visuelle : animation → fade du CanvasGroup → bloc invisible mais dans le layout.
+    /// SetActive(false) évité intentionnellement pour ne pas redistribuer les positions des survivants.
+    /// </summary>
+    private IEnumerator MortEnnemiRoutine(EnemyInstance ennemi)
+    {
+        // Déclenche l'animation de mort (no-op si pas d'Animator ou de paramètre "Death" configuré)
+        if (ennemi.animator != null)
+            ennemi.animator.SetTrigger("Death");
+
+        // Courte pause — laisse le coup fatal "impacter" avant que le fade ne démarre
+        yield return new WaitForSeconds(0.3f);
+
+        // Fade progressif via CanvasGroup.alpha (sprite + textes ensemble)
+        if (ennemi.canvasGroup != null)
+        {
+            float elapsed = 0f;
+            float alphaDepart = ennemi.canvasGroup.alpha;
+            while (elapsed < fadeDureeMort)
+            {
+                elapsed += Time.deltaTime;
+                ennemi.canvasGroup.alpha = Mathf.Lerp(alphaDepart, 0f, elapsed / fadeDureeMort);
+                yield return null;
+            }
+            ennemi.canvasGroup.alpha = 0f;
+        }
+
+        // Le bloc reste dans le HorizontalLayoutGroup (SetActive(false) évité) :
+        // les ennemis survivants conservent leurs positions d'origine.
     }
 
     private bool AllEnemiesDead()
@@ -1822,6 +1867,7 @@ public class CombatManager : MonoBehaviour
         public TextMeshProUGUI armorText;
         public TextMeshProUGUI nextActionText;
         public Button          targetButton;
+        public Animator        animator;      // pour le trigger "Death" (branché quand l'Animator sera prêt)
 
         public bool IsAlive => currentHP > 0;
         public int  MaxHP   => data != null ? data.maxHP : 0;

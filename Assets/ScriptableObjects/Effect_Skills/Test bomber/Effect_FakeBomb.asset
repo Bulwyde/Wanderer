@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5713ebea065ef3643a7749f10079cbca, type: 3}
+  m_Name: Effect_FakeBomb
+  m_EditorClassIdentifier: Assembly-CSharp::EffectData
+  effectID: fake_bomb
+  displayName: Fake Bomb
+  description: 
+  keywords: []
+  trigger: 0
+  action: 2
+  value: 10
+  secondaryValue: 0
+  statusToApply: {fileID: 11400000, guid: 75109b2abe58b0c4fbad9632071e8b25, type: 2}
+  scalingStatus: {fileID: 0}
+  consumeStacks: 0
+  target: 0
+  statToModify: 0

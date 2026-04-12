@@ -15,11 +15,12 @@ MonoBehaviour:
   statusID: 
   statusName: 
   description: 
-  icon: {fileID: 0}
+  icon: {fileID: -5953095983196202022, guid: 146226683fa30004db32190f431bf738, type: 3}
   behavior: 2
   perTurnAction: 3
   effectPerStack: -0.5
   decayPerTurn: 1
+  decayTiming: 0
   maxStacks: 0
   statToModify: 1
   statModifierType: 1

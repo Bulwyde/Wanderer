@@ -10,14 +10,18 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 7e42231eca85dd24eac4c3b5a2342760, type: 3}
-  m_Name: Status_Explo
+  m_Name: Status_FakeBomb
   m_EditorClassIdentifier: Assembly-CSharp::StatusData
-  statusID: status_explo
-  statusName: Explo
+  statusID: status_fake_bomb
+  statusName: Status FakeBomb
   description: 
-  icon: {fileID: 0}
+  icon: {fileID: -306144382887051786, guid: 6be0ada76371cdc4898eab62dbcc76fb, type: 3}
   behavior: 0
   perTurnAction: 0
   effectPerStack: 0
   decayPerTurn: 0
+  decayTiming: 0
   maxStacks: 0
+  statToModify: 0
+  statModifierType: 0
+  valueScalesWithStacks: 0

@@ -15,11 +15,12 @@ MonoBehaviour:
   statusID: status_buff_energie
   statusName: Buff Energie
   description: 
-  icon: {fileID: 0}
+  icon: {fileID: 6747901558121414709, guid: 38638c50626eea84d923ad79def0d396, type: 3}
   behavior: 2
   perTurnAction: 3
   effectPerStack: 1
   decayPerTurn: 0
+  decayTiming: 0
   maxStacks: 0
   statToModify: 6
   statModifierType: 0

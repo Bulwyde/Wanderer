@@ -61,19 +61,24 @@ Roguelike tour par tour Unity/C#, inspiré Slay the Spire + Darkest Dungeon. Car
 ### Combat
 
 **`CombatManager.cs`** — États `PlayerTurn → EnemyTurn → Victory/Defeat`. Refactorisé pour le **multi-ennemis** (1 à 4 ennemis simultanés).
-- `List<EnemyInstance> enemies` : liste des ennemis actifs. `EnemyInstance` est une classe interne portant `data`, `currentHP/Armor`, `statuses` (Dictionary propre), `ai` (EnemyAI), `uiRoot`, `canvasGroup`, `spriteImage`, `animator`, TMP texts (hp/armor/nextAction), `targetButton`.
+- `List<EnemyInstance> enemies` : liste des ennemis actifs. `EnemyInstance` est une classe interne portant `data`, `currentHP/Armor`, `statuses` (Dictionary propre), `combatStatBonuses` (Dictionary<StatType,float> — miroir du `combatStatModifiers` joueur, jamais modifié sur le SO), `ai` (EnemyAI), `uiRoot`, `canvasGroup`, `spriteImage`, `animator`, TMP texts (hp/armor/nextAction), `targetButton`, `statusIconContainer` (Transform), `spawnedStatusIcons` (List<StatusIcon>).
 - `BuildEnemyList()` : construit les instances depuis `RunManager.currentEnemyGroup` (groupe, jusqu'à 4) ou `RunManager.currentEnemyData` (solo). Fallback Inspector : `enemyGroup` > `enemyData`.
+- `InitializeCombat()` : après `BuildEnemyList()`, applique les `spawnEffects` de chaque ennemi via `ApplyEnemyEffect` (avant le premier tour).
 - `SpawnEnemyUI(EnemyInstance)` : instancie `enemyUIPrefab` dans `enemiesContainer` (HorizontalLayoutGroup). Ajoute/récupère un `CanvasGroup` (blocksRaycasts=false par défaut). Cherche `EnemySprite` par nom exact → `spriteImage` (preserveAspect=true) + `animator`. Cherche TMP par nom : "EnemyHPText", "EnemyArmorText", "EnemyNextActionText". Le nom `EnemyNameText` est supprimé — les noms ne sont plus affichés.
 - **Ciblage** : `RequiertCiblage(skill)` → false si ≤ 1 ennemi vivant (auto-cible). Sinon → `EnterTargetSelectionMode()` (CanvasGroup.blocksRaycasts=true sur vivants). Flèche : `_rootCanvas` mis en cache depuis `arrowTransform` (pas depuis `this` — CombatManager peut être hors Canvas). `sizeDelta.x = distance / scaleFactor` pour corriger pixels écran → unités canvas. Clic détecté dans `Update()` via `RectTransformUtility.RectangleContainsScreenPoint` sur `spriteImage.rectTransform` — pas via `Button.onClick` (le root élargi par HorizontalLayoutGroup causait un décalage d'une position). Annulation RMB/Escape rembourse énergie/cooldown.
 - **Tour ennemi** : `EnemyTurnRoutine()` — foreach séquentiel sur ennemis vivants avec `WaitForSeconds(EnemyActionDelay)` entre chaque.
 - `ApplyEffect(EffectData, source, EnemyInstance explicitTarget)` → `GetEffectTargets(EffectTarget, EnemyInstance)` : SingleEnemy = explicit ou premier vivant, AllEnemies = tous vivants, RandomEnemy = aléatoire parmi vivants.
-- Statuts/effets par tour : méthodes séparées joueur vs ennemi (`ApplyPlayerPerTurnEffects()` / `ApplyEnemyPerTurnEffects(EnemyInstance)`, etc.).
-- `CheckEnemyDeath(EnemyInstance)` : exclut immédiatement l'ennemi (canvasGroup.interactable/blocksRaycasts=false), déclenche `GameEvents.TriggerEnemyDied()`, tick cooldowns nav, lance `MortEnnemiRoutine()`, vérifie `AllEnemiesDead()`.
+- `ApplyEnemyEffect(EffectData, source, EnemyInstance attacker)` : gère `DealDamage`, `Heal`, `AddArmor`, `ApplyStatus`, **`ModifyStat`** (Self → `attacker.combatStatBonuses`, autre cible → `combatStatModifiers` joueur).
+- Statuts/effets par tour : méthodes séparées joueur vs ennemi (`ApplyPlayerPerTurnEffects()` / `ApplyEnemyPerTurnEffects(EnemyInstance)`). Les deux gèrent désormais `perTurnAction = ModifyStat` (accumulation cumulative dans le dict de stats).
+- `GetEnemyStatModifiers(EnemyInstance, StatType)` → `(flat, pct)` : combine `combatStatBonuses` + statuts `ModifyStat` passifs de l'ennemi. Miroir de `GetPlayerStatModifiers`.
+- `GetEnemyAttack(EnemyInstance)` : `(data.attack + flat) × (1 + pct)`. **Toujours utiliser à la place de `ennemi.data.attack` direct.**
+- `CheckEnemyDeath(EnemyInstance)` : exclut l'ennemi, déclenche `GameEvents.TriggerEnemyDied()`, tick cooldowns nav, **applique les `deathEffects`** (avant `AllEnemiesDead()`), lance `MortEnnemiRoutine()`.
 - `MortEnnemiRoutine(EnemyInstance)` : coroutine — `animator.SetTrigger("Death")` → pause 0.3s → fade `CanvasGroup.alpha` 1→0 sur `fadeDureeMort` secondes. **Pas de `SetActive(false)`** : le bloc reste dans le HorizontalLayoutGroup pour que les survivants ne se redistribuent pas. `fadeDureeMort` exposé dans l'Inspector (défaut 3.5s).
 - `combatEnded` bool : garde contre double-appel à `EndCombat()` (notamment sur AoE).
 - **Loot** : priorité `currentGroup.lootPool` > `enemies[0].data.lootPool` (solo) > `RunManager.currentMapData.defaultCombatLootTable`. Crédits : `currentGroup.creditsLoot` OU somme des `creditsLoot` individuels.
 - `ResolveEquipment()` au démarrage : lit `RunManager.selectedCharacter`. Seeding = no-op en jeu normal. Sur victoire boss → `EndRun()` + `GoToMainMenu()` sans `ClearCurrentRoom()`.
-- **Champs Inspector** : `enemiesContainer` (Transform), `enemyUIPrefab` (GameObject), `arrowTransform` (RectTransform), `playerSpriteTransform` (RectTransform), `fadeDureeMort` (float). Fallbacks test : `enemyGroup` (EnemyGroup), `enemyData` (EnemyData). Champs noms joueur/ennemi supprimés.
+- **Champs Inspector** : `enemiesContainer` (Transform), `enemyUIPrefab` (GameObject), `arrowTransform` (RectTransform), `playerSpriteTransform` (RectTransform), `fadeDureeMort` (float), `statusIconContainer` (Transform), `statusIconPrefab` (GameObject), `statusIconsPerRow` (int, défaut 5). Fallbacks test : `enemyGroup` (EnemyGroup), `enemyData` (EnemyData).
+- `RefreshPlayerStatusIcons()` : recrée les icônes `StatusIcon` dans `statusIconContainer` (GridLayoutGroup) depuis `playerStatuses`. Appelée automatiquement par `UpdatePlayerUI()`.
 
 **`EquipmentOfferController.cs`** — Partagé Combat (simultané) / Event et Shop (séquentiel). Se désactive dans `Awake()`.
 - **Structure LootPanel** — identique dans les 3 scènes (Combat, Event, Shop) :
@@ -106,7 +111,7 @@ Roguelike tour par tour Unity/C#, inspiré Slay the Spire + Darkest Dungeon. Car
 | Script | Rôle |
 |---|---|
 | `CharacterData` | Stats de base, équipement/module/consommables départ, `baseVisionRange`, `startingCredits` |
-| `EnemyData` | Stats, actions IA, lootPool, consumableLootPool, `creditsLoot` |
+| `EnemyData` | Stats, actions IA, `spawnEffects` (List<EffectData> — appliqués à l'init du combat), `deathEffects` (List<EffectData> — déclenchés à 0 HP), lootPool, consumableLootPool, `creditsLoot` |
 | `EnemyGroup` | Groupe multi-ennemis (1 à 4 EnemyData). Loot propre : `lootPool`, `lootOfferCount`, `consumableLootPool`, `creditsLoot`. Tags. Prioritaire sur EnemyData dans CellData. |
 | `EnemyPool` | Pool mixte (`EnemyData` ou `EnemyGroup`) via `List<EnemyPoolEntry>`. `PickRandom()` → `EnemyPoolEntry`. Tirage pondéré si `weight > 0`. ⚠️ Migration : anciens assets (List\<EnemyData\>) à ré-assigner dans l'Inspector. |
 | `SkillData` | Compétence (coût énergie, cooldown, `List<EffectData> effects`). Navigation : `isNavigationSkill`, `navEffects`, `navCooldownType` (`NavCooldownType` enum), `navCooldownCount`, `navCooldownTag` |
@@ -133,18 +138,28 @@ Roguelike tour par tour Unity/C#, inspiré Slay the Spire + Darkest Dungeon. Car
 
 **Editors custom :** `EffectDataEditor`, `EventEffectDrawer`, `NavEffectDrawer`, `MapEditorWindow`, `TagDataEditor`, `SkillDataEditor`.
 **Editors Data (filtrage tags) :** `CharacterDataEditor`, `ConsumableDataEditor`, `EquipmentDataEditor`, `EventDataEditor`, `EnemyDataEditor`, `EnemyGroupEditor`, `MapDataEditor`, `ModuleDataEditor` — tous s'appuient sur `TagListFilterUtil.DrawFilteredTagList(prop, categorie)` pour ne proposer que les tags de la catégorie correspondante (+ tags "Everything" = toutes catégories cochées). Cache statique par catégorie, invalidé à chaque recompilation. `EnemyGroupEditor` utilise `TagCategorie.Ennemi`, `[CanEditMultipleObjects]`.
+**`EnemyDataEditor`** : réécrit avec `FindProperty` explicite pour chaque champ — ordre forcé : Identité → Stats → Tags → Actions → Effets (spawnEffects/deathEffects) → Loot. Ne pas revenir au loop générique (perd le contrôle de l'ordre).
 
-**Prefabs :** `ChoiceButton` (360×65px), `SkillButtonPrefab`, `LootCard`, `ConsumableButton`, `ModuleIcon` (48×48px).
+**Prefabs :** `ChoiceButton` (360×65px), `SkillButtonPrefab`, `LootCard`, `ConsumableButton`, `ModuleIcon` (48×48px), `StatusIconPrefab` (ex : 32×32px — Image + TMP StackText).
 `ConsumableButton.SetInteractable(false)` grise + réduit taille d'un tiers. Désactiver `ChildControlSize` sur le container. `ModuleHUD` enfant direct du Canvas (jamais du `mapContainer`).
+**Setup `StatusIconPrefab`** : racine avec composant `StatusIcon`, enfant `IconImage` (Image, full size), enfant `StackText` (TMP, ancré bas-droite). Le container parent doit avoir un `GridLayoutGroup` (Constraint = Fixed Column Count — le `constraintCount` est écrasé au runtime par `statusIconsPerRow`).
 
 ---
 
 ## Systèmes clés — décisions non-évidentes
 
-**ModifyStat — 3 cas distincts :**
+**ModifyStat — 3 cas distincts (joueur) :**
 - *Permanent run* (events/modules hors-combat) → `RunManager.AddStatBonus()`, stocké dans `runStatBonuses`, intégré dans `ResolveEquipment()` et `RecalculerMaxHP()`.
 - *Temporaire ce combat* (skills/consommables/modules en combat) → `combatStatModifiers`, lu dynamiquement par `GetCurrentAttack()` etc.
 - *Statut ModifyStat* → actif tant que stacks > 0. `valueScalesWithStacks=false` : valeur fixe, stacks = durée. `valueScalesWithStacks=true` : valeur = `effectPerStack × stacks`, durée infinie.
+
+**ModifyStat ennemi — système symétrique au joueur :**
+- `EnemyInstance.combatStatBonuses: Dictionary<StatType, float>` — équivalent de `combatStatModifiers` joueur.
+- `GetEnemyStatModifiers(EnemyInstance, StatType)` → `(flat, pct)` — combine `combatStatBonuses` + statuts `ModifyStat` passifs.
+- `GetEnemyAttack(EnemyInstance)` — **point d'entrée unique** pour lire l'attaque ennemi. Ne jamais lire `ennemi.data.attack` directement.
+- `EffectAction.ModifyStat` dans `ApplyEnemyEffect` : `Self` → `combatStatBonuses`, autre → `combatStatModifiers` joueur.
+
+**`PerTurnStart + perTurnAction ModifyStat`** (joueur ET ennemi) : chaque tour, ajoute `effectPerStack × stacks` dans le dict de stats correspondant. Permet une croissance cumulative (ex : +1 attaque/tour). Fonctionne via le case `ModifyStat` ajouté dans `ApplyPlayerPerTurnEffects` et `ApplyEnemyPerTurnEffects`.
 
 **Formule dégâts joueur :** `(skillValue + effectiveAttack + flat) × (1 + pct)`. Crit appliqué après, défense soustraite avant le crit.
 
@@ -163,7 +178,7 @@ Roguelike tour par tour Unity/C#, inspiré Slay the Spire + Darkest Dungeon. Car
 ## État du développement
 
 ### Fonctionnel ✅
-Combat complet (tours, énergie, armure StS, cooldowns, statuts, crits, regen, lifesteal) · IA ennemie circulaire · Équipement (stats effectives, skills, passifs) · Loot post-combat · Navigation (brouillard, clavier, sauvegarde) · Modules (GameEvents, HUD, OnFightStart) · Consommables (3 scènes) · Events narratifs (tous effets) · Pool d'events (ManualList/FromPool, anti-doublon) · EquipmentOfferController partagé · NavEffect complets · MainMenu complet · Seeding au lancement · Boutons passifs équipement · Crédits · Marchand (ShopData, persistance par case) · Boss (victoire → EndRun + MainMenu) · EnemyPool + CellType.Elite · Sélection ennemi par case/pool · **Système de tags** (TagData sur tous les Data, sync nom asset ↔ tagName, multi-édition) · **Cooldowns skills de navigation** (5 types, bouton grisé, persist RunManager) · **Filtrage tags par catégorie dans l'Inspector** (9 editors Data + TagListFilterUtil) · **Combat multi-ennemis** (jusqu'à 4, ciblage flèche souris, tour séquentiel, statuts par ennemi, loot priorité groupe > solo > MapData fallback, EnemyGroup SO, EnemyPool mixte EnemyData+EnemyGroup) · **Mort d'ennemi mid-combat** (exclusion immédiate, fade CanvasGroup 3.5s, positions preservées, hook Animator "Death" prêt)
+Combat complet (tours, énergie, armure StS, cooldowns, statuts, crits, regen, lifesteal) · IA ennemie circulaire · Équipement (stats effectives, skills, passifs) · Loot post-combat · Navigation (brouillard, clavier, sauvegarde) · Modules (GameEvents, HUD, OnFightStart) · Consommables (3 scènes) · Events narratifs (tous effets) · Pool d'events (ManualList/FromPool, anti-doublon) · EquipmentOfferController partagé · NavEffect complets · MainMenu complet · Seeding au lancement · Boutons passifs équipement · Crédits · Marchand (ShopData, persistance par case) · Boss (victoire → EndRun + MainMenu) · EnemyPool + CellType.Elite · Sélection ennemi par case/pool · **Système de tags** (TagData sur tous les Data, sync nom asset ↔ tagName, multi-édition) · **Cooldowns skills de navigation** (5 types, bouton grisé, persist RunManager) · **Filtrage tags par catégorie dans l'Inspector** (9 editors Data + TagListFilterUtil) · **Combat multi-ennemis** (jusqu'à 4, ciblage flèche souris, tour séquentiel, statuts par ennemi, loot priorité groupe > solo > MapData fallback, EnemyGroup SO, EnemyPool mixte EnemyData+EnemyGroup) · **Mort d'ennemi mid-combat** (exclusion immédiate, fade CanvasGroup 3.5s, positions preservées, hook Animator "Death" prêt) · **spawnEffects / deathEffects sur EnemyData** (effets à l'apparition et à la mort, via `ApplyEnemyEffect`) · **Système de stats ennemi** (`combatStatBonuses`, `GetEnemyAttack`, `GetEnemyStatModifiers` — symétrique joueur) · **`PerTurnStart + ModifyStat`** fonctionnel joueur ET ennemi (croissance cumulative par tour) · **Icônes de statuts joueur** (`StatusIcon.cs`, `RefreshPlayerStatusIcons`, GridLayoutGroup avec `statusIconsPerRow` configurable)
 
 ### À faire 🔧
 - Scène de sélection de personnage (`MainMenuManager.defaultCharacter` = placeholder)
@@ -230,3 +245,9 @@ Combat complet (tours, énergie, armure StS, cooldowns, statuts, crits, regen, l
 42. **Ciblage ennemi — `Button.onClick` vs `RectangleContainsScreenPoint`** : le Button sur le root élargi par `HorizontalLayoutGroup` couvre plus de surface que le sprite visible → décalage de cible. Préférer `RectTransformUtility.RectangleContainsScreenPoint(spriteImage.rectTransform, ...)` dans `Update()`.
 43. **Mort d'ennemi — `SetActive(false)` vs `CanvasGroup.alpha = 0`** : `SetActive(false)` retire l'enfant du HorizontalLayoutGroup et redistribue les positions. Pour garder les positions des survivants fixes, utiliser `CanvasGroup.alpha = 0` uniquement — le bloc reste dans le layout mais est invisible.
 44. **`EnemySprite` — nom exact requis dans le prefab** : `SpawnEnemyUI` cherche l'enfant par `root.transform.Find("EnemySprite")`. Un nom différent → `spriteImage` et `animator` null → sprite non affiché, fade non fonctionnel, ciblage impossible.
+45. **`ennemi.data.attack` direct — interdit** : toujours passer par `GetEnemyAttack(ennemi)` pour tenir compte des `combatStatBonuses` et statuts `ModifyStat`. La lecture directe ignore tous les buffs/debuffs runtime.
+46. **`deathEffects` — ordre dans `CheckEnemyDeath`** : les `deathEffects` sont appliqués APRÈS l'exclusion du ciblage mais AVANT `AllEnemiesDead()`. Si un deathEffect tue le joueur, `combatEnded` devient true → le `return` après la boucle évite de déclencher faussement la victoire.
+47. **`spawnEffects` et `deathEffects` — `ApplyEnemyEffect`** : `Self` désigne l'ennemi lui-même (ex : se donner de l'armure). Pour cibler le joueur (ex : explosion), utiliser `SingleEnemy`.
+48. **`StatusIconContainer` — `GridLayoutGroup` requis** : le container doit avoir un `GridLayoutGroup` dans la scène. `RefreshPlayerStatusIcons()` et `RefreshEnemyStatusIcons()` écrasent `constraintCount` au runtime — inutile de le configurer à la main, mais le composant doit être présent.
+49. **`StatusIcon` prefab — composant `StatusIcon` à la racine** : `RefreshPlayerStatusIcons` et `RefreshEnemyStatusIcons` font `go.GetComponent<StatusIcon>()` — si le composant est sur un enfant et non sur la racine, il retourne null et l'icône n'est pas enregistrée.
+50. **`EnemyStatusContainer` — nom exact requis dans l'EnemyUIPrefab** : `SpawnEnemyUI` cherche le container par `root.transform.Find("EnemyStatusContainer")`. Un nom différent → `statusIconContainer` null → icônes ennemis silencieusement absentes (pas d'erreur).

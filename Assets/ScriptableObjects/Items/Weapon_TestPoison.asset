@@ -29,6 +29,6 @@ MonoBehaviour:
   passiveEffects: []
   skills:
   - {fileID: 11400000, guid: 9c9666361562e55498dc31655fa61747, type: 2}
+  - {fileID: 11400000, guid: 608617fd7f457a84482ecb37099979a7, type: 2}
   tags: []
-  isUnique: 0
   setID: 

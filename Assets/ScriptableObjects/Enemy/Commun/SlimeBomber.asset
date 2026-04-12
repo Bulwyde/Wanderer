@@ -23,7 +23,8 @@ MonoBehaviour:
   actions:
   - skill: {fileID: 11400000, guid: f77538bbcb40ec5428470b863f721111, type: 2}
     maxUses: 0
-  spawnEffects: []
+  spawnEffects:
+  - {fileID: 11400000, guid: c11dfcf7f853e3642b30a043fae8de59, type: 2}
   deathEffects:
   - {fileID: 11400000, guid: 948228bbf3b12fd4eb1bcb3e581e807e, type: 2}
   creditsLoot: 50

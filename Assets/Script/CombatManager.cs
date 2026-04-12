@@ -119,6 +119,19 @@ public class CombatManager : MonoBehaviour
     public EquipmentOfferController equipmentOfferController;
 
     // -----------------------------------------------
+    // UI — STATUTS JOUEUR
+    // -----------------------------------------------
+
+    [Header("UI — Statuts joueur")]
+    // Container des icônes — doit avoir un GridLayoutGroup (Constraint = Fixed Column Count)
+    // Le constraintCount est écrasé au runtime par statusIconsPerRow
+    public Transform   statusIconContainer;
+    // Prefab d'une icône — doit avoir le composant StatusIcon (Image + StackText TMP)
+    public GameObject  statusIconPrefab;
+    [Tooltip("Nombre d'icônes de statut par ligne avant retour à la ligne")]
+    public int         statusIconsPerRow = 5;
+
+    // -----------------------------------------------
     // ÉTAT INTERNE
     // -----------------------------------------------
 
@@ -129,6 +142,9 @@ public class CombatManager : MonoBehaviour
 
     // Liste des ennemis actifs — chaque EnemyInstance porte toutes ses données runtime
     private List<EnemyInstance> enemies = new List<EnemyInstance>();
+
+    // Icônes de statuts joueur actuellement affichées
+    private List<StatusIcon> _spawnedStatusIcons = new List<StatusIcon>();
 
     // Canvas racine — mis en cache pour la conversion pixels écran → unités canvas (flèche ciblage)
     private Canvas _rootCanvas;
@@ -362,6 +378,20 @@ public class CombatManager : MonoBehaviour
                 case "EnemyHPText":         instance.hpText         = tmp; break;
                 case "EnemyArmorText":      instance.armorText      = tmp; break;
                 case "EnemyNextActionText": instance.nextActionText = tmp; break;
+            }
+        }
+
+        // Container d'icônes de statuts — cherché par nom exact "EnemyStatusContainer"
+        Transform statusContainerChild = root.transform.Find("EnemyStatusContainer");
+        if (statusContainerChild != null)
+        {
+            instance.statusIconContainer = statusContainerChild;
+            // Configure le GridLayoutGroup dès l'instanciation pour refléter statusIconsPerRow
+            GridLayoutGroup grid = statusContainerChild.GetComponent<GridLayoutGroup>();
+            if (grid != null)
+            {
+                grid.constraint      = GridLayoutGroup.Constraint.FixedColumnCount;
+                grid.constraintCount = Mathf.Max(1, statusIconsPerRow);
             }
         }
 
@@ -1419,6 +1449,9 @@ public class CombatManager : MonoBehaviour
         ennemi.statuses[status] += stacks;
         if (status.maxStacks > 0) ennemi.statuses[status] = Mathf.Min(ennemi.statuses[status], status.maxStacks);
         Log($"{ennemi.GetName()} reçoit {stacks} stack(s) de {status.statusName} → {ennemi.statuses[status]} total");
+        // Rafraîchit immédiatement l'UI ennemi pour que l'icône apparaisse dès l'application
+        // (sans ça, l'icône n'apparaît qu'au prochain UpdateEnemyUI déclenché par les dégâts/tour ennemi)
+        UpdateEnemyUI(ennemi);
     }
 
     private int GetPlayerStatusStacks(StatusData status)
@@ -1891,6 +1924,47 @@ public class CombatManager : MonoBehaviour
         if (energyText      != null) energyText.text      = $"Énergie : {currentEnergy} / {GetCurrentMaxEnergy()}";
         if (creditsText     != null && RunManager.Instance != null)
             creditsText.text = $"Credits : {RunManager.Instance.credits}";
+
+        RefreshPlayerStatusIcons();
+    }
+
+    /// <summary>
+    /// Recrée les icônes de statuts du joueur depuis playerStatuses.
+    /// Appelée automatiquement par UpdatePlayerUI à chaque changement d'état joueur.
+    /// Le GridLayoutGroup sur statusIconContainer gère le retour à la ligne automatiquement.
+    /// </summary>
+    private void RefreshPlayerStatusIcons()
+    {
+        if (statusIconPrefab == null || statusIconContainer == null) return;
+
+        // Met à jour le constraintCount du GridLayoutGroup pour refléter la valeur Inspector
+        GridLayoutGroup grid = statusIconContainer.GetComponent<GridLayoutGroup>();
+        if (grid != null)
+        {
+            grid.constraint      = GridLayoutGroup.Constraint.FixedColumnCount;
+            grid.constraintCount = Mathf.Max(1, statusIconsPerRow);
+        }
+
+        // Détruit les icônes existantes
+        foreach (StatusIcon icon in _spawnedStatusIcons)
+            if (icon != null) Destroy(icon.gameObject);
+        _spawnedStatusIcons.Clear();
+
+        // Recrée une icône par statut actif (stacks > 0)
+        foreach (var kvp in playerStatuses)
+        {
+            StatusData status = kvp.Key;
+            int        stacks = kvp.Value;
+            if (status == null || stacks <= 0) continue;
+
+            GameObject go   = Instantiate(statusIconPrefab, statusIconContainer);
+            StatusIcon icon = go.GetComponent<StatusIcon>();
+            if (icon != null)
+            {
+                icon.Setup(status, stacks);
+                _spawnedStatusIcons.Add(icon);
+            }
+        }
     }
 
     private void UpdateEnemyUI(EnemyInstance ennemi)
@@ -1902,6 +1976,38 @@ public class CombatManager : MonoBehaviour
         {
             SkillData next = ennemi.ai?.PeekNextSkill();
             ennemi.nextActionText.text = next != null ? $"Prochain : {next.skillName}" : "Prochain : Attaque de base";
+        }
+        RefreshEnemyStatusIcons(ennemi);
+    }
+
+    /// <summary>
+    /// Recrée les icônes de statuts d'un ennemi depuis son dictionnaire statuses.
+    /// Appelée automatiquement par UpdateEnemyUI. Utilise le même statusIconPrefab que le joueur.
+    /// Le container "EnemyStatusContainer" doit exister dans l'EnemyUIPrefab.
+    /// </summary>
+    private void RefreshEnemyStatusIcons(EnemyInstance ennemi)
+    {
+        if (statusIconPrefab == null || ennemi.statusIconContainer == null) return;
+
+        // Détruit les icônes existantes
+        foreach (StatusIcon icon in ennemi.spawnedStatusIcons)
+            if (icon != null) Destroy(icon.gameObject);
+        ennemi.spawnedStatusIcons.Clear();
+
+        // Recrée une icône par statut actif (stacks > 0)
+        foreach (var kvp in ennemi.statuses)
+        {
+            StatusData status = kvp.Key;
+            int        stacks = kvp.Value;
+            if (status == null || stacks <= 0) continue;
+
+            GameObject go   = Instantiate(statusIconPrefab, ennemi.statusIconContainer);
+            StatusIcon icon = go.GetComponent<StatusIcon>();
+            if (icon != null)
+            {
+                icon.Setup(status, stacks);
+                ennemi.spawnedStatusIcons.Add(icon);
+            }
         }
     }
 
@@ -1964,6 +2070,10 @@ public class CombatManager : MonoBehaviour
         public TextMeshProUGUI nextActionText;
         public Button          targetButton;
         public Animator        animator;      // pour le trigger "Death" (branché quand l'Animator sera prêt)
+
+        // Icônes de statuts — container trouvé par nom "EnemyStatusContainer" dans SpawnEnemyUI
+        public Transform       statusIconContainer;
+        public List<StatusIcon> spawnedStatusIcons = new List<StatusIcon>();
 
         public bool IsAlive => currentHP > 0;
         public int  MaxHP   => data != null ? data.maxHP : 0;

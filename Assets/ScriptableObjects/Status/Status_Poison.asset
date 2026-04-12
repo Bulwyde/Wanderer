@@ -15,9 +15,13 @@ MonoBehaviour:
   statusID: status_poison
   statusName: Poison
   description: 
-  icon: {fileID: 0}
+  icon: {fileID: -8848810468678797423, guid: e2a7bba5c2c51ce439159e499ca11e5b, type: 3}
   behavior: 1
   perTurnAction: 0
   effectPerStack: 1
   decayPerTurn: 1
+  decayTiming: 0
   maxStacks: 0
+  statToModify: 0
+  statModifierType: 0
+  valueScalesWithStacks: 0

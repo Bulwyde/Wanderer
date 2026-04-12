@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 19f9f454a116fcc47b71120bd5a13bd7, type: 3}
+  m_Name: EnemyGroupBombers
+  m_EditorClassIdentifier: Assembly-CSharp::EnemyGroup
+  groupID: EnemyGroupBombers
+  groupName: EnemyGroupBombers
+  enemies:
+  - {fileID: 11400000, guid: 4841910e196fe754793fb8d6cb5537c3, type: 2}
+  - {fileID: 11400000, guid: 4841910e196fe754793fb8d6cb5537c3, type: 2}
+  creditsLoot: 500
+  lootPool:
+  - {fileID: 11400000, guid: 7240fdddf83b30d4e95f7ccaf85c0b17, type: 2}
+  - {fileID: 11400000, guid: 2647f9465eb987c4fa6aee338461b252, type: 2}
+  - {fileID: 11400000, guid: 5abf629468f06cf4b920d7b631a4809c, type: 2}
+  lootOfferCount: 2
+  consumableLootPool: []
+  tags: []

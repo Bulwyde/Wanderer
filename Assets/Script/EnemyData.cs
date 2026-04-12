@@ -34,6 +34,15 @@ public class EnemyData : ScriptableObject
     public int defense   = 0;
 
     // -----------------------------------------------
+    // TAGS
+    // -----------------------------------------------
+
+    [Header("Tags")]
+    // Tags sémantiques pour les interactions et les conditions d'effets
+    // Ex : Tag_Humain, Tag_Undead, Tag_Feu — créer les assets dans Assets/ScriptableObjects/Tags/
+    public List<TagData> tags = new List<TagData>();
+
+    // -----------------------------------------------
     // LISTE D'ACTIONS
     // -----------------------------------------------
 
@@ -44,17 +53,18 @@ public class EnemyData : ScriptableObject
     public List<EnemyAction> actions = new List<EnemyAction>();
 
     // -----------------------------------------------
-    // LOOT
+    // EFFETS SPÉCIAUX
     // -----------------------------------------------
 
-    // -----------------------------------------------
-    // TAGS
-    // -----------------------------------------------
+    [Header("Effets — Apparition")]
+    [Tooltip("Effets appliqués sur cet ennemi dès l'initialisation du combat (avant le premier tour).")]
+    // Ex : conférer un statut, modifier une stat, appliquer de l'armure au départ.
+    public List<EffectData> spawnEffects = new List<EffectData>();
 
-    [Header("Tags")]
-    // Tags sémantiques pour les interactions et les conditions d'effets
-    // Ex : Tag_Humain, Tag_Undead, Tag_Feu — créer les assets dans Assets/ScriptableObjects/Tags/
-    public List<TagData> tags = new List<TagData>();
+    [Header("Effets — Mort")]
+    [Tooltip("Effets déclenchés au moment où cet ennemi tombe à 0 HP (avant la vérification de victoire).")]
+    // Ex : infliger des dégâts au joueur, soigner un allié, appliquer un statut.
+    public List<EffectData> deathEffects = new List<EffectData>();
 
     // -----------------------------------------------
     // LOOT

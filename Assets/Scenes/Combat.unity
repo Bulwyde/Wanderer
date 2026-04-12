@@ -558,7 +558,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CombatManager
   characterData: {fileID: 11400000, guid: 5d7cc6fa9416770409266c61a5550a2d, type: 2}
-  enemyGroup: {fileID: 11400000, guid: 710cd77b5020298458d85d957483977e, type: 2}
+  enemyGroup: {fileID: 11400000, guid: 7943d42479a9d2c4e966e7cb9902b892, type: 2}
   enemyData: {fileID: 0}
   playerHPText: {fileID: 447927619}
   playerArmorText: {fileID: 890051565}

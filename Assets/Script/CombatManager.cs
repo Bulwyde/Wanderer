@@ -265,6 +265,15 @@ public class CombatManager : MonoBehaviour
         enemies.Clear();
         BuildEnemyList();
 
+        // Applique les effets d'apparition de chaque ennemi (spawnEffects)
+        // — exécutés depuis le point de vue de l'ennemi, avant le premier tour.
+        foreach (EnemyInstance instance in enemies)
+        {
+            if (instance.data?.spawnEffects == null) continue;
+            foreach (EffectData eff in instance.data.spawnEffects)
+                if (eff != null) ApplyEnemyEffect(eff, $"{instance.GetName()} (apparition)", instance);
+        }
+
         foreach (SkillData skill in availableSkills)
             if (skill != null) skillCooldowns[skill] = 0;
 
@@ -623,8 +632,8 @@ public class CombatManager : MonoBehaviour
             }
             else
             {
-                // Attaque de base
-                int atk      = ennemi.data != null ? ennemi.data.attack : 5;
+                // Attaque de base — passe par GetEnemyAttack pour tenir compte des buffs/debuffs runtime
+                int atk      = GetEnemyAttack(ennemi);
                 int rawDmg   = Mathf.Max(1, atk - GetCurrentDefense());
                 AppliquerDegatsAuJoueur(rawDmg, ennemi.GetName(), "Attaque de base");
             }
@@ -1008,7 +1017,8 @@ public class CombatManager : MonoBehaviour
         {
             case EffectAction.DealDamage:
             {
-                int atk      = attacker.data != null ? attacker.data.attack : 5;
+                // Passe par GetEnemyAttack pour tenir compte des buffs/debuffs runtime
+                int atk      = GetEnemyAttack(attacker);
                 int rawDmg   = Mathf.Max(1, Mathf.RoundToInt(effect.value) + atk - GetCurrentDefense());
 
                 // Mise à l'échelle par stacks (scalingStatus sur le joueur)
@@ -1061,6 +1071,28 @@ public class CombatManager : MonoBehaviour
                     ApplyStatusAEnnemi(attacker, effect.statusToApply, stacks);
                 else
                     ApplyStatusAuJoueur(effect.statusToApply, stacks);
+                break;
+            }
+
+            case EffectAction.ModifyStat:
+            {
+                // Self = modifie les stats de l'ennemi lui-même (ex : +attaque au spawn)
+                // Toute autre cible = modifie les stats du joueur (ex : debuff)
+                float val = effect.value;
+                if (effect.target == EffectTarget.Self)
+                {
+                    if (!attacker.combatStatBonuses.ContainsKey(effect.statToModify))
+                        attacker.combatStatBonuses[effect.statToModify] = 0f;
+                    attacker.combatStatBonuses[effect.statToModify] += val;
+                    Log($"{attacker.GetName()} utilise {sourceName} — {effect.statToModify} {(val >= 0 ? "+" : "")}{val:F1} (ce combat)");
+                }
+                else
+                {
+                    if (!combatStatModifiers.ContainsKey(effect.statToModify))
+                        combatStatModifiers[effect.statToModify] = 0f;
+                    combatStatModifiers[effect.statToModify] += val;
+                    Log($"{attacker.GetName()} utilise {sourceName} — {GetPlayerName()} : {effect.statToModify} {(val >= 0 ? "+" : "")}{val:F1} (ce combat)");
+                }
                 break;
             }
 
@@ -1419,6 +1451,12 @@ public class CombatManager : MonoBehaviour
                     currentPlayerHP = Mathf.Max(0, currentPlayerHP - dmg);
                     Log($"{GetPlayerName()} subit {dmg} dégâts de {status.statusName} ({stacks} stack(s))");
                     break;
+                case EffectAction.ModifyStat:
+                    if (!combatStatModifiers.ContainsKey(status.statToModify))
+                        combatStatModifiers[status.statToModify] = 0f;
+                    combatStatModifiers[status.statToModify] += totalEffect;
+                    Log($"{GetPlayerName()} — {status.statusName} : {status.statToModify} {(totalEffect >= 0 ? "+" : "")}{totalEffect:F1} (ce combat)");
+                    break;
                 case EffectAction.Heal:
                     int healed = Mathf.Min(Mathf.RoundToInt(totalEffect), GetPlayerMaxHP() - currentPlayerHP);
                     currentPlayerHP += healed;
@@ -1445,6 +1483,12 @@ public class CombatManager : MonoBehaviour
                     int dmg = Mathf.Max(1, Mathf.RoundToInt(totalEffect));
                     ennemi.currentHP = Mathf.Max(0, ennemi.currentHP - dmg);
                     Log($"{ennemi.GetName()} subit {dmg} dégâts de {status.statusName} ({stacks} stack(s))");
+                    break;
+                case EffectAction.ModifyStat:
+                    if (!ennemi.combatStatBonuses.ContainsKey(status.statToModify))
+                        ennemi.combatStatBonuses[status.statToModify] = 0f;
+                    ennemi.combatStatBonuses[status.statToModify] += totalEffect;
+                    Log($"{ennemi.GetName()} — {status.statusName} : {status.statToModify} {(totalEffect >= 0 ? "+" : "")}{totalEffect:F1} (ce combat)");
                     break;
                 case EffectAction.Heal:
                     int healed = Mathf.Min(Mathf.RoundToInt(totalEffect), ennemi.MaxHP - ennemi.currentHP);
@@ -1515,6 +1559,16 @@ public class CombatManager : MonoBehaviour
         // Recharge les cooldowns de nav liés aux tags de l'ennemi
         if (ennemi.data?.tags != null && ennemi.data.tags.Count > 0 && RunManager.Instance != null)
             RunManager.Instance.TickCooldownsAvecTag(ennemi.data.tags);
+
+        // Effets à la mort — ex : explosion infligeant des dégâts au joueur, soin d'un allié, etc.
+        // Exécutés depuis le point de vue de l'ennemi, avant la vérification de victoire.
+        if (ennemi.data?.deathEffects != null)
+        {
+            foreach (EffectData eff in ennemi.data.deathEffects)
+                if (eff != null) ApplyEnemyEffect(eff, $"{ennemi.GetName()} (mort)", ennemi);
+            // Un death effect peut tuer le joueur → combat déjà terminé, on sort immédiatement
+            if (combatEnded) return;
+        }
 
         // Lance le fade visuel en parallèle — n'interrompt pas le flux de combat
         StartCoroutine(MortEnnemiRoutine(ennemi));
@@ -1596,6 +1650,45 @@ public class CombatManager : MonoBehaviour
     private float GetCurrentCritMultiplier(){ var (f,p) = GetPlayerStatModifiers(StatType.CriticalMultiplier); return Mathf.Max(1f, (effectiveCriticalMultiplier + f) * (1f + p)); }
     private float GetCurrentLifeSteal()     { var (f,p) = GetPlayerStatModifiers(StatType.LifeSteal);          return Mathf.Clamp01((effectiveLifeSteal + f) * (1f + p)); }
     private int   GetCurrentMaxEnergy()     { var (f,p) = GetPlayerStatModifiers(StatType.MaxEnergy);          return Mathf.Max(1, Mathf.RoundToInt((effectiveMaxEnergy + f) * (1f + p))); }
+
+    /// <summary>
+    /// Retourne les modificateurs de stats cumulés d'un ennemi pour le combat en cours.
+    /// Miroir de GetPlayerStatModifiers : combine combatStatBonuses (effets directs)
+    /// et les statuts ModifyStat passifs portés par l'ennemi.
+    /// </summary>
+    private (float flat, float pct) GetEnemyStatModifiers(EnemyInstance ennemi, StatType stat)
+    {
+        float flat = 0f, pct = 0f;
+
+        // Bonus directs accumulés (skills ennemis, spawnEffects, perTurnAction ModifyStat…)
+        if (ennemi.combatStatBonuses.TryGetValue(stat, out float directMod))
+            flat += directMod;
+
+        // Statuts ModifyStat passifs — actifs tant que stacks > 0
+        foreach (var kvp in ennemi.statuses)
+        {
+            StatusData status = kvp.Key;
+            int stacks = kvp.Value;
+            if (stacks <= 0 || status == null || status.behavior != StatusBehavior.ModifyStat) continue;
+            if (status.statToModify != stat) continue;
+            float amount = status.valueScalesWithStacks ? status.effectPerStack * stacks : status.effectPerStack;
+            if (status.statModifierType == StatModifierType.Percentage) pct += amount;
+            else flat += amount;
+        }
+
+        return (flat, pct);
+    }
+
+    /// <summary>
+    /// Retourne l'attaque effective d'un ennemi en tenant compte de ses modificateurs de combat.
+    /// Utiliser à la place de ennemi.data.attack pour respecter les buffs/debuffs en cours.
+    /// </summary>
+    private int GetEnemyAttack(EnemyInstance ennemi)
+    {
+        int baseAtk = ennemi.data != null ? ennemi.data.attack : 5;
+        var (flat, pct) = GetEnemyStatModifiers(ennemi, StatType.Attack);
+        return Mathf.Max(0, Mathf.RoundToInt((baseAtk + flat) * (1f + pct)));
+    }
 
     // -----------------------------------------------
     // COOLDOWNS
@@ -1856,7 +1949,10 @@ public class CombatManager : MonoBehaviour
         public EnemyData data;
         public int       currentHP;
         public int       currentArmor;
-        public Dictionary<StatusData, int> statuses = new Dictionary<StatusData, int>();
+        public Dictionary<StatusData, int>  statuses         = new Dictionary<StatusData, int>();
+        // Modificateurs de stats temporaires accumulés pendant ce combat (skills, perTurnAction, spawnEffects…)
+        // Miroir du combatStatModifiers du joueur — jamais modifié sur le ScriptableObject.
+        public Dictionary<StatType, float>  combatStatBonuses = new Dictionary<StatType, float>();
         public EnemyAI   ai;
 
         // Références UI (peuplées par SpawnEnemyUI)

@@ -10,21 +10,22 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: c13b9ef6d09b5344b85cee60eda85826, type: 3}
-  m_Name: SlimePoison
+  m_Name: SlimeBomber
   m_EditorClassIdentifier: Assembly-CSharp::EnemyData
-  enemyID: slime_poison
-  enemyName: Poison
-  portrait: {fileID: -3297650188656544483, guid: 82538c3874249314ebcb826ef6a94856, type: 3}
+  enemyID: bomber
+  enemyName: Bomber
+  portrait: {fileID: 10913, guid: 0000000000000000f000000000000000, type: 0}
   maxHP: 20
   attack: 0
   defense: 0
   tags:
   - {fileID: 11400000, guid: 7b9eff8930069504e8e348d2516d9a97, type: 2}
   actions:
-  - skill: {fileID: 11400000, guid: 9c9666361562e55498dc31655fa61747, type: 2}
+  - skill: {fileID: 11400000, guid: f77538bbcb40ec5428470b863f721111, type: 2}
     maxUses: 0
   spawnEffects: []
-  deathEffects: []
+  deathEffects:
+  - {fileID: 11400000, guid: 948228bbf3b12fd4eb1bcb3e581e807e, type: 2}
   creditsLoot: 50
   lootPool:
   - {fileID: 11400000, guid: 00bfed72720722c4a87df02eb7371be4, type: 2}

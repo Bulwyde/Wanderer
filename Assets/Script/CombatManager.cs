@@ -1945,9 +1945,15 @@ public class CombatManager : MonoBehaviour
             grid.constraintCount = Mathf.Max(1, statusIconsPerRow);
         }
 
-        // Détruit les icônes existantes
+        // Détruit les icônes existantes — SetActive(false) d'abord pour retrait immédiat du layout (Piège #3)
         foreach (StatusIcon icon in _spawnedStatusIcons)
-            if (icon != null) Destroy(icon.gameObject);
+        {
+            if (icon != null)
+            {
+                icon.gameObject.SetActive(false);
+                Destroy(icon.gameObject);
+            }
+        }
         _spawnedStatusIcons.Clear();
 
         // Recrée une icône par statut actif (stacks > 0)
@@ -1989,9 +1995,15 @@ public class CombatManager : MonoBehaviour
     {
         if (statusIconPrefab == null || ennemi.statusIconContainer == null) return;
 
-        // Détruit les icônes existantes
+        // Détruit les icônes existantes — SetActive(false) d'abord pour retrait immédiat du layout (Piège #3)
         foreach (StatusIcon icon in ennemi.spawnedStatusIcons)
-            if (icon != null) Destroy(icon.gameObject);
+        {
+            if (icon != null)
+            {
+                icon.gameObject.SetActive(false);
+                Destroy(icon.gameObject);
+            }
+        }
         ennemi.spawnedStatusIcons.Clear();
 
         // Recrée une icône par statut actif (stacks > 0)

@@ -3,6 +3,13 @@ using UnityEngine.UI;
 using System.Collections;
 using System.Collections.Generic;
 
+[System.Serializable]
+public class AssociationIconeCase
+{
+    public CellType typeDCase;
+    public Sprite   icone;
+}
+
 public class MapRenderer : MonoBehaviour
 {
     [Header("Références")]
@@ -14,6 +21,9 @@ public class MapRenderer : MonoBehaviour
     [Header("Dimensions")]
     public float cellSize      = 30f;
     public float wallThickness = 6f;
+
+    [Header("Icônes")]
+    [SerializeField] private AssociationIconeCase[] iconesParType;
 
     [Header("Couleurs")]
     public Color colorHidden  = new Color(0.1f, 0.1f, 0.1f);
@@ -29,8 +39,9 @@ public class MapRenderer : MonoBehaviour
     public Color colorPlayer  = Color.white;
     public Color colorPreview = new Color(0.95f, 0.90f, 0.2f, 0.85f); // jaune vif semi-opaque
 
-    // Références aux images des cases
+    // Références aux images des cases (fond) et aux images d'icônes (calque supérieur)
     private Image[,] cellImages;
+    private Image[,] iconeImages;
 
     // Cases actuellement en surbrillance (mode sélection de zone RevealZoneChoice)
     private HashSet<Vector2Int> cellsEnPreview = new HashSet<Vector2Int>();
@@ -63,6 +74,7 @@ public class MapRenderer : MonoBehaviour
             Destroy(child.gameObject);
 
         cellImages  = new Image[mapData.width, mapData.height];
+        iconeImages = new Image[mapData.width, mapData.height];
         wallEntries = new List<WallEntry>();
         float step  = cellSize + wallThickness;
 
@@ -87,6 +99,22 @@ public class MapRenderer : MonoBehaviour
                 Image img = cell.AddComponent<Image>();
                 img.color = colorHidden;
                 cellImages[x, y] = img;
+
+                // Calque icône : GO enfant dédié, par-dessus le fond
+                GameObject iconeGO = new GameObject($"Icone_{x}_{y}");
+                iconeGO.transform.SetParent(cell.transform, false);
+
+                RectTransform iconeRt = iconeGO.AddComponent<RectTransform>();
+                iconeRt.sizeDelta        = new Vector2(cellSize, cellSize);
+                iconeRt.anchorMin        = Vector2.zero;
+                iconeRt.anchorMax        = Vector2.zero;
+                iconeRt.pivot            = Vector2.zero;
+                iconeRt.anchoredPosition = Vector2.zero;
+
+                Image iconeImg = iconeGO.AddComponent<Image>();
+                iconeImg.color          = Color.clear;
+                iconeImg.raycastTarget  = false;
+                iconeImages[x, y] = iconeImg;
             }
         }
 
@@ -159,6 +187,7 @@ public class MapRenderer : MonoBehaviour
                 if (x == navigationManager.PlayerX && y == navigationManager.PlayerY)
                 {
                     cellImages[x, y].color = colorPlayer;
+                    AppliquerIcone(x, y, CellType.Empty, false);
                     continue;
                 }
 
@@ -167,6 +196,7 @@ public class MapRenderer : MonoBehaviour
                 if (cell?.cellType == CellType.NonNavigable)
                 {
                     cellImages[x, y].color = Color.clear;
+                    AppliquerIcone(x, y, CellType.NonNavigable, false);
                     continue;
                 }
 
@@ -183,10 +213,12 @@ public class MapRenderer : MonoBehaviour
                     CellType displayType = cleared ? CellType.Empty
                                                    : (cell?.cellType ?? CellType.Empty);
                     cellImages[x, y].color = GetCellColor(displayType);
+                    AppliquerIcone(x, y, displayType, true);
                 }
                 else
                 {
                     cellImages[x, y].color = colorHidden;
+                    AppliquerIcone(x, y, CellType.Empty, false);
                 }
             }
         }
@@ -268,12 +300,14 @@ public class MapRenderer : MonoBehaviour
         if (x == navigationManager.PlayerX && y == navigationManager.PlayerY)
         {
             cellImages[x, y].color = colorPlayer;
+            AppliquerIcone(x, y, CellType.Empty, false);
             return;
         }
 
         if (cell?.cellType == CellType.NonNavigable)
         {
             cellImages[x, y].color = Color.clear;
+            AppliquerIcone(x, y, CellType.NonNavigable, false);
             return;
         }
 
@@ -285,10 +319,12 @@ public class MapRenderer : MonoBehaviour
             CellType displayType = cleared ? CellType.Empty
                                            : (cell?.cellType ?? CellType.Empty);
             cellImages[x, y].color = GetCellColor(displayType);
+            AppliquerIcone(x, y, displayType, true);
         }
         else
         {
             cellImages[x, y].color = colorHidden;
+            AppliquerIcone(x, y, CellType.Empty, false);
         }
     }
 
@@ -328,6 +364,33 @@ public void CenterCameraOnPlayer()
 
     Debug.Log($"CanvasCenter : {canvasCenter} | PlayerUIPos : {playerUIPos} | Result : {mapContainer.anchoredPosition}");
 }
+
+    // --- ICÔNES ---
+
+    /// <summary>
+    /// Retourne le sprite associé au type de case donné,
+    /// ou null si aucune association n'est configurée dans l'Inspector.
+    /// </summary>
+    private Sprite ObtenirIcone(CellType type)
+    {
+        if (iconesParType == null) return null;
+        foreach (AssociationIconeCase assoc in iconesParType)
+            if (assoc.typeDCase == type) return assoc.icone;
+        return null;
+    }
+
+    /// <summary>
+    /// Assigne le sprite approprié sur l'Image icône de la case (x, y).
+    /// Si la case n'est pas visible ou qu'aucun sprite n'est configuré, efface l'icône.
+    /// </summary>
+    private void AppliquerIcone(int x, int y, CellType displayType, bool visible)
+    {
+        if (iconeImages == null || iconeImages[x, y] == null) return;
+        Image icone   = iconeImages[x, y];
+        Sprite sprite = visible ? ObtenirIcone(displayType) : null;
+        icone.sprite  = sprite;
+        icone.color   = sprite != null ? Color.white : Color.clear;
+    }
 
     private Color GetCellColor(CellType type)
     {

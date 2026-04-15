@@ -897,12 +897,35 @@ public class CombatManager : MonoBehaviour
         {
             case EffectAction.DealDamage:
             {
+                // Condition CarteActuelle non implémentée dans ce chantier
+                if (effect.conditionCible == ConditionCible.CarteActuelle)
+                    Debug.Log("[CombatManager] ConditionCible.CarteActuelle non encore implémenté");
+
                 float critChance = GetCurrentCritChance();
                 bool  isCrit     = critChance > 0f && Random.value < critChance;
 
                 foreach (EnemyInstance cible in GetEffectTargets(effect.target, explicitTarget))
                 {
-                    AppliquerDegatsEnnemi(cible, effect, sourceName, isCrit);
+                    float multiplicateur = 1f;
+                    int   bonusFlat      = 0;
+
+                    // Bonus conditionnel de tag sur l'ennemi ciblé
+                    if (effect.conditionCible == ConditionCible.EnnemiCible && effect.conditionTag != null)
+                    {
+                        bool aLeTag = cible.data != null
+                                   && cible.data.tags != null
+                                   && cible.data.tags.Contains(effect.conditionTag);
+
+                        if (aLeTag && effect.bonusConditionnel != 0f)
+                        {
+                            if (effect.typeBonusConditionnel == TypeBonusConditionnel.Pourcentage)
+                                multiplicateur = 1f + effect.bonusConditionnel;
+                            else
+                                bonusFlat = Mathf.RoundToInt(effect.bonusConditionnel);
+                        }
+                    }
+
+                    AppliquerDegatsEnnemi(cible, effect, sourceName, isCrit, multiplicateur, bonusFlat);
                     CheckEnemyDeath(cible);
                     if (combatEnded) return;
                 }
@@ -981,7 +1004,7 @@ public class CombatManager : MonoBehaviour
     /// <summary>
     /// Applique des dégâts du joueur sur un ennemi spécifique (helpers pour ApplyEffect).
     /// </summary>
-    private void AppliquerDegatsEnnemi(EnemyInstance ennemi, EffectData effect, string sourceName, bool isCrit)
+    private void AppliquerDegatsEnnemi(EnemyInstance ennemi, EffectData effect, string sourceName, bool isCrit, float multiplicateur = 1f, int bonusFlat = 0)
     {
         int enemyDef  = ennemi.data != null ? ennemi.data.defense : 0;
         int rawDamage = Mathf.Max(1, CalculerDegatsJoueur(effect.value) - enemyDef);
@@ -1000,6 +1023,12 @@ public class CombatManager : MonoBehaviour
                 if (effect.consumeStacks) ennemi.statuses.Remove(effect.scalingStatus);
             }
         }
+
+        // Bonus conditionnel de tag (pourcentage puis flat, dans cet ordre)
+        if (multiplicateur != 1f)
+            rawDamage = Mathf.Max(1, Mathf.RoundToInt(rawDamage * multiplicateur));
+        if (bonusFlat != 0)
+            rawDamage = Mathf.Max(1, rawDamage + bonusFlat);
 
         if (isCrit) rawDamage = Mathf.RoundToInt(rawDamage * GetCurrentCritMultiplier());
         rawDamage = Mathf.Clamp(rawDamage, 0, 9999);

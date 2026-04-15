@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a78710460ccc06149a964161e638fc8a, type: 3}
+  m_Name: Skill_OneShotElite
+  m_EditorClassIdentifier: Assembly-CSharp::SkillData
+  skillID: OneShotElite
+  skillName: OneShotElite
+  icon: {fileID: 0}
+  description: 
+  keywords: []
+  energyCost: 1
+  cooldown: 0
+  effects:
+  - {fileID: 11400000, guid: 7e446e98865f70141baeaf841972b959, type: 2}
+  targetType: 0
+  tags: []
+  isNavigationSkill: 0
+  navEffects: []
+  navCooldownType: 0
+  navCooldownCount: 1
+  navCooldownTag: {fileID: 0}

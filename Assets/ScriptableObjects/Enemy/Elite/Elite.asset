@@ -17,14 +17,16 @@ MonoBehaviour:
   portrait: {fileID: 1142697403063345136, guid: 540d2d315eadeb740a9e04947c69ea1e, type: 3}
   maxHP: 1000
   attack: 10
-  defense: 2
+  defense: 0
+  tags:
+  - {fileID: 11400000, guid: 9b97f8bbb7856054ba7ae2d74d48d62c, type: 2}
   actions:
   - skill: {fileID: 11400000, guid: 9c9666361562e55498dc31655fa61747, type: 2}
     maxUses: 1
   - skill: {fileID: 11400000, guid: 9de6836a04603bf499a97c1a54e2453e, type: 2}
     maxUses: 0
-  tags:
-  - {fileID: 11400000, guid: 9b97f8bbb7856054ba7ae2d74d48d62c, type: 2}
+  spawnEffects: []
+  deathEffects: []
   creditsLoot: 500
   lootPool:
   - {fileID: 11400000, guid: 7240fdddf83b30d4e95f7ccaf85c0b17, type: 2}

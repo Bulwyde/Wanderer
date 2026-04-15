@@ -12,5 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f975845bfcd4ede4295e9d9653502ec0, type: 3}
   m_Name: Pool_Enemy_Elite
   m_EditorClassIdentifier: Assembly-CSharp::EnemyPool
-  enemies:
-  - {fileID: 11400000, guid: 1613afb0a184e9346987066b9960b107, type: 2}
+  entries:
+  - enemyData: {fileID: 11400000, guid: 1613afb0a184e9346987066b9960b107, type: 2}
+    enemyGroup: {fileID: 0}
+    weight: 0

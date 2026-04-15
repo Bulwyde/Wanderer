@@ -202,6 +202,41 @@ public class EffectDataEditor : Editor
             }
         }
 
+        EditorGUILayout.Space();
+
+        // -----------------------------------------------
+        // CONDITION DE TAG
+        // -----------------------------------------------
+
+        EditorGUILayout.LabelField("Condition de tag", EditorStyles.boldLabel);
+
+        SerializedProperty conditionCibleProp = serializedObject.FindProperty("conditionCible");
+        EditorGUILayout.PropertyField(conditionCibleProp, new GUIContent("Cible de la condition"));
+        EditorGUILayout.PropertyField(serializedObject.FindProperty("conditionTag"), new GUIContent("Tag requis"));
+
+        ConditionCible conditionCible = (ConditionCible)conditionCibleProp.enumValueIndex;
+
+        // Bonus conditionnel — uniquement pour DealDamage quand un tag est assigné
+        SerializedProperty conditionTagProp = serializedObject.FindProperty("conditionTag");
+        if (conditionTagProp.objectReferenceValue != null && action == EffectAction.DealDamage)
+        {
+            EditorGUI.indentLevel++;
+
+            SerializedProperty typeBonusProp = serializedObject.FindProperty("typeBonusConditionnel");
+            EditorGUILayout.PropertyField(typeBonusProp, new GUIContent("Type de bonus conditionnel"));
+
+            TypeBonusConditionnel typBonus = (TypeBonusConditionnel)typeBonusProp.enumValueIndex;
+            string labelBonus = typBonus == TypeBonusConditionnel.Pourcentage
+                ? "Bonus % (ex : 0.5 = +50%, -0.3 = -30%)"
+                : "Bonus dégâts flat";
+
+            EditorGUILayout.PropertyField(
+                serializedObject.FindProperty("bonusConditionnel"),
+                new GUIContent(labelBonus));
+
+            EditorGUI.indentLevel--;
+        }
+
         serializedObject.ApplyModifiedProperties();
     }
 }

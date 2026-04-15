@@ -68,6 +68,21 @@ public class EffectData : ScriptableObject
     // Pour les modules et passifs : bonus permanent sur le run (via RunManager).
     // Pour les skills et consommables en combat : bonus temporaire jusqu'à la fin du combat.
     public StatType statToModify;
+
+    [Header("Condition de tag (optionnel)")]
+    // Tag requis sur la cible ou le contexte pour que l'effet s'applique (ou soit amplifié).
+    // null = pas de condition.
+    [SerializeField] public TagData conditionTag;
+
+    // Sur quoi vérifier le tag.
+    [SerializeField] public ConditionCible conditionCible;
+
+    // Valeur du bonus appliqué si la condition de tag est remplie.
+    // Pourcentage : ex. 0.5 → +50%, -0.3 → -30% | Flat : valeur brute ajoutée aux dégâts.
+    [SerializeField] public float bonusConditionnel;
+
+    // Interprétation de bonusConditionnel : pourcentage ou valeur plate.
+    [SerializeField] public TypeBonusConditionnel typeBonusConditionnel;
 }
 
 /// <summary>
@@ -146,4 +161,23 @@ public enum EffectTarget
     SingleEnemy,            // Un ennemi ciblé
     AllEnemies,             // Tous les ennemis
     RandomEnemy,            // Un ennemi aléatoire
+}
+
+/// <summary>
+/// Interprétation de bonusConditionnel dans un EffectData.
+/// </summary>
+public enum TypeBonusConditionnel
+{
+    Pourcentage, // bonusConditionnel = fraction (ex : 0.5 = +50%, -0.3 = -30%)
+    Flat,        // bonusConditionnel = valeur brute ajoutée aux dégâts
+}
+
+/// <summary>
+/// Sur quoi vérifier la condition de tag d'un EffectData.
+/// </summary>
+public enum ConditionCible
+{
+    Aucune       = 0,       // Pas de condition — l'effet s'applique toujours
+    EnnemiCible,            // L'ennemi ciblé doit avoir le conditionTag
+    CarteActuelle,          // La carte courante doit avoir le conditionTag (réservé — non implémenté)
 }

@@ -10,14 +10,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 89ff0b5dd9d418544b2c3a658e2f35e2, type: 3}
-  m_Name: Consumable_LootTable_Basic
+  m_Name: Consumable_LootTable_TestTag
   m_EditorClassIdentifier: Assembly-CSharp::ConsumableLootTable
   consumables:
   - {fileID: 11400000, guid: d6c4a653009701145be19cc2e5d6958c, type: 2}
-  - {fileID: 11400000, guid: 04445750443ee984c9e8f37267ee79b7, type: 2}
-  - {fileID: 11400000, guid: 2971b8ab95e473d4b87c3a6d01ce53e9, type: 2}
-  - {fileID: 11400000, guid: 2f119e003e5f7184294998db0039b9de, type: 2}
-  - {fileID: 11400000, guid: 27f19f8a6535b8a47b3c481e4f0c6e7e, type: 2}
-  - {fileID: 11400000, guid: ccba42f331a60e84997c14314a13d5aa, type: 2}
-  - {fileID: 11400000, guid: fe94d9017fec5814996d71915bb3bd5d, type: 2}
   - {fileID: 11400000, guid: ab801af9176679b4d8883e8350e06c34, type: 2}

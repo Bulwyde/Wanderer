@@ -69,6 +69,17 @@ public class EffectData : ScriptableObject
     // Pour les skills et consommables en combat : bonus temporaire jusqu'à la fin du combat.
     public StatType statToModify;
 
+    [Header("Distribution d'item (DonnerConsommable / DonnerEquipement / DonnerModule)")]
+    // Loot table source — seule celle correspondant à l'action est utilisée.
+    [SerializeField] public ConsumableLootTable consommableLootTable;
+    [SerializeField] public EquipmentLootTable  equipementLootTable;
+    [SerializeField] public ModuleLootTable     moduleLootTable;
+
+    // Filtre appliqué lors du tirage (null = pas de filtre).
+    // Mutuellement exclusifs : si filtreParTagHero == true, filtreTag est ignoré.
+    [SerializeField] public TagData filtreTag;
+    [SerializeField] public bool    filtreParTagHero; // Utilise tags[0] du héros sélectionné
+
     [Header("Condition de tag (optionnel)")]
     // Tag requis sur la cible ou le contexte pour que l'effet s'applique (ou soit amplifié).
     // null = pas de condition.
@@ -126,6 +137,9 @@ public enum EffectAction
     AddCredits,             // Modifie les crédits du joueur (positif = gain, négatif = dépense)
     RevealRoom,             // Révèle une salle sur la carte
     DisableEnemyPart,       // Désactive une partie d'un ennemi
+    DonnerConsommable,      // Tire un consommable depuis une loot table et l'ajoute à l'inventaire
+    DonnerEquipement,       // Tire un équipement depuis une loot table (offre UI post-combat)
+    DonnerModule,           // Tire un module depuis une loot table et l'active immédiatement
 }
 
 /// <summary>

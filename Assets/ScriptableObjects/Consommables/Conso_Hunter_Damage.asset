@@ -10,19 +10,17 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: d730bac26e8d4204ba7d5b3416a8b789, type: 3}
-  m_Name: Conso_Rangevision
+  m_Name: Conso_Hunter_Damage
   m_EditorClassIdentifier: Assembly-CSharp::ConsumableData
-  consumableID: conso_range_vision
-  consumableName: Vision
-  icon: {fileID: 0}
+  consumableID: skill_hunter_damage
+  consumableName: skill_hunter_damage
+  icon: {fileID: -3743075690402889343, guid: efc692ead394f2c44b805ab24d6abd8d, type: 3}
   description: 
-  effects: []
-  tags: []
-  usableInCombat: 0
-  usableOnMap: 1
+  effects:
+  - {fileID: 11400000, guid: 4c8ff941a851ee14cbcc887d33c01607, type: 2}
+  tags:
+  - {fileID: 11400000, guid: 17bb226d1564ba04da420ae4e42e4415, type: 2}
+  usableInCombat: 1
+  usableOnMap: 0
   usableInEvents: 0
-  mapEffects:
-  - type: 3
-    value: 1
-    counterKey: 
-    allowedCellTypes: 
+  mapEffects: []

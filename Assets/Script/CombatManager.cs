@@ -118,6 +118,9 @@ public class CombatManager : MonoBehaviour
     public Button                  lootContinueButton;
     public EquipmentOfferController equipmentOfferController;
 
+    // Équipements injectés en cours de combat (via DonnerEquipement) — ajoutés aux offres du loot panel.
+    private List<EquipmentData> equipementsLootDifféré = new List<EquipmentData>();
+
     // -----------------------------------------------
     // UI — STATUTS JOUEUR
     // -----------------------------------------------
@@ -271,6 +274,7 @@ public class CombatManager : MonoBehaviour
     {
         combatEnded = false;
         combatStatModifiers.Clear();
+        equipementsLootDifféré.Clear();
         ResolveEquipment();
 
         currentPlayerHP    = (RunManager.Instance != null && RunManager.Instance.currentHP > 0)
@@ -995,10 +999,83 @@ public class CombatManager : MonoBehaviour
                 break;
             }
 
+            case EffectAction.DonnerConsommable:
+            {
+                if (effect.consommableLootTable == null)
+                {
+                    Log($"[CombatManager] DonnerConsommable — consommableLootTable non assignée sur '{sourceName}'.");
+                    break;
+                }
+                TagData filtre = ObtenirFiltreTag(effect);
+                ConsumableData consommable = effect.consommableLootTable.GetRandomAvecTag(filtre);
+                if (consommable == null) break;
+                if (RunManager.Instance != null)
+                {
+                    bool ajouté = RunManager.Instance.AddConsumable(consommable);
+                    if (ajouté)
+                    {
+                        Log($"{GetPlayerName()} obtient un consommable via {sourceName} : {consommable.consumableName}");
+                        SpawnConsumableButtons();
+                    }
+                    else
+                        Log($"[CombatManager] DonnerConsommable — inventaire plein, '{consommable.consumableName}' ignoré.");
+                }
+                break;
+            }
+
+            case EffectAction.DonnerModule:
+            {
+                if (effect.moduleLootTable == null)
+                {
+                    Log($"[CombatManager] DonnerModule — moduleLootTable non assignée sur '{sourceName}'.");
+                    break;
+                }
+                TagData filtre = ObtenirFiltreTag(effect);
+                ModuleData module = effect.moduleLootTable.GetRandomAvecTag(filtre);
+                if (module == null) break;
+                if (RunManager.Instance != null)
+                {
+                    RunManager.Instance.AddModule(module);
+                    Log($"{GetPlayerName()} obtient un module via {sourceName} : {module.moduleName}");
+                }
+                break;
+            }
+
+            case EffectAction.DonnerEquipement:
+            {
+                if (effect.equipementLootTable == null)
+                {
+                    Log($"[CombatManager] DonnerEquipement — equipementLootTable non assignée sur '{sourceName}'.");
+                    break;
+                }
+                TagData filtre = ObtenirFiltreTag(effect);
+                EquipmentData equipement = effect.equipementLootTable.GetRandomAvecTag(filtre);
+                if (equipement == null) break;
+                equipementsLootDifféré.Add(equipement);
+                Log($"{GetPlayerName()} va recevoir un équipement via {sourceName} : {equipement.equipmentName} (proposé après le combat)");
+                break;
+            }
+
             default:
                 Log($"{GetPlayerName()} utilise {sourceName} — Effet '{effect.action}' non encore implémenté.");
                 break;
         }
+    }
+
+    /// <summary>
+    /// Résout le tag de filtre à utiliser pour la distribution d'un item.
+    /// Si <c>filtreParTagHero</c> est activé et que le héros a au moins un tag, retourne <c>tags[0]</c>.
+    /// Sinon retourne <c>effect.filtreTag</c> (peut être null — pas de filtre).
+    /// </summary>
+    private TagData ObtenirFiltreTag(EffectData effect)
+    {
+        if (effect.filtreParTagHero)
+        {
+            CharacterData héros = RunManager.Instance?.selectedCharacter;
+            if (héros != null && héros.tags != null && héros.tags.Count > 0)
+                return héros.tags[0];
+        }
+        return effect.filtreTag;
     }
 
     /// <summary>
@@ -1396,6 +1473,63 @@ public class CombatManager : MonoBehaviour
                     RunManager.Instance.AddCredits(montant);
                     Log($"{source} — {(montant >= 0 ? "+" : "")}{montant} credits");
                 }
+                break;
+            }
+
+            case EffectAction.DonnerConsommable:
+            {
+                if (effect.consommableLootTable == null)
+                {
+                    Log($"{source} — DonnerConsommable : consommableLootTable non assignée.");
+                    break;
+                }
+                TagData filtre = ObtenirFiltreTag(effect);
+                ConsumableData consommable = effect.consommableLootTable.GetRandomAvecTag(filtre);
+                if (consommable == null) break;
+                if (RunManager.Instance != null)
+                {
+                    bool ajouté = RunManager.Instance.AddConsumable(consommable);
+                    if (ajouté)
+                    {
+                        Log($"{source} — consommable obtenu : {consommable.consumableName}");
+                        SpawnConsumableButtons();
+                    }
+                    else
+                        Log($"{source} — DonnerConsommable : inventaire plein, '{consommable.consumableName}' ignoré.");
+                }
+                break;
+            }
+
+            case EffectAction.DonnerModule:
+            {
+                if (effect.moduleLootTable == null)
+                {
+                    Log($"{source} — DonnerModule : moduleLootTable non assignée.");
+                    break;
+                }
+                TagData filtre = ObtenirFiltreTag(effect);
+                ModuleData module = effect.moduleLootTable.GetRandomAvecTag(filtre);
+                if (module == null) break;
+                if (RunManager.Instance != null)
+                {
+                    RunManager.Instance.AddModule(module);
+                    Log($"{source} — module obtenu : {module.moduleName}");
+                }
+                break;
+            }
+
+            case EffectAction.DonnerEquipement:
+            {
+                if (effect.equipementLootTable == null)
+                {
+                    Log($"{source} — DonnerEquipement : equipementLootTable non assignée.");
+                    break;
+                }
+                TagData filtre = ObtenirFiltreTag(effect);
+                EquipmentData equipement = effect.equipementLootTable.GetRandomAvecTag(filtre);
+                if (equipement == null) break;
+                equipementsLootDifféré.Add(equipement);
+                Log($"{source} — équipement réservé : {equipement.equipmentName} (proposé après le combat)");
                 break;
             }
 
@@ -1880,10 +2014,29 @@ public class CombatManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Résout les offres d'équipement dans l'ordre de priorité :
-    ///   EnemyGroup.lootPool > EnemyData.lootPool > MapData.defaultCombatLootTable
+    /// Résout les offres d'équipement : offres standard + équipements injectés via DonnerEquipement.
+    /// Vide <c>equipementsLootDifféré</c> après la fusion.
     /// </summary>
     private List<EquipmentData> PickLootOffers()
+    {
+        List<EquipmentData> offresBase = BuildLootOffresBase();
+
+        // Fusionne les équipements injectés par DonnerEquipement pendant le combat
+        foreach (EquipmentData e in equipementsLootDifféré)
+        {
+            if (e != null && !offresBase.Contains(e))
+                offresBase.Add(e);
+        }
+        equipementsLootDifféré.Clear();
+
+        return offresBase;
+    }
+
+    /// <summary>
+    /// Construit la liste d'offres d'équipement standard dans l'ordre de priorité :
+    ///   EnemyGroup.lootPool > EnemyData.lootPool > MapData.defaultCombatLootTable
+    /// </summary>
+    private List<EquipmentData> BuildLootOffresBase()
     {
         List<EquipmentData> pool       = null;
         int                 offerCount = 2;

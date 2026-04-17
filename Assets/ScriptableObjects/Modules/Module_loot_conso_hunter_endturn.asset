@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 98fb6cd1a235c4141958267325857b6b, type: 3}
+  m_Name: Module_loot_conso_hunter_endturn
+  m_EditorClassIdentifier: Assembly-CSharp::ModuleData
+  moduleID: module_loot_conso_endturn
+  moduleName: Module_loot_conso_endturn
+  icon: {fileID: -7538194220438307237, guid: ad15a7e3dca8ed548b580a8c19a7c072, type: 3}
+  description: 
+  keywords: []
+  effects:
+  - {fileID: 11400000, guid: ea0334b4a62e56a44bad6c89a53a376a, type: 2}
+  tags: []

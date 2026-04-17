@@ -26,8 +26,9 @@ MonoBehaviour:
   lifeSteal: 0
   baseVisionRange: 1
   maxEnergy: 3
-  tags: []
-  startingModule: {fileID: 11400000, guid: 6420e462f8efbe34ba29b8545c58db6b, type: 2}
+  tags:
+  - {fileID: 11400000, guid: 666f6447c3e3aa74db1ac3f6fb8e7c2f, type: 2}
+  startingModule: {fileID: 11400000, guid: 21478f726cf8b0b49975eddc01f0cfb0, type: 2}
   startingHead: {fileID: 11400000, guid: 22ae26ffd4aaba74cab76a4106bf6700, type: 2}
   startingTorso: {fileID: 0}
   startingLegs: {fileID: 11400000, guid: 06b4ecbeaf8fb144bb69ac9fbd707739, type: 2}
@@ -35,5 +36,3 @@ MonoBehaviour:
   startingArm2: {fileID: 11400000, guid: e39ba75205b38404e8066318ce23ef5e, type: 2}
   startingConsumables:
   - {fileID: 11400000, guid: 2971b8ab95e473d4b87c3a6d01ce53e9, type: 2}
-  - {fileID: 11400000, guid: 2f119e003e5f7184294998db0039b9de, type: 2}
-  - {fileID: 11400000, guid: fe94d9017fec5814996d71915bb3bd5d, type: 2}

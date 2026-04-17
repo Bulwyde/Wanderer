@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using System.Linq;
 
 /// <summary>
 /// Loot table de consommables — ScriptableObject réutilisable.
@@ -53,6 +54,39 @@ public class ConsumableLootTable : ScriptableObject
 
         ConsumableData tiré = disponibles[Random.Range(0, disponibles.Count)];
         Debug.Log($"[ConsumableLootTable] '{name}' : '{tiré.consumableName}' tiré parmi {disponibles.Count} consommable(s).");
+        return tiré;
+    }
+
+    /// <summary>
+    /// Retourne un consommable aléatoire parmi ceux qui possèdent le tag indiqué.
+    /// Si <paramref name="tag"/> est null, délègue à <see cref="GetRandom"/> sans filtre.
+    /// Retourne null si aucun consommable ne correspond au tag.
+    /// </summary>
+    public ConsumableData GetRandomAvecTag(TagData tag)
+    {
+        if (tag == null) return GetRandom();
+
+        if (consumables == null || consumables.Count == 0)
+        {
+            Debug.LogWarning($"[ConsumableLootTable] '{name}' : la liste de consommables est vide.");
+            return null;
+        }
+
+        List<ConsumableData> filtrés = new List<ConsumableData>();
+        foreach (ConsumableData c in consumables)
+        {
+            if (c != null && c.tags != null && c.tags.Any(t => t != null && t.tagName == tag.tagName))
+                filtrés.Add(c);
+        }
+
+        if (filtrés.Count == 0)
+        {
+            Debug.LogWarning($"[ConsumableLootTable] '{name}' : aucun consommable avec le tag '{tag.tagName}'.");
+            return null;
+        }
+
+        ConsumableData tiré = filtrés[Random.Range(0, filtrés.Count)];
+        Debug.Log($"[ConsumableLootTable] '{name}' : '{tiré.consumableName}' tiré parmi {filtrés.Count} consommable(s) avec le tag '{tag.tagName}'.");
         return tiré;
     }
 }

@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using System.Linq;
 
 /// <summary>
 /// Loot table d'équipements — ScriptableObject réutilisable.
@@ -52,6 +53,39 @@ public class EquipmentLootTable : ScriptableObject
 
         EquipmentData tiré = disponibles[Random.Range(0, disponibles.Count)];
         Debug.Log($"[EquipmentLootTable] '{name}' : '{tiré.equipmentName}' tiré parmi {disponibles.Count} équipement(s).");
+        return tiré;
+    }
+
+    /// <summary>
+    /// Retourne un équipement aléatoire parmi ceux qui possèdent le tag indiqué.
+    /// Si <paramref name="tag"/> est null, délègue à <see cref="GetRandom"/> sans filtre.
+    /// Retourne null si aucun équipement ne correspond au tag.
+    /// </summary>
+    public EquipmentData GetRandomAvecTag(TagData tag)
+    {
+        if (tag == null) return GetRandom();
+
+        if (equipments == null || equipments.Count == 0)
+        {
+            Debug.LogWarning($"[EquipmentLootTable] '{name}' : la liste d'équipements est vide.");
+            return null;
+        }
+
+        List<EquipmentData> filtrés = new List<EquipmentData>();
+        foreach (EquipmentData e in equipments)
+        {
+            if (e != null && e.tags != null && e.tags.Any(t => t != null && t.tagName == tag.tagName))
+                filtrés.Add(e);
+        }
+
+        if (filtrés.Count == 0)
+        {
+            Debug.LogWarning($"[EquipmentLootTable] '{name}' : aucun équipement avec le tag '{tag.tagName}'.");
+            return null;
+        }
+
+        EquipmentData tiré = filtrés[Random.Range(0, filtrés.Count)];
+        Debug.Log($"[EquipmentLootTable] '{name}' : '{tiré.equipmentName}' tiré parmi {filtrés.Count} équipement(s) avec le tag '{tag.tagName}'.");
         return tiré;
     }
 }

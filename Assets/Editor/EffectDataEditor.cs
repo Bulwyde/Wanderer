@@ -32,6 +32,10 @@ using UnityEngine;
 ///
 ///   RevealRoom    → (value et secondaryValue masqués — pas de paramètre numérique)
 ///   DisableEnemyPart → idem
+///
+///   DonnerConsommable → loot table consommable + filtreTag / filtreParTagHero
+///   DonnerEquipement  → loot table équipement  + filtreTag / filtreParTagHero
+///   DonnerModule      → loot table module       + filtreTag / filtreParTagHero
 /// </summary>
 [CustomEditor(typeof(EffectData))]
 public class EffectDataEditor : Editor
@@ -186,6 +190,47 @@ public class EffectDataEditor : Editor
                 EditorGUILayout.HelpBox(
                     "Cette action ne requiert pas de valeur numérique.",
                     MessageType.None);
+                break;
+            }
+
+            // -----------------------------------------------------------
+            case EffectAction.DonnerConsommable:
+            case EffectAction.DonnerEquipement:
+            case EffectAction.DonnerModule:
+            {
+                // Loot table correspondante au type d'action
+                if (action == EffectAction.DonnerConsommable)
+                    EditorGUILayout.PropertyField(
+                        serializedObject.FindProperty("consommableLootTable"),
+                        new GUIContent("Loot table consommable"));
+                else if (action == EffectAction.DonnerEquipement)
+                    EditorGUILayout.PropertyField(
+                        serializedObject.FindProperty("equipementLootTable"),
+                        new GUIContent("Loot table équipement"));
+                else
+                    EditorGUILayout.PropertyField(
+                        serializedObject.FindProperty("moduleLootTable"),
+                        new GUIContent("Loot table module"));
+
+                EditorGUILayout.Space(4);
+
+                // Filtre — filtreParTagHero et filtreTag sont mutuellement exclusifs
+                SerializedProperty filtreHéroProp = serializedObject.FindProperty("filtreParTagHero");
+                EditorGUILayout.PropertyField(filtreHéroProp,
+                    new GUIContent("Utiliser le tag du héros comme filtre"));
+
+                if (!filtreHéroProp.boolValue)
+                {
+                    EditorGUILayout.PropertyField(
+                        serializedObject.FindProperty("filtreTag"),
+                        new GUIContent("Filtre par tag (optionnel)"));
+                }
+                else
+                {
+                    EditorGUILayout.HelpBox(
+                        "filtreTag ignoré — le premier tag du héros est utilisé comme filtre.",
+                        MessageType.None);
+                }
                 break;
             }
 

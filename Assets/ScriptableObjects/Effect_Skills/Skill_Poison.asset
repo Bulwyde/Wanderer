@@ -22,6 +22,10 @@ MonoBehaviour:
   effects:
   - {fileID: 11400000, guid: d92bf9494e1965843b29feae034d1336, type: 2}
   targetType: 0
-  tags: []
+  tags:
+  - {fileID: 11400000, guid: 63d312329abfa6d41a8d4a482c609fe2, type: 2}
   isNavigationSkill: 0
   navEffects: []
+  navCooldownType: 0
+  navCooldownCount: 1
+  navCooldownTag: {fileID: 0}

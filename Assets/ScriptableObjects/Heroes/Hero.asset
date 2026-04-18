@@ -28,11 +28,11 @@ MonoBehaviour:
   maxEnergy: 3
   tags:
   - {fileID: 11400000, guid: 666f6447c3e3aa74db1ac3f6fb8e7c2f, type: 2}
-  startingModule: {fileID: 11400000, guid: 21478f726cf8b0b49975eddc01f0cfb0, type: 2}
+  startingModule: {fileID: 11400000, guid: 989de3618fbfa54458e13f2fc5939564, type: 2}
   startingHead: {fileID: 11400000, guid: 22ae26ffd4aaba74cab76a4106bf6700, type: 2}
   startingTorso: {fileID: 0}
   startingLegs: {fileID: 11400000, guid: 06b4ecbeaf8fb144bb69ac9fbd707739, type: 2}
-  startingArm1: {fileID: 11400000, guid: 00bfed72720722c4a87df02eb7371be4, type: 2}
-  startingArm2: {fileID: 11400000, guid: e39ba75205b38404e8066318ce23ef5e, type: 2}
+  startingArm1: {fileID: 11400000, guid: e39ba75205b38404e8066318ce23ef5e, type: 2}
+  startingArm2: {fileID: 11400000, guid: 5abf629468f06cf4b920d7b631a4809c, type: 2}
   startingConsumables:
   - {fileID: 11400000, guid: 2971b8ab95e473d4b87c3a6d01ce53e9, type: 2}

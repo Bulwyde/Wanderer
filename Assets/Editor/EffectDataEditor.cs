@@ -24,8 +24,13 @@ using UnityEngine;
 ///                   "Stacks à appliquer" (value)
 ///                   (secondaryValue et scalingStatus masqués)
 ///
-///   ModifyStat    → "Valeur de modification" (value)
-///                   (secondaryValue affiché sans scaling pour l'instant)
+///   ModifyStat    → "Stat ciblée" (statToModify)
+///                   "Valeur (plate)" (value)
+///
+/// Section globale (toutes actions) :
+///   "Source de scaling" (scalingSource)
+///   Si EquipementEquipe : "Tag a compter" (comptageTag)
+///   Si SkillUtilise     : "Tag requis sur le skill utilisé" (comptageTag)
 ///
 ///   AddGold       → "Quantité" (value)
 ///                   (secondaryValue masqué)
@@ -245,6 +250,42 @@ public class EffectDataEditor : Editor
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("consumeStacks"));
                 break;
             }
+        }
+
+        EditorGUILayout.Space();
+
+        // -----------------------------------------------
+        // SCALING / CONDITION DE SKILL
+        // -----------------------------------------------
+
+        EditorGUILayout.LabelField("Scaling / condition de skill", EditorStyles.boldLabel);
+
+        SerializedProperty scalingSourceProp = serializedObject.FindProperty("scalingSource");
+        EditorGUILayout.PropertyField(scalingSourceProp, new GUIContent("Source de scaling"));
+
+        EffectScalingSource scalingSourceVal = (EffectScalingSource)scalingSourceProp.enumValueIndex;
+        if (scalingSourceVal == EffectScalingSource.EquipementEquipe)
+        {
+            EditorGUI.indentLevel++;
+            EditorGUILayout.PropertyField(
+                serializedObject.FindProperty("comptageTag"),
+                new GUIContent("Tag a compter"));
+            EditorGUILayout.HelpBox(
+                "ModifyStat : valeur effective = Valeur (plate) × nb équipements portés avec ce tag.",
+                MessageType.None);
+            EditorGUI.indentLevel--;
+        }
+        else if (scalingSourceVal == EffectScalingSource.SkillUtilise)
+        {
+            EditorGUI.indentLevel++;
+            EditorGUILayout.PropertyField(
+                serializedObject.FindProperty("comptageTag"),
+                new GUIContent("Tag requis sur le skill utilisé"));
+            EditorGUILayout.HelpBox(
+                "L'effet ne se déclenche que si le skill utilisé possède ce tag.\n" +
+                "Nécessite trigger = OnSkillUsed.",
+                MessageType.None);
+            EditorGUI.indentLevel--;
         }
 
         EditorGUILayout.Space();

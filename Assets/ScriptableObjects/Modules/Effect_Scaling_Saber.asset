@@ -10,28 +10,28 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5713ebea065ef3643a7749f10079cbca, type: 3}
-  m_Name: Effect_Poison
+  m_Name: Effect_Scaling_Saber
   m_EditorClassIdentifier: Assembly-CSharp::EffectData
-  effectID: effect_poison
-  displayName: Poison
+  effectID: Effect_Scaling_Saber
+  displayName: Effect_Scaling_Saber
   description: 
   keywords: []
-  trigger: 0
-  action: 2
+  trigger: 9
+  action: 3
   value: 10
   secondaryValue: 0
-  statusToApply: {fileID: 11400000, guid: 0006ca0b1eb99d64c9a8355b1611db15, type: 2}
+  statusToApply: {fileID: 0}
   scalingStatus: {fileID: 0}
   consumeStacks: 0
-  target: 1
-  statToModify: 0
+  target: 0
+  statToModify: 1
   consommableLootTable: {fileID: 0}
   equipementLootTable: {fileID: 0}
   moduleLootTable: {fileID: 0}
   filtreTag: {fileID: 0}
   filtreParTagHero: 0
-  comptageTag: {fileID: 0}
-  scalingSource: 0
+  comptageTag: {fileID: 11400000, guid: 2e4bb727e58574d47bec8abc18bfa5cf, type: 2}
+  scalingSource: 1
   conditionTag: {fileID: 0}
   conditionCible: 0
   bonusConditionnel: 0

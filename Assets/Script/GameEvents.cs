@@ -36,6 +36,9 @@ public static class GameEvents
     /// <summary>Déclenché quand le joueur a utilisé toutes ses compétences ce tour.</summary>
     public static event Action OnAllSkillsUsed;
 
+    /// <summary>Déclenché quand le joueur utilise un skill (après application de ses effets).</summary>
+    public static event Action<SkillData> OnSkillUsed;
+
     // -----------------------------------------------
     // ÉVÉNEMENTS DE NAVIGATION
     // -----------------------------------------------
@@ -74,6 +77,9 @@ public static class GameEvents
 
     public static void TriggerAllSkillsUsed()
         => OnAllSkillsUsed?.Invoke();
+
+    public static void TriggerSkillUsed(SkillData skill)
+        => OnSkillUsed?.Invoke(skill);
 
     public static void TriggerRoomEntered(int roomIndex)
         => OnRoomEntered?.Invoke(roomIndex);

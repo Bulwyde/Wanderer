@@ -744,10 +744,11 @@ public class CombatManager : MonoBehaviour
 
         if (skill.effects != null && skill.effects.Count > 0)
             foreach (EffectData eff in skill.effects)
-                if (eff != null) ApplyEffect(eff, skill.skillName, null);
+                if (eff != null) ApplyEffect(eff, skill.skillName, null, skill);
         else
             Log($"{GetPlayerName()} utilise {skill.skillName} — (aucun effet défini)");
 
+        GameEvents.TriggerSkillUsed(skill);
         UpdatePlayerUI();
         UpdateSkillButtons();
     }
@@ -858,9 +859,10 @@ public class CombatManager : MonoBehaviour
         if (skill != null && skill.effects != null)
         {
             foreach (EffectData eff in skill.effects)
-                if (eff != null) ApplyEffect(eff, skill.skillName, cible);
+                if (eff != null) ApplyEffect(eff, skill.skillName, cible, skill);
         }
 
+        if (skill != null) GameEvents.TriggerSkillUsed(skill);
         UpdatePlayerUI();
         UpdateSkillButtons();
     }
@@ -894,8 +896,10 @@ public class CombatManager : MonoBehaviour
     /// <summary>
     /// Applique un EffectData du joueur.
     /// explicitTarget : ennemi sélectionné explicitement (null = résolution automatique).
+    /// sourceSkill    : skill à l'origine de l'appel — utilisé pour résoudre les bonus
+    ///                  stacks des modules (SkillUtilise). null = pas de bonus stacks.
     /// </summary>
-    private void ApplyEffect(EffectData effect, string sourceName, EnemyInstance explicitTarget)
+    private void ApplyEffect(EffectData effect, string sourceName, EnemyInstance explicitTarget, SkillData sourceSkill = null)
     {
         switch (effect.action)
         {
@@ -956,6 +960,10 @@ public class CombatManager : MonoBehaviour
             {
                 if (effect.statusToApply == null) break;
                 int stacks = Mathf.RoundToInt(effect.value);
+                int bonusStacks = ObtenirBonusStacksModules(effect.statusToApply, sourceSkill);
+                if (bonusStacks > 0)
+                    Log($"Bonus stacks module : +{bonusStacks} {effect.statusToApply.statusName} (source : '{sourceSkill?.skillName}')");
+                stacks += bonusStacks;
                 if (effect.target == EffectTarget.Self)
                 {
                     ApplyStatusAuJoueur(effect.statusToApply, stacks);
@@ -971,6 +979,8 @@ public class CombatManager : MonoBehaviour
             case EffectAction.ModifyStat:
             {
                 float val = effect.value;
+                if (effect.scalingSource == EffectScalingSource.EquipementEquipe && effect.comptageTag != null)
+                    val = effect.value * CompterEquipementsAvecTag(effect.comptageTag);
                 if (!combatStatModifiers.ContainsKey(effect.statToModify))
                     combatStatModifiers[effect.statToModify] = 0f;
                 combatStatModifiers[effect.statToModify] += val;
@@ -1060,6 +1070,75 @@ public class CombatManager : MonoBehaviour
                 Log($"{GetPlayerName()} utilise {sourceName} — Effet '{effect.action}' non encore implémenté.");
                 break;
         }
+    }
+
+    /// <summary>
+    /// Cumule les bonus stacks provenant des modules et passifs d'équipement
+    /// configurés avec action == ApplyStatus, scalingSource == SkillUtilise,
+    /// statusToApply == status, et dont le tag correspond au skill source.
+    /// Retourne 0 si sourceSkill == null, RunManager indisponible, ou aucun bonus.
+    /// Comparaison du tag par tagName (jamais par référence objet).
+    /// </summary>
+    private int ObtenirBonusStacksModules(StatusData status, SkillData sourceSkill)
+    {
+        if (sourceSkill == null || RunManager.Instance == null) return 0;
+
+        int total = 0;
+
+        // --- Modules ---
+        foreach (ModuleData module in RunManager.Instance.GetModules())
+        {
+            if (module == null || module.effects == null) continue;
+            foreach (EffectData effet in module.effects)
+            {
+                if (effet == null) continue;
+                if (effet.action         != EffectAction.ApplyStatus)              continue;
+                if (effet.scalingSource  != EffectScalingSource.SkillUtilise)      continue;
+                if (effet.statusToApply  != status)                                continue;
+                if (effet.comptageTag    == null)                                  continue;
+                if (sourceSkill.tags     == null)                                  continue;
+                if (!sourceSkill.tags.Any(t => t != null && t.tagName == effet.comptageTag.tagName)) continue;
+                total += Mathf.RoundToInt(effet.value);
+            }
+        }
+
+        // --- Passifs d'équipement ---
+        foreach (EquipmentSlot slot in System.Enum.GetValues(typeof(EquipmentSlot)))
+        {
+            EquipmentData equip = RunManager.Instance.GetEquipped(slot);
+            if (equip == null || equip.passiveEffects == null) continue;
+            foreach (EffectData effet in equip.passiveEffects)
+            {
+                if (effet == null) continue;
+                if (effet.action         != EffectAction.ApplyStatus)              continue;
+                if (effet.scalingSource  != EffectScalingSource.SkillUtilise)      continue;
+                if (effet.statusToApply  != status)                                continue;
+                if (effet.comptageTag    == null)                                  continue;
+                if (sourceSkill.tags     == null)                                  continue;
+                if (!sourceSkill.tags.Any(t => t != null && t.tagName == effet.comptageTag.tagName)) continue;
+                total += Mathf.RoundToInt(effet.value);
+            }
+        }
+
+        return total;
+    }
+
+    /// <summary>
+    /// Compte les équipements portés qui possèdent le tag indiqué (comparaison par tagName).
+    /// Retourne 0 si tag == null ou RunManager non disponible.
+    /// </summary>
+    private int CompterEquipementsAvecTag(TagData tag)
+    {
+        if (tag == null || RunManager.Instance == null) return 0;
+        int total = 0;
+        foreach (EquipmentSlot slot in System.Enum.GetValues(typeof(EquipmentSlot)))
+        {
+            EquipmentData equip = RunManager.Instance.GetEquipped(slot);
+            if (equip != null && equip.tags != null
+                && equip.tags.Any(t => t != null && t.tagName == tag.tagName))
+                total++;
+        }
+        return total;
     }
 
     /// <summary>
@@ -1322,6 +1401,8 @@ public class CombatManager : MonoBehaviour
             case EffectAction.ModifyStat:
             {
                 float val = effect.value;
+                if (effect.scalingSource == EffectScalingSource.EquipementEquipe && effect.comptageTag != null)
+                    val = effect.value * CompterEquipementsAvecTag(effect.comptageTag);
                 if (!combatStatModifiers.ContainsKey(effect.statToModify))
                     combatStatModifiers[effect.statToModify] = 0f;
                 combatStatModifiers[effect.statToModify] += val;
@@ -1447,20 +1528,24 @@ public class CombatManager : MonoBehaviour
 
             case EffectAction.ModifyStat:
             {
+                float val = effect.value;
+                if (effect.scalingSource == EffectScalingSource.EquipementEquipe && effect.comptageTag != null)
+                    val = effect.value * CompterEquipementsAvecTag(effect.comptageTag);
+
                 if (RunManager.Instance != null)
                 {
-                    RunManager.Instance.AddStatBonus(effect.statToModify, effect.value);
+                    RunManager.Instance.AddStatBonus(effect.statToModify, val);
                     switch (effect.statToModify)
                     {
-                        case StatType.Attack:             effectiveAttack             += Mathf.RoundToInt(effect.value); break;
-                        case StatType.Defense:            effectiveDefense            += Mathf.RoundToInt(effect.value); break;
-                        case StatType.MaxHP:              effectiveMaxHP              += Mathf.RoundToInt(effect.value); break;
-                        case StatType.CriticalChance:     effectiveCriticalChance     = Mathf.Clamp01(effectiveCriticalChance + effect.value); break;
-                        case StatType.CriticalMultiplier: effectiveCriticalMultiplier += effect.value; break;
-                        case StatType.LifeSteal:          effectiveLifeSteal          = Mathf.Clamp01(effectiveLifeSteal + effect.value); break;
-                        case StatType.MaxEnergy:          effectiveMaxEnergy          += Mathf.RoundToInt(effect.value); break;
+                        case StatType.Attack:             effectiveAttack             += Mathf.RoundToInt(val); break;
+                        case StatType.Defense:            effectiveDefense            += Mathf.RoundToInt(val); break;
+                        case StatType.MaxHP:              effectiveMaxHP              += Mathf.RoundToInt(val); break;
+                        case StatType.CriticalChance:     effectiveCriticalChance     = Mathf.Clamp01(effectiveCriticalChance + val); break;
+                        case StatType.CriticalMultiplier: effectiveCriticalMultiplier += val; break;
+                        case StatType.LifeSteal:          effectiveLifeSteal          = Mathf.Clamp01(effectiveLifeSteal + val); break;
+                        case StatType.MaxEnergy:          effectiveMaxEnergy          += Mathf.RoundToInt(val); break;
                     }
-                    Log($"{source} — {effect.statToModify} {(effect.value >= 0 ? "+" : "")}{effect.value:F1} (permanent run)");
+                    Log($"{source} — {effect.statToModify} {(val >= 0 ? "+" : "")}{val:F1} (permanent run)");
                 }
                 break;
             }

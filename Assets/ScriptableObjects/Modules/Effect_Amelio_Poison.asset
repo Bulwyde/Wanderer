@@ -10,28 +10,28 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5713ebea065ef3643a7749f10079cbca, type: 3}
-  m_Name: Effect_Poison
+  m_Name: Effect_Amelio_Poison
   m_EditorClassIdentifier: Assembly-CSharp::EffectData
-  effectID: effect_poison
-  displayName: Poison
+  effectID: Effect_Amelio_Poison
+  displayName: Effect_Amelio_Poison
   description: 
   keywords: []
-  trigger: 0
+  trigger: 8
   action: 2
-  value: 10
+  value: 50
   secondaryValue: 0
   statusToApply: {fileID: 11400000, guid: 0006ca0b1eb99d64c9a8355b1611db15, type: 2}
   scalingStatus: {fileID: 0}
   consumeStacks: 0
-  target: 1
+  target: 0
   statToModify: 0
   consommableLootTable: {fileID: 0}
   equipementLootTable: {fileID: 0}
   moduleLootTable: {fileID: 0}
   filtreTag: {fileID: 0}
   filtreParTagHero: 0
-  comptageTag: {fileID: 0}
-  scalingSource: 0
+  comptageTag: {fileID: 11400000, guid: 63d312329abfa6d41a8d4a482c609fe2, type: 2}
+  scalingSource: 2
   conditionTag: {fileID: 0}
   conditionCible: 0
   bonusConditionnel: 0

@@ -80,6 +80,13 @@ public class EffectData : ScriptableObject
     [SerializeField] public TagData filtreTag;
     [SerializeField] public bool    filtreParTagHero; // Utilise tags[0] du héros sélectionné
 
+    [Header("Scaling / condition de skill")]
+    // EquipementEquipe : value × nb d'équipements portés avec comptageTag (pour ModifyStat).
+    // SkillUtilise     : condition binaire — l'effet est skippé si le skill utilisé
+    //                    n'a pas comptageTag (nécessite trigger = OnSkillUsed).
+    [SerializeField] public TagData comptageTag;
+    [SerializeField] public EffectScalingSource scalingSource;
+
     [Header("Condition de tag (optionnel)")]
     // Tag requis sur la cible ou le contexte pour que l'effet s'applique (ou soit amplifié).
     // null = pas de condition.
@@ -194,4 +201,15 @@ public enum ConditionCible
     Aucune       = 0,       // Pas de condition — l'effet s'applique toujours
     EnnemiCible,            // L'ennemi ciblé doit avoir le conditionTag
     CarteActuelle,          // La carte courante doit avoir le conditionTag (réservé — non implémenté)
+}
+
+/// <summary>
+/// Source de scaling pour un effet ModifyStat.
+/// Détermine comment la valeur effective est calculée à partir de effect.value.
+/// </summary>
+public enum EffectScalingSource
+{
+    Aucune           = 0,   // Pas de scaling — value utilisée telle quelle
+    EquipementEquipe,       // value × nb d'équipements portés avec comptageTag (ModifyStat)
+    SkillUtilise,           // Condition binaire : skip si le skill utilisé n'a pas comptageTag
 }

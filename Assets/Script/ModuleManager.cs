@@ -1,6 +1,7 @@
 using UnityEngine;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 /// <summary>
 /// Singleton persistant (DontDestroyOnLoad) qui écoute le bus d'événements GameEvents
@@ -49,6 +50,7 @@ public class ModuleManager : MonoBehaviour
         GameEvents.OnPlayerDamaged      += HandlePlayerDamaged;
         GameEvents.OnPlayerDealtDamage  += HandlePlayerDealtDamage;
         GameEvents.OnEnemyDied          += HandleEnemyDied;
+        GameEvents.OnSkillUsed          += HandleSkillUsed;
     }
 
     void OnDisable()
@@ -58,6 +60,7 @@ public class ModuleManager : MonoBehaviour
         GameEvents.OnPlayerDamaged      -= HandlePlayerDamaged;
         GameEvents.OnPlayerDealtDamage  -= HandlePlayerDealtDamage;
         GameEvents.OnEnemyDied          -= HandleEnemyDied;
+        GameEvents.OnSkillUsed          -= HandleSkillUsed;
     }
 
     // -----------------------------------------------
@@ -86,6 +89,9 @@ public class ModuleManager : MonoBehaviour
 
     private void HandleEnemyDied()
         => ApplyModulesWithTrigger(EffectTrigger.OnEnemyDied);
+
+    private void HandleSkillUsed(SkillData skillUtilisé)
+        => ApplyModulesAvecSkill(skillUtilisé);
 
     // -----------------------------------------------
     // APPLICATION DES EFFETS DE MODULES
@@ -139,6 +145,86 @@ public class ModuleManager : MonoBehaviour
                     string nom = $"{equip.equipmentName} — {(string.IsNullOrEmpty(effet.displayName) ? effet.effectID : effet.displayName)}";
                     Debug.Log($"[Équipement passif] '{nom}' déclenché ({trigger})");
 
+                    if (combat != null)
+                        combat.ApplyModuleEffect(effet, nom);
+                    else
+                        ApplyEffectOutOfCombat(effet, nom);
+                }
+            }
+        }
+        finally
+        {
+            isApplyingModule = false;
+        }
+    }
+
+    /// <summary>
+    /// Déclenche les effets des modules et passifs d'équipement dont le trigger est OnSkillUsed.
+    /// Si l'effet porte scalingSource == SkillUtilise, ne l'applique que si le skill utilisé
+    /// possède un tag dont tagName == effect.comptageTag.tagName (comparaison par valeur).
+    /// </summary>
+    private void ApplyModulesAvecSkill(SkillData skillUtilisé)
+    {
+        if (isApplyingModule) return;
+        if (RunManager.Instance == null) return;
+
+        CombatManager combat = FindFirstObjectByType<CombatManager>();
+
+        isApplyingModule = true;
+        try
+        {
+            // --- Modules ---
+            foreach (ModuleData module in RunManager.Instance.GetModules())
+            {
+                if (module == null || module.effects == null) continue;
+                foreach (EffectData effet in module.effects)
+                {
+                    if (effet == null) continue;
+                    if (effet.trigger != EffectTrigger.OnSkillUsed) continue;
+
+                    // Géré inline par CombatManager.ApplyEffect — skip pour éviter double application
+                    if (effet.action == EffectAction.ApplyStatus && effet.scalingSource == EffectScalingSource.SkillUtilise) continue;
+
+                    // Condition de tag sur le skill utilisé
+                    if (effet.scalingSource == EffectScalingSource.SkillUtilise)
+                    {
+                        if (effet.comptageTag == null) continue;
+                        if (skillUtilisé == null || skillUtilisé.tags == null) continue;
+                        bool aLeTag = skillUtilisé.tags.Any(t => t != null && t.tagName == effet.comptageTag.tagName);
+                        if (!aLeTag) continue;
+                    }
+
+                    Debug.Log($"[Module] '{module.moduleName}' déclenché (OnSkillUsed — {skillUtilisé?.skillName})");
+                    if (combat != null)
+                        combat.ApplyModuleEffect(effet, module.moduleName);
+                    else
+                        ApplyEffectOutOfCombat(effet, module.moduleName);
+                }
+            }
+
+            // --- Passifs d'équipement ---
+            foreach (EquipmentSlot slot in System.Enum.GetValues(typeof(EquipmentSlot)))
+            {
+                EquipmentData equip = RunManager.Instance.GetEquipped(slot);
+                if (equip == null || equip.passiveEffects == null) continue;
+                foreach (EffectData effet in equip.passiveEffects)
+                {
+                    if (effet == null) continue;
+                    if (effet.trigger != EffectTrigger.OnSkillUsed) continue;
+
+                    // Géré inline par CombatManager.ApplyEffect — skip pour éviter double application
+                    if (effet.action == EffectAction.ApplyStatus && effet.scalingSource == EffectScalingSource.SkillUtilise) continue;
+
+                    if (effet.scalingSource == EffectScalingSource.SkillUtilise)
+                    {
+                        if (effet.comptageTag == null) continue;
+                        if (skillUtilisé == null || skillUtilisé.tags == null) continue;
+                        bool aLeTag = skillUtilisé.tags.Any(t => t != null && t.tagName == effet.comptageTag.tagName);
+                        if (!aLeTag) continue;
+                    }
+
+                    string nom = $"{equip.equipmentName} — {(string.IsNullOrEmpty(effet.displayName) ? effet.effectID : effet.displayName)}";
+                    Debug.Log($"[Équipement passif] '{nom}' déclenché (OnSkillUsed — {skillUtilisé?.skillName})");
                     if (combat != null)
                         combat.ApplyModuleEffect(effet, nom);
                     else

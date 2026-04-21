@@ -265,6 +265,10 @@ public class RunManager : MonoBehaviour
     // Clé : "x,y". Consulté par MapRenderer pour choisir la couleur/icône post-visite.
     private Dictionary<string, CellType> postVisitCellTypes = new Dictionary<string, CellType>();
 
+    // Cases remplacées par le système de maximum (clé : "x,y").
+    // Distinct de resolvedAleatoireCells — ces cases avaient un type fixe mais dépassaient le quota.
+    private Dictionary<string, CellType> overridesMaximum = new Dictionary<string, CellType>();
+
     // Indique si la carte courante a déjà été initialisée ce run (cases Aléatoires résolues, etc.).
     public bool carteInitialisee = false;
 
@@ -577,6 +581,7 @@ public class RunManager : MonoBehaviour
         shopStates.Clear();
         resolvedAleatoireCells.Clear();
         postVisitCellTypes.Clear();
+        overridesMaximum.Clear();
         carteInitialisee = false;
         currentMapData   = null;
         currentEnemyData  = null;
@@ -600,12 +605,14 @@ public class RunManager : MonoBehaviour
     /// Enregistre la salle dans laquelle le joueur entre.
     /// Appelé par NavigationManager juste avant de changer de scène,
     /// pour que la scène de destination sache quelle salle traiter.
+    /// Utilise GetEffectiveCellType pour que les cases Aléatoires résolues
+    /// et les overrides de maximum se comportent correctement dans les scènes cibles.
     /// </summary>
     public void EnterRoom(CellData cell)
     {
         currentRoomX    = cell.x;
         currentRoomY    = cell.y;
-        currentCellType = cell.cellType;
+        currentCellType = GetEffectiveCellType(cell);
 
         // Réinitialise les deux champs avant résolution
         currentEnemyData  = null;
@@ -663,9 +670,9 @@ public class RunManager : MonoBehaviour
         switch (cellType)
         {
             case CellType.CombatSimple: return currentMapData.normalEnemyPool;
-            case CellType.Elite:   return currentMapData.eliteEnemyPool;
-            case CellType.Boss:    return currentMapData.bossEnemyPool;
-            default:               return null;
+            case CellType.Elite:        return currentMapData.eliteEnemyPool;
+            case CellType.Boss:         return currentMapData.bossEnemyPool;
+            default:                    return null;
         }
     }
 
@@ -739,6 +746,59 @@ public class RunManager : MonoBehaviour
     public bool IsAleatoireResolu(int x, int y)
     {
         return resolvedAleatoireCells.ContainsKey($"{x},{y}");
+    }
+
+    // -----------------------------------------------
+    // OVERRIDES DE MAXIMUM
+    // -----------------------------------------------
+
+    /// <summary>
+    /// Enregistre un override de type pour une case dépassant son quota de maximum.
+    /// Appelé par NavigationManager.InitialiserCarte() à la première arrivée sur la carte.
+    /// </summary>
+    public void SetOverrideMaximum(int x, int y, CellType type)
+    {
+        overridesMaximum[$"{x},{y}"] = type;
+    }
+
+    /// <summary>
+    /// Retourne true si une case a été remplacée par le système de maximum.
+    /// </summary>
+    public bool HasOverrideMaximum(int x, int y)
+    {
+        return overridesMaximum.ContainsKey($"{x},{y}");
+    }
+
+    /// <summary>
+    /// Retourne le type de remplacement d'une case overridée, ou CellType.Empty si non défini.
+    /// </summary>
+    public CellType GetOverrideMaximum(int x, int y)
+    {
+        return overridesMaximum.TryGetValue($"{x},{y}", out CellType type)
+            ? type
+            : CellType.Empty;
+    }
+
+    /// <summary>
+    /// Retourne le type effectif d'une case en appliquant la chaîne de priorité :
+    /// postVisitCellTypes → overridesMaximum → resolvedAleatoireCells (si Aléatoire) → cellType original.
+    /// Source unique de vérité pour tout code qui a besoin du type réel d'une case au runtime.
+    /// </summary>
+    public CellType GetEffectiveCellType(CellData cell)
+    {
+        string cle = $"{cell.x},{cell.y}";
+
+        if (postVisitCellTypes.TryGetValue(cle, out CellType postVisit))
+            return postVisit;
+
+        if (overridesMaximum.TryGetValue(cle, out CellType overrideType))
+            return overrideType;
+
+        if (cell.cellType == CellType.Aleatoire &&
+            resolvedAleatoireCells.TryGetValue(cle, out CellType resolu))
+            return resolu;
+
+        return cell.cellType;
     }
 
     // -----------------------------------------------

@@ -86,6 +86,11 @@ public class NavigationManager : MonoBehaviour
             return;
         }
 
+        // Initialise la carte à la première arrivée (résolution des maximums et des cases Aléatoires).
+        // Ignoré si on revient d'un combat (carteInitialisee déjà true).
+        if (RunManager.Instance != null && !RunManager.Instance.carteInitialisee)
+            InitialiserCarte();
+
         // Si RunManager a sauvegardé un état (= on revient d'un combat),
         // on le restaure. Sinon, on place le joueur sur la case de départ.
         if (RunManager.Instance != null && RunManager.Instance.hasNavigationState)
@@ -114,6 +119,116 @@ public class NavigationManager : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.DownArrow))  TryMove(0, 1);
         if (Input.GetKeyDown(KeyCode.LeftArrow))  TryMove(-1, 0);
         if (Input.GetKeyDown(KeyCode.RightArrow)) TryMove(1, 0);
+    }
+
+    // -----------------------------------------------
+    // INITIALISATION DE CARTE
+    // -----------------------------------------------
+
+    /// <summary>
+    /// Initialise la carte à la première arrivée du joueur.
+    /// Étape 1 : applique les maximums par type (cases en excès → typeDeRemplacement).
+    /// Étape 2 : résout les cases Aléatoires via CellAleaPool.
+    /// N'est jamais appelée si carteInitialisee est déjà true (retour depuis un combat).
+    /// </summary>
+    private void InitialiserCarte()
+    {
+        if (RunManager.Instance == null || mapData == null) return;
+
+        // ── Étape 1 : Maximums par type ─────────────────────────────────────
+        if (mapData.maximumsParType != null)
+        {
+            foreach (MaxTypeEntry entree in mapData.maximumsParType)
+            {
+                if (entree.maximum <= 0) continue;
+
+                // Compter les cases du type concerné (ignorer celles déjà overridées)
+                List<CellData> casesType = new List<CellData>();
+                foreach (CellData cell in mapData.cells)
+                {
+                    if (cell == null) continue;
+                    if (RunManager.Instance.HasOverrideMaximum(cell.x, cell.y)) continue;
+                    if (cell.cellType == entree.type) casesType.Add(cell);
+                }
+
+                int exces = casesType.Count - entree.maximum;
+                if (exces <= 0) continue;
+
+                // Mélange Fisher-Yates pour choisir aléatoirement les cases en excès
+                for (int i = casesType.Count - 1; i > 0; i--)
+                {
+                    int j = Random.Range(0, i + 1);
+                    CellData tmp = casesType[i];
+                    casesType[i] = casesType[j];
+                    casesType[j] = tmp;
+                }
+
+                for (int i = 0; i < exces; i++)
+                    RunManager.Instance.SetOverrideMaximum(
+                        casesType[i].x, casesType[i].y, mapData.typeDeRemplacement);
+
+                Debug.Log($"[Navigation] Maximum dépassé pour {entree.type} — " +
+                          $"{exces} case(s) remplacée(s) par {mapData.typeDeRemplacement}");
+            }
+        }
+
+        // ── Étape 2 : Résolution des cases Aléatoires ───────────────────────
+        if (mapData.aleatoirePool == null)
+        {
+            bool aDesAleatoires = false;
+            foreach (CellData cell in mapData.cells)
+            {
+                if (cell != null && cell.cellType == CellType.Aleatoire)
+                { aDesAleatoires = true; break; }
+            }
+            if (aDesAleatoires)
+                Debug.LogWarning("[Navigation] Des cases Aléatoires sont présentes " +
+                                 "mais aucune CellAleaPool n'est assignée sur la MapData.");
+        }
+        else
+        {
+            // Comptes initiaux : types effectifs de toutes les cases non-Aléatoires
+            Dictionary<CellType, int> comptesActuels = new Dictionary<CellType, int>();
+            foreach (CellData cell in mapData.cells)
+            {
+                if (cell == null || cell.cellType == CellType.Aleatoire) continue;
+                CellType typeEff = RunManager.Instance.GetEffectiveCellType(cell);
+                if (!comptesActuels.ContainsKey(typeEff))
+                    comptesActuels[typeEff] = 0;
+                comptesActuels[typeEff]++;
+            }
+
+            // Collecter les cases Aléatoires dans un ordre aléatoire (Fisher-Yates)
+            List<CellData> casesAleatoires = new List<CellData>();
+            foreach (CellData cell in mapData.cells)
+            {
+                if (cell != null && cell.cellType == CellType.Aleatoire)
+                    casesAleatoires.Add(cell);
+            }
+
+            for (int i = casesAleatoires.Count - 1; i > 0; i--)
+            {
+                int j = Random.Range(0, i + 1);
+                CellData tmp = casesAleatoires[i];
+                casesAleatoires[i] = casesAleatoires[j];
+                casesAleatoires[j] = tmp;
+            }
+
+            foreach (CellData cell in casesAleatoires)
+            {
+                CellType resolu = mapData.aleatoirePool.TirerAleatoire(comptesActuels);
+                RunManager.Instance.SetResolvedAleatoire(cell.x, cell.y, resolu);
+
+                if (!comptesActuels.ContainsKey(resolu))
+                    comptesActuels[resolu] = 0;
+                comptesActuels[resolu]++;
+
+                Debug.Log($"[Navigation] Case Aléatoire ({cell.x},{cell.y}) → {resolu}");
+            }
+        }
+
+        RunManager.Instance.carteInitialisee = true;
+        Debug.Log("[Navigation] Carte initialisée.");
     }
 
     // -----------------------------------------------
@@ -428,10 +543,15 @@ public class NavigationManager : MonoBehaviour
     /// Appelé à chaque fois que le joueur entre dans une nouvelle case.
     /// Notifie le RunManager de la salle courante, puis déclenche
     /// la transition de scène adaptée au type de salle.
+    /// Utilise GetEffectiveCellType pour respecter les overrides de maximum et les Aléatoires résolus.
     /// </summary>
     private void OnRoomEntered(CellData cell)
     {
-        switch (cell.cellType)
+        CellType typeEffectif = RunManager.Instance != null
+            ? RunManager.Instance.GetEffectiveCellType(cell)
+            : cell.cellType;
+
+        switch (typeEffectif)
         {
             case CellType.CombatSimple:
             case CellType.Elite:

@@ -56,6 +56,13 @@ public class MapData : ScriptableObject
     [Range(1, 4)]
     public int defaultLootOfferCount = 2;
 
+    [Header("Aléatoire")]
+    [SerializeField] public CellAleaPool aleatoirePool;
+
+    [Header("Maximums par type")]
+    [SerializeField] public List<MaxTypeEntry> maximumsParType;
+    [SerializeField] public CellType typeDeRemplacement; // Type utilisé quand un maximum est dépassé
+
     /// <summary>
     /// Retourne la case à la position (x, y).
     /// </summary>
@@ -122,7 +129,7 @@ public class CellData
     // Mode FromPool : référence vers un EventPool ScriptableObject prédéfini.
     public EventPool eventPool;
 
-    // ── Champs Combat (CellType.Classic / CellType.Boss / CellType.Elite) ──────
+    // ── Champs Combat (CellType.CombatSimple / CellType.Boss / CellType.Elite) ──────
 
     // Ennemi solo à affronter dans cette salle.
     // Si null et specificGroup est null, fallback sur la pool de la MapData.
@@ -137,6 +144,16 @@ public class CellData
     // Configuration du marchand pour cette case spécifique.
     // Si null, la MapData.defaultShopData est utilisée en fallback.
     public ShopData shopData;
+
+    // ── Champs PointInteret / Teleporteur ────────────────────────────────────
+
+    // EventData spécifique à cette case (PointInteret, Teleporteur).
+    public EventData specificEvent;
+
+    // ── Champs BloqueurLD ────────────────────────────────────────────────────
+
+    // Condition de déblocage du bloqueur.
+    public BloqueurCondition condition;
 }
 
 /// <summary>
@@ -153,14 +170,54 @@ public enum EventCellMode
 /// </summary>
 public enum CellType
 {
-    Empty,          // Case vide — le joueur peut passer sans effet
-    Start,          // Case de départ du joueur
-    Boss,           // Salle du boss
-    Classic,        // Salle classique — contenu décidé par la génération
-    Event,          // Salle d'événement textuel — eventPool contient les EventData disponibles
-    NonNavigable,   // Bloc non navigable — obstacle infranchissable
-    Shop,           // Salle marchand — inventaire persistant généré à la première visite
-    Elite,          // Salle élite — ennemi plus difficile qu'un classique
+    Empty           = 0,    // Case vide — le joueur peut passer sans effet
+    Start           = 1,    // Case de départ du joueur
+    Boss            = 2,    // Salle du boss
+    CombatSimple    = 3,    // Salle de combat classique — contenu décidé par la génération
+    Event           = 4,    // Salle d'événement textuel — eventPool contient les EventData disponibles
+    NonNavigable    = 5,    // Bloc non navigable — obstacle infranchissable
+    Shop            = 6,    // Salle marchand — inventaire persistant généré à la première visite
+    Elite           = 7,    // Salle élite — ennemi plus difficile qu'un classique
+    BloqueurLD      = 8,    // Bloqueur de ligne de direction — débloqué par condition
+    PointInteret    = 9,    // Point d'intérêt — déclenche un EventData spécifique
+    Ferrailleur     = 10,   // Ferrailleur — marchand d'équipement usagé
+    Radar           = 11,   // Radar — révèle une zone de la carte
+    Coffre          = 12,   // Coffre — récompense de loot directe
+    Teleporteur     = 13,   // Téléporteur — déplace le joueur vers une autre case
+    Aleatoire       = 14,   // Case aléatoire — type tiré depuis CellAleaPool au runtime
+    FerailleurUtilise  = 15, // Ferrailleur déjà visité
+    TeleporteurUtilise = 16, // Téléporteur déjà utilisé
+}
+
+/// <summary>
+/// Condition de déblocage d'une case BloqueurLD.
+/// </summary>
+[System.Serializable]
+public class BloqueurCondition
+{
+    public BloqueurConditionType type;
+    public string compteurID;   // Pour CompteurNomme
+    public int valeurCible;
+}
+
+/// <summary>
+/// Type de condition évaluée pour débloquer un BloqueurLD.
+/// </summary>
+public enum BloqueurConditionType
+{
+    CompteurNomme    = 0,   // Variable nommée dans RunManager
+    CombatsTermines  = 1,   // RunManager.combatsTermines
+    EventsTermines   = 2,   // RunManager.eventsTermines
+}
+
+/// <summary>
+/// Entrée de la liste de maximums par type sur une MapData.
+/// </summary>
+[System.Serializable]
+public class MaxTypeEntry
+{
+    public CellType type;
+    public int maximum;
 }
 
 /// <summary>

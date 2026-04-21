@@ -44,15 +44,24 @@ public class MapEditorWindow : EditorWindow
     // COULEURS PAR TYPE DE CASE (configurables)
     // -----------------------------------------------
 
-    private Color colorEmpty       = new Color(0.2f, 0.2f, 0.2f);
-    private Color colorStart       = new Color(0.0f, 0.8f, 0.2f);
-    private Color colorBoss        = new Color(0.8f, 0.0f, 0.0f);
-    private Color colorClassic     = new Color(0.3f, 0.5f, 0.8f);
-    private Color colorElite       = new Color(0.7f, 0.2f, 0.8f); // violet — élite
-    private Color colorEvent       = new Color(0.8f, 0.5f, 0.0f);
-    private Color colorShop        = new Color(0.2f, 0.8f, 0.8f);
-    private Color colorNonNav      = new Color(0.1f, 0.1f, 0.1f);
-    private Color colorWall        = new Color(0.9f, 0.7f, 0.1f);
+    private Color colorEmpty              = new Color(0.2f,  0.2f,  0.2f);
+    private Color colorStart              = new Color(0.0f,  0.8f,  0.2f);
+    private Color colorBoss               = new Color(0.8f,  0.0f,  0.0f);
+    private Color colorCombatSimple       = new Color(0.3f,  0.5f,  0.8f);
+    private Color colorElite              = new Color(0.7f,  0.2f,  0.8f);
+    private Color colorEvent              = new Color(0.8f,  0.5f,  0.0f);
+    private Color colorShop               = new Color(0.2f,  0.8f,  0.8f);
+    private Color colorNonNav             = new Color(0.1f,  0.1f,  0.1f);
+    private Color colorWall               = new Color(0.9f,  0.7f,  0.1f);
+    private Color colorBloqueurLD         = new Color(0.5f,  0.3f,  0.1f);
+    private Color colorPointInteret       = new Color(0.9f,  0.9f,  0.2f);
+    private Color colorFerrailleur        = new Color(0.55f, 0.45f, 0.35f);
+    private Color colorRadar              = new Color(0.2f,  0.7f,  0.5f);
+    private Color colorCoffre             = new Color(0.85f, 0.75f, 0.2f);
+    private Color colorTeleporteur        = new Color(0.4f,  0.2f,  0.9f);
+    private Color colorAleatoire          = new Color(0.6f,  0.6f,  0.6f);
+    private Color colorFerailleurUtilise  = new Color(0.35f, 0.3f,  0.25f);
+    private Color colorTeleporteurUtilise = new Color(0.25f, 0.15f, 0.5f);
 
 
     // -----------------------------------------------
@@ -152,15 +161,24 @@ public class MapEditorWindow : EditorWindow
         if (!showColorSettings) return;
 
         EditorGUI.indentLevel++;
-        colorEmpty   = EditorGUILayout.ColorField("Vide",          colorEmpty);
-        colorStart   = EditorGUILayout.ColorField("Départ",        colorStart);
-        colorBoss    = EditorGUILayout.ColorField("Boss",          colorBoss);
-        colorClassic = EditorGUILayout.ColorField("Classique",     colorClassic);
-        colorElite   = EditorGUILayout.ColorField("Élite",         colorElite);
-        colorEvent   = EditorGUILayout.ColorField("Événement",     colorEvent);
-        colorShop    = EditorGUILayout.ColorField("Marchand",      colorShop);
-        colorNonNav  = EditorGUILayout.ColorField("Non navigable", colorNonNav);
-        colorWall    = EditorGUILayout.ColorField("Mur",           colorWall);
+        colorEmpty              = EditorGUILayout.ColorField("Vide",                colorEmpty);
+        colorStart              = EditorGUILayout.ColorField("Départ",              colorStart);
+        colorBoss               = EditorGUILayout.ColorField("Boss",                colorBoss);
+        colorCombatSimple       = EditorGUILayout.ColorField("Combat simple",       colorCombatSimple);
+        colorElite              = EditorGUILayout.ColorField("Élite",               colorElite);
+        colorEvent              = EditorGUILayout.ColorField("Événement",           colorEvent);
+        colorShop               = EditorGUILayout.ColorField("Marchand",            colorShop);
+        colorNonNav             = EditorGUILayout.ColorField("Non navigable",       colorNonNav);
+        colorWall               = EditorGUILayout.ColorField("Mur",                 colorWall);
+        colorBloqueurLD         = EditorGUILayout.ColorField("Bloqueur LD",         colorBloqueurLD);
+        colorPointInteret       = EditorGUILayout.ColorField("Point d'intérêt",     colorPointInteret);
+        colorFerrailleur        = EditorGUILayout.ColorField("Ferrailleur",         colorFerrailleur);
+        colorRadar              = EditorGUILayout.ColorField("Radar",               colorRadar);
+        colorCoffre             = EditorGUILayout.ColorField("Coffre",              colorCoffre);
+        colorTeleporteur        = EditorGUILayout.ColorField("Téléporteur",         colorTeleporteur);
+        colorAleatoire          = EditorGUILayout.ColorField("Aléatoire",           colorAleatoire);
+        colorFerailleurUtilise  = EditorGUILayout.ColorField("Ferrailleur utilisé", colorFerailleurUtilise);
+        colorTeleporteurUtilise = EditorGUILayout.ColorField("Téléporteur utilisé", colorTeleporteurUtilise);
         EditorGUI.indentLevel--;
 
         EditorGUILayout.Space(5);
@@ -188,7 +206,7 @@ public class MapEditorWindow : EditorWindow
 
     /// <summary>
     /// Affiche les propriétés de la case sélectionnée (clic gauche sur une case).
-    /// Permet notamment de saisir le specificEventID pour les cases Event.
+    /// Permet de saisir les données spécifiques selon le type de la case.
     /// </summary>
     private void DrawCellProperties()
     {
@@ -312,9 +330,9 @@ public class MapEditorWindow : EditorWindow
             }
         }
 
-        // Configuration de l'ennemi — uniquement pour les cases de type Classic, Elite et Boss
-        if (selectedCell.cellType == CellType.Classic ||
-            selectedCell.cellType == CellType.Elite   ||
+        // Configuration de l'ennemi — uniquement pour les cases de type CombatSimple, Elite et Boss
+        if (selectedCell.cellType == CellType.CombatSimple ||
+            selectedCell.cellType == CellType.Elite        ||
             selectedCell.cellType == CellType.Boss)
         {
             EditorGUILayout.Space(4);
@@ -334,7 +352,7 @@ public class MapEditorWindow : EditorWindow
                 string poolName = "";
                 if (currentMap != null)
                 {
-                    if (selectedCell.cellType == CellType.Classic)
+                    if (selectedCell.cellType == CellType.CombatSimple)
                     { pool = currentMap.normalEnemyPool; poolName = "normalEnemyPool"; }
                     else if (selectedCell.cellType == CellType.Elite)
                     { pool = currentMap.eliteEnemyPool; poolName = "eliteEnemyPool"; }
@@ -350,6 +368,62 @@ public class MapEditorWindow : EditorWindow
                     EditorGUILayout.HelpBox(
                         "Aucun ennemi specifique et aucune pool assignee sur la MapData — fallback Inspector de CombatManager.",
                         MessageType.Warning);
+            }
+        }
+
+        // Configuration de l'event spécifique — PointInteret et Teleporteur
+        if (selectedCell.cellType == CellType.PointInteret ||
+            selectedCell.cellType == CellType.Teleporteur)
+        {
+            EditorGUILayout.Space(4);
+            EditorGUILayout.LabelField("Événement spécifique", EditorStyles.boldLabel);
+
+            EventData newSpecificEvent = (EventData)EditorGUILayout.ObjectField(
+                "Event", selectedCell.specificEvent, typeof(EventData), false);
+            if (newSpecificEvent != selectedCell.specificEvent)
+            {
+                selectedCell.specificEvent = newSpecificEvent;
+                EditorUtility.SetDirty(currentMap);
+            }
+
+            if (selectedCell.specificEvent == null)
+                EditorGUILayout.HelpBox(
+                    "Aucun EventData assigné à cette case.",
+                    MessageType.Warning);
+        }
+
+        // Configuration du bloqueur — BloqueurLD
+        if (selectedCell.cellType == CellType.BloqueurLD)
+        {
+            EditorGUILayout.Space(4);
+            EditorGUILayout.LabelField("Condition de déblocage", EditorStyles.boldLabel);
+
+            if (selectedCell.condition == null)
+                selectedCell.condition = new BloqueurCondition();
+
+            BloqueurConditionType newCondType = (BloqueurConditionType)EditorGUILayout.EnumPopup(
+                "Type", selectedCell.condition.type);
+            if (newCondType != selectedCell.condition.type)
+            {
+                selectedCell.condition.type = newCondType;
+                EditorUtility.SetDirty(currentMap);
+            }
+
+            if (selectedCell.condition.type == BloqueurConditionType.CompteurNomme)
+            {
+                string newID = EditorGUILayout.TextField("Compteur ID", selectedCell.condition.compteurID);
+                if (newID != selectedCell.condition.compteurID)
+                {
+                    selectedCell.condition.compteurID = newID;
+                    EditorUtility.SetDirty(currentMap);
+                }
+            }
+
+            int newValeur = EditorGUILayout.IntField("Valeur cible", selectedCell.condition.valeurCible);
+            if (newValeur != selectedCell.condition.valeurCible)
+            {
+                selectedCell.condition.valeurCible = newValeur;
+                EditorUtility.SetDirty(currentMap);
             }
         }
 
@@ -596,14 +670,23 @@ private Rect GetVerticalWallRect(Rect grid, int x, int y)
     {
         switch (type)
         {
-            case CellType.Start:         return colorStart;
-            case CellType.Boss:          return colorBoss;
-            case CellType.Classic:       return colorClassic;
-            case CellType.Elite:         return colorElite;
-            case CellType.Event:         return colorEvent;
-            case CellType.Shop:          return colorShop;
-            case CellType.NonNavigable:  return colorNonNav;
-            default:                     return colorEmpty;
+            case CellType.Start:               return colorStart;
+            case CellType.Boss:                return colorBoss;
+            case CellType.CombatSimple:        return colorCombatSimple;
+            case CellType.Elite:               return colorElite;
+            case CellType.Event:               return colorEvent;
+            case CellType.Shop:                return colorShop;
+            case CellType.NonNavigable:        return colorNonNav;
+            case CellType.BloqueurLD:          return colorBloqueurLD;
+            case CellType.PointInteret:        return colorPointInteret;
+            case CellType.Ferrailleur:         return colorFerrailleur;
+            case CellType.Radar:               return colorRadar;
+            case CellType.Coffre:              return colorCoffre;
+            case CellType.Teleporteur:         return colorTeleporteur;
+            case CellType.Aleatoire:           return colorAleatoire;
+            case CellType.FerailleurUtilise:   return colorFerailleurUtilise;
+            case CellType.TeleporteurUtilise:  return colorTeleporteurUtilise;
+            default:                           return colorEmpty;
         }
     }
 
@@ -611,14 +694,23 @@ private Rect GetVerticalWallRect(Rect grid, int x, int y)
     {
         switch (type)
         {
-            case CellType.Start:         return "S";
-            case CellType.Boss:          return "B";
-            case CellType.Classic:       return "C";
-            case CellType.Elite:         return "EL";
-            case CellType.Event:         return "E";
-            case CellType.Shop:          return "M";
-            case CellType.NonNavigable:  return "X";
-            default:                     return "";
+            case CellType.Start:               return "S";
+            case CellType.Boss:                return "B";
+            case CellType.CombatSimple:        return "C";
+            case CellType.Elite:               return "EL";
+            case CellType.Event:               return "E";
+            case CellType.Shop:                return "M";
+            case CellType.NonNavigable:        return "X";
+            case CellType.BloqueurLD:          return "BLD";
+            case CellType.PointInteret:        return "PI";
+            case CellType.Ferrailleur:         return "FE";
+            case CellType.Radar:               return "RA";
+            case CellType.Coffre:              return "CO";
+            case CellType.Teleporteur:         return "TP";
+            case CellType.Aleatoire:           return "AL";
+            case CellType.FerailleurUtilise:   return "FU";
+            case CellType.TeleporteurUtilise:  return "TU";
+            default:                           return "";
         }
     }
 

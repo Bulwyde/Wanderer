@@ -202,16 +202,7 @@ public class MapRenderer : MonoBehaviour
 
                 if (navigationManager.IsVisible(x, y))
                 {
-                    // Si la salle a été complétée, on la montre comme vide
-                    // même si son type d'origine est Classic ou Boss.
-                    // Exception : les cases Shop gardent leur couleur même après visite
-                    // (le marchand reste accessible, son état est persistant).
-                    bool cleared = RunManager.Instance != null &&
-                                   RunManager.Instance.IsRoomCleared(x, y) &&
-                                   cell?.cellType != CellType.Shop;
-
-                    CellType displayType = cleared ? CellType.Empty
-                                                   : (cell?.cellType ?? CellType.Empty);
+                    CellType displayType = ObtenirTypeAffiche(cell, x, y);
                     cellImages[x, y].color = GetCellColor(displayType);
                     AppliquerIcone(x, y, displayType, true);
                 }
@@ -313,11 +304,7 @@ public class MapRenderer : MonoBehaviour
 
         if (navigationManager.IsVisible(x, y))
         {
-            bool cleared = RunManager.Instance != null &&
-                           RunManager.Instance.IsRoomCleared(x, y) &&
-                           cell?.cellType != CellType.Shop;
-            CellType displayType = cleared ? CellType.Empty
-                                           : (cell?.cellType ?? CellType.Empty);
+            CellType displayType = ObtenirTypeAffiche(cell, x, y);
             cellImages[x, y].color = GetCellColor(displayType);
             AppliquerIcone(x, y, displayType, true);
         }
@@ -390,6 +377,32 @@ public void CenterCameraOnPlayer()
         Sprite sprite = visible ? ObtenirIcone(displayType) : null;
         icone.sprite  = sprite;
         icone.color   = sprite != null ? Color.white : Color.clear;
+    }
+
+    /// <summary>
+    /// Retourne le CellType à afficher pour une case selon son état runtime.
+    /// Chaîne de priorité : salle complétée → Aléatoire brut → override maximum → cellType original.
+    /// Appelé identiquement depuis RefreshMap() et RefreshSingleCell().
+    /// </summary>
+    private CellType ObtenirTypeAffiche(CellData cell, int x, int y)
+    {
+        if (RunManager.Instance == null)
+            return cell?.cellType ?? CellType.Empty;
+
+        // Salle complétée → type post-visite (Empty, FerailleurUtilise, TeleporteurUtilise…)
+        // Le Shop ne va jamais dans clearedRooms — garde défensif contre régression future.
+        if (RunManager.Instance.IsRoomCleared(x, y) && cell?.cellType != CellType.Shop)
+            return RunManager.Instance.GetPostVisitType(x, y);
+
+        // Case Aléatoire non encore visitée → afficher l'icône Aléatoire (pas le type résolu)
+        if (cell?.cellType == CellType.Aleatoire)
+            return CellType.Aleatoire;
+
+        // Case remplacée par le système de maximum → afficher le type de remplacement
+        if (RunManager.Instance.HasOverrideMaximum(x, y))
+            return RunManager.Instance.GetOverrideMaximum(x, y);
+
+        return cell?.cellType ?? CellType.Empty;
     }
 
     private Color GetCellColor(CellType type)

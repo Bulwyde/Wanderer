@@ -50,6 +50,8 @@ public class CellAleaPool : ScriptableObject
             if (tirage < cumul) return e.type;
         }
 
+        // Ce point ne devrait jamais être atteint si totalPoids > 0
+        Debug.LogError("[CellAleaPool] TirerAleatoire — échec du tirage pondéré inattendu.");
         return disponibles[disponibles.Count - 1].type;
     }
 }

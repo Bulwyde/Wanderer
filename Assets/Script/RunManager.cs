@@ -637,7 +637,7 @@ public class RunManager : MonoBehaviour
         }
         else
         {
-            EnemyPool pool = ResolveEnemyPool(cell.cellType);
+            EnemyPool pool = ResolveEnemyPool(currentCellType);
             if (pool != null)
             {
                 EnemyPoolEntry entry = pool.PickRandom();

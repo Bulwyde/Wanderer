@@ -134,8 +134,12 @@ public class NavigationManager : MonoBehaviour
     private void InitialiserCarte()
     {
         if (RunManager.Instance == null || mapData == null) return;
+        if (mapData.cells == null) return;
 
         // ── Étape 1 : Maximums par type ─────────────────────────────────────
+        // Note design : mapData.typeDeRemplacement ne doit pas lui-même figurer dans
+        // maximumsParType — les overrides posés ici ne sont pas recomptés lors du
+        // traitement de son propre quota (ils sont dans overridesMaximum, pas dans cell.cellType).
         if (mapData.maximumsParType != null)
         {
             foreach (MaxTypeEntry entree in mapData.maximumsParType)

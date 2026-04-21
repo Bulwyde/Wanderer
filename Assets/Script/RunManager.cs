@@ -698,13 +698,36 @@ public class RunManager : MonoBehaviour
 
     /// <summary>
     /// Marque la salle courante (currentRoomX, currentRoomY) comme complétée.
+    /// Calcule et stocke le type post-visite via DeterminerPostVisitType.
     /// Appelé par CombatManager quand le joueur remporte le combat.
     /// </summary>
     public void ClearCurrentRoom()
     {
         string key = $"{currentRoomX},{currentRoomY}";
         clearedRooms.Add(key);
-        Debug.Log($"Salle ({currentRoomX},{currentRoomY}) marquée comme complétée.");
+
+        // currentCellType est déjà le type effectif (résolu par GetEffectiveCellType dans EnterRoom)
+        CellType postVisit = DeterminerPostVisitType(currentCellType);
+        SetPostVisitType(currentRoomX, currentRoomY, postVisit);
+
+        Debug.Log($"[RunManager] Salle ({currentRoomX},{currentRoomY}) complétée — affichage : {postVisit}");
+    }
+
+    /// <summary>
+    /// Retourne le type affiché sur la carte après visite d'une salle.
+    /// Ferrailleur et Teleporteur passent à leur variante "Utilisé".
+    /// Shop reste Shop (marchand toujours accessible).
+    /// Tous les autres types (combat, event, etc.) deviennent Empty.
+    /// </summary>
+    private CellType DeterminerPostVisitType(CellType typeEffectif)
+    {
+        switch (typeEffectif)
+        {
+            case CellType.Ferrailleur:  return CellType.FerailleurUtilise;
+            case CellType.Teleporteur:  return CellType.TeleporteurUtilise;
+            case CellType.Shop:         return CellType.Shop;
+            default:                    return CellType.Empty;
+        }
     }
 
     /// <summary>

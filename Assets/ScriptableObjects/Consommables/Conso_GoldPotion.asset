@@ -14,10 +14,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ConsumableData
   consumableID: conso_goldpotion
   consumableName: Gold Potion
-  icon: {fileID: 0}
+  icon: {fileID: 5086303347179861780, guid: 2f418b54668050f4e9a1f37737082feb, type: 3}
   description: 
   effects:
   - {fileID: 11400000, guid: 2393856fac7d1da41a3e025b8845b1d3, type: 2}
+  tags: []
   usableInCombat: 1
   usableOnMap: 1
   usableInEvents: 1

@@ -14,11 +14,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ConsumableData
   consumableID: conso_teleportation
   consumableName: "T\xE9l\xE9portation"
-  icon: {fileID: 0}
+  icon: {fileID: 8240395797469933408, guid: 7ce75aaebf2fa2f42bfe870c1401d694, type: 3}
   description: 
-  effect: {fileID: 0}
+  effects: []
+  tags: []
   usableInCombat: 0
   usableOnMap: 1
+  usableInEvents: 0
   mapEffects:
   - type: 0
     value: 0

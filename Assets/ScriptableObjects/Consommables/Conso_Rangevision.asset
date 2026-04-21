@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ConsumableData
   consumableID: conso_range_vision
   consumableName: Vision
-  icon: {fileID: 0}
+  icon: {fileID: -4596908879257354779, guid: 2b9d74f284691c646980b307264ed755, type: 3}
   description: 
   effects: []
   tags: []

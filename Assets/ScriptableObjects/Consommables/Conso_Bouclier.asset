@@ -14,10 +14,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ConsumableData
   consumableID: bouclier
   consumableName: Bouclier
-  icon: {fileID: 0}
+  icon: {fileID: -3110966788883646594, guid: 49620fea634f2c7429e4f55b6f58638f, type: 3}
   description: Gagnez 10 points d'armure.
   effects:
   - {fileID: 11400000, guid: 1059e634690376c42a0ffe6fe72e4cb2, type: 2}
+  tags: []
   usableInCombat: 1
   usableOnMap: 0
+  usableInEvents: 0
   mapEffects: []

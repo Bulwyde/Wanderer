@@ -14,10 +14,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ConsumableData
   consumableID: potion
   consumableName: Potion
-  icon: {fileID: 0}
+  icon: {fileID: -8590651323815972599, guid: 074c9c90ee61c954db80271216e4b558, type: 3}
   description: Vous soigne de 5 points de vie
   effects:
   - {fileID: 11400000, guid: cfdbaf629480e15488da082a3b71f59c, type: 2}
+  tags: []
   usableInCombat: 1
   usableOnMap: 1
   usableInEvents: 1

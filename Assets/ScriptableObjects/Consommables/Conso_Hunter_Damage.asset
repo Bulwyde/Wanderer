@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ConsumableData
   consumableID: skill_hunter_damage
   consumableName: skill_hunter_damage
-  icon: {fileID: -3743075690402889343, guid: efc692ead394f2c44b805ab24d6abd8d, type: 3}
+  icon: {fileID: -2467115190233687107, guid: e741ccfd9dc84454ca3a4339aa2cb2b8, type: 3}
   description: 
   effects:
   - {fileID: 11400000, guid: 4c8ff941a851ee14cbcc887d33c01607, type: 2}

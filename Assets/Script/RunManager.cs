@@ -254,6 +254,21 @@ public class RunManager : MonoBehaviour
     private Dictionary<string, ShopState> shopStates = new Dictionary<string, ShopState>();
 
     // -----------------------------------------------
+    // CASES ALÉATOIRES ET POST-VISITE
+    // -----------------------------------------------
+
+    // Types résolus des cases Aléatoires (clé : "x,y").
+    // Peuplé par NavigationManager au premier affichage de la carte.
+    private Dictionary<string, CellType> resolvedAleatoireCells = new Dictionary<string, CellType>();
+
+    // Types affichés après visite (Ferrailleur→FerailleurUtilise, Teleporteur→TeleporteurUtilise, etc.)
+    // Clé : "x,y". Consulté par MapRenderer pour choisir la couleur/icône post-visite.
+    private Dictionary<string, CellType> postVisitCellTypes = new Dictionary<string, CellType>();
+
+    // Indique si la carte courante a déjà été initialisée ce run (cases Aléatoires résolues, etc.).
+    public bool carteInitialisee = false;
+
+    // -----------------------------------------------
     // COMPTEURS DE NAVIGATION
     // -----------------------------------------------
 
@@ -560,6 +575,9 @@ public class RunManager : MonoBehaviour
         runStatBonuses.Clear();
         credits = 0;
         shopStates.Clear();
+        resolvedAleatoireCells.Clear();
+        postVisitCellTypes.Clear();
+        carteInitialisee = false;
         currentMapData   = null;
         currentEnemyData  = null;
         currentEnemyGroup = null;
@@ -644,7 +662,7 @@ public class RunManager : MonoBehaviour
 
         switch (cellType)
         {
-            case CellType.Classic: return currentMapData.normalEnemyPool;
+            case CellType.CombatSimple: return currentMapData.normalEnemyPool;
             case CellType.Elite:   return currentMapData.eliteEnemyPool;
             case CellType.Boss:    return currentMapData.bossEnemyPool;
             default:               return null;
@@ -689,6 +707,70 @@ public class RunManager : MonoBehaviour
     public bool IsRoomCleared(int x, int y)
     {
         return clearedRooms.Contains($"{x},{y}");
+    }
+
+    // -----------------------------------------------
+    // CASES ALÉATOIRES
+    // -----------------------------------------------
+
+    /// <summary>
+    /// Enregistre le type résolu d'une case Aléatoire.
+    /// Appelé par NavigationManager lors de l'initialisation de la carte.
+    /// </summary>
+    public void SetResolvedAleatoire(int x, int y, CellType type)
+    {
+        resolvedAleatoireCells[$"{x},{y}"] = type;
+    }
+
+    /// <summary>
+    /// Retourne le type résolu d'une case Aléatoire.
+    /// Retourne CellType.Aleatoire si la case n'a pas encore été résolue.
+    /// </summary>
+    public CellType GetResolvedAleatoire(int x, int y)
+    {
+        return resolvedAleatoireCells.TryGetValue($"{x},{y}", out CellType type)
+            ? type
+            : CellType.Aleatoire;
+    }
+
+    /// <summary>
+    /// Retourne true si le type de la case Aléatoire à (x, y) a déjà été tiré.
+    /// </summary>
+    public bool IsAleatoireResolu(int x, int y)
+    {
+        return resolvedAleatoireCells.ContainsKey($"{x},{y}");
+    }
+
+    // -----------------------------------------------
+    // TYPES POST-VISITE
+    // -----------------------------------------------
+
+    /// <summary>
+    /// Enregistre le type affiché après visite d'une case
+    /// (ex : Ferrailleur → FerailleurUtilise, Teleporteur → TeleporteurUtilise).
+    /// Appelé par NavigationManager quand le joueur quitte la salle.
+    /// </summary>
+    public void SetPostVisitType(int x, int y, CellType type)
+    {
+        postVisitCellTypes[$"{x},{y}"] = type;
+    }
+
+    /// <summary>
+    /// Retourne true si une case a un type post-visite enregistré.
+    /// </summary>
+    public bool HasPostVisitType(int x, int y)
+    {
+        return postVisitCellTypes.ContainsKey($"{x},{y}");
+    }
+
+    /// <summary>
+    /// Retourne le type post-visite d'une case, ou CellType.Empty si non défini.
+    /// </summary>
+    public CellType GetPostVisitType(int x, int y)
+    {
+        return postVisitCellTypes.TryGetValue($"{x},{y}", out CellType type)
+            ? type
+            : CellType.Empty;
     }
 
     public void SetEventFlag(string key, bool value)

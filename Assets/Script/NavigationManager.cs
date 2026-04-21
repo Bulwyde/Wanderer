@@ -433,7 +433,7 @@ public class NavigationManager : MonoBehaviour
     {
         switch (cell.cellType)
         {
-            case CellType.Classic:
+            case CellType.CombatSimple:
             case CellType.Elite:
             case CellType.Boss:
                 if (RunManager.Instance != null &&

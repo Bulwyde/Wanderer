@@ -398,7 +398,7 @@ public void CenterCameraOnPlayer()
         {
             case CellType.Start:        return colorStart;
             case CellType.Boss:         return colorBoss;
-            case CellType.Classic:      return colorClassic;
+            case CellType.CombatSimple: return colorClassic;
             case CellType.Elite:        return colorElite;
             case CellType.Event:        return colorEvent;
             case CellType.Shop:         return colorShop;

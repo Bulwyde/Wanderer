@@ -726,6 +726,9 @@ public class RunManager : MonoBehaviour
             case CellType.Ferrailleur:  return CellType.FerailleurUtilise;
             case CellType.Teleporteur:  return CellType.TeleporteurUtilise;
             case CellType.Shop:         return CellType.Shop;
+            case CellType.PointInteret: return CellType.Empty;
+            case CellType.Radar:        return CellType.Empty;
+            case CellType.Coffre:       return CellType.Empty;
             default:                    return CellType.Empty;
         }
     }

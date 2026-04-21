@@ -91,6 +91,10 @@ public class NavigationManager : MonoBehaviour
         if (RunManager.Instance != null && !RunManager.Instance.carteInitialisee)
             InitialiserCarte();
 
+        // Évalue les BloqueurLD à chaque chargement de la scène Navigation.
+        // Appelé avant le placement du joueur — Start() se charge de UpdateVisibility() ensuite.
+        VerifierBloqueurLD();
+
         // Si RunManager a sauvegardé un état (= on revient d'un combat),
         // on le restaure. Sinon, on place le joueur sur la case de départ.
         if (RunManager.Instance != null && RunManager.Instance.hasNavigationState)
@@ -236,6 +240,77 @@ public class NavigationManager : MonoBehaviour
     }
 
     // -----------------------------------------------
+    // BLOQUEURS LD
+    // -----------------------------------------------
+
+    /// <summary>
+    /// Évalue si la condition d'un BloqueurLD est remplie.
+    /// Retourne true si le bloqueur doit s'ouvrir (condition satisfaite).
+    /// Retourne false si la condition est null, si RunManager est absent,
+    /// ou si le compteurID est vide pour un type CompteurNomme.
+    /// </summary>
+    private bool EvaluerConditionBloqueur(BloqueurCondition condition)
+    {
+        if (condition == null) return false;
+        if (RunManager.Instance == null) return false;
+
+        switch (condition.type)
+        {
+            case BloqueurConditionType.CompteurNomme:
+                if (string.IsNullOrEmpty(condition.compteurID))
+                {
+                    Debug.LogWarning("[Navigation] EvaluerConditionBloqueur — compteurID vide ou null.");
+                    return false;
+                }
+                return RunManager.Instance.GetCounter(condition.compteurID) >= condition.valeurCible;
+
+            case BloqueurConditionType.CombatsTermines:
+                return RunManager.Instance.combatsTermines >= condition.valeurCible;
+
+            case BloqueurConditionType.EventsTermines:
+                return RunManager.Instance.eventsTermines >= condition.valeurCible;
+
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// Parcourt toutes les cases BloqueurLD de la carte et convertit en Empty
+    /// celles dont la condition est remplie. Appelle RefreshMap si au moins
+    /// un bloqueur a été débloqué. Ne recalcule pas la visibilité —
+    /// le appelant doit appeler UpdateVisibility() si nécessaire.
+    /// </summary>
+    private void VerifierBloqueurLD()
+    {
+        if (mapData?.cells == null || RunManager.Instance == null) return;
+
+        bool modifie = false;
+        foreach (CellData cell in mapData.cells)
+        {
+            if (cell == null || cell.cellType != CellType.BloqueurLD) continue;
+
+            // Déjà débloqué lors d'une vérification précédente — ignorer
+            if (RunManager.Instance.HasPostVisitType(cell.x, cell.y)) continue;
+
+            if (cell.condition == null)
+            {
+                Debug.LogWarning($"[Navigation] BloqueurLD ({cell.x},{cell.y}) sans condition configurée — ignoré.");
+                continue;
+            }
+
+            if (EvaluerConditionBloqueur(cell.condition))
+            {
+                RunManager.Instance.SetPostVisitType(cell.x, cell.y, CellType.Empty);
+                modifie = true;
+                Debug.Log($"[Navigation] BloqueurLD ({cell.x},{cell.y}) débloqué.");
+            }
+        }
+
+        if (modifie) mapRenderer.RefreshMap();
+    }
+
+    // -----------------------------------------------
     // PLACEMENT DU JOUEUR
     // -----------------------------------------------
 
@@ -302,11 +377,21 @@ public class NavigationManager : MonoBehaviour
             return;
         }
 
-        // Vérifie si la case est navigable
+        // Vérifie si la case est navigable (en tenant compte des overrides runtime)
         CellData targetCell = mapData.GetCell(targetX, targetY);
-        if (targetCell == null || targetCell.cellType == CellType.NonNavigable)
+        if (targetCell == null)
         {
-            Debug.Log("Déplacement impossible — case non navigable");
+            Debug.Log("Déplacement impossible — case nulle");
+            return;
+        }
+
+        CellType typeEffectifCible = RunManager.Instance != null
+            ? RunManager.Instance.GetEffectiveCellType(targetCell)
+            : targetCell.cellType;
+
+        if (typeEffectifCible == CellType.NonNavigable || typeEffectifCible == CellType.BloqueurLD)
+        {
+            Debug.Log("Déplacement impossible — case non navigable ou bloqueur");
             return;
         }
 
@@ -642,6 +727,123 @@ public class NavigationManager : MonoBehaviour
 
             case CellType.Empty:
                 Debug.Log($"({PlayerX},{PlayerY}) — Case vide, pas de transition");
+                break;
+
+            // -----------------------------------------------------------
+            // POINT D'INTÉRÊT — événement spécifique curé (specificEvent)
+            // -----------------------------------------------------------
+
+            case CellType.PointInteret:
+                if (cell.specificEvent == null)
+                {
+                    Debug.LogWarning($"({PlayerX},{PlayerY}) — PointInteret sans specificEvent assigné, pas de transition.");
+                    break;
+                }
+
+                if (RunManager.Instance == null || SceneLoader.Instance == null)
+                {
+                    Debug.LogError("RunManager ou SceneLoader introuvable !");
+                    break;
+                }
+
+                RunManager.Instance.SaveNavigationState(
+                    PlayerX, PlayerY, visitedCells, exploredCells);
+                RunManager.Instance.EnterRoom(cell);
+                RunManager.Instance.currentSpecificEventID = cell.specificEvent.eventID;
+                SceneLoader.Instance.GoToEvent();
+                break;
+
+            // -----------------------------------------------------------
+            // RADAR / COFFRE — événement poolé (ChoisirEventAleatoire)
+            // -----------------------------------------------------------
+
+            case CellType.Radar:
+            case CellType.Coffre:
+            {
+                EventData eventPoole = ChoisirEventAleatoire(cell);
+                if (eventPoole == null)
+                {
+                    Debug.Log($"({PlayerX},{PlayerY}) — Tous les events du pool ont été joués, salle ignorée.");
+                    break;
+                }
+
+                if (RunManager.Instance == null || SceneLoader.Instance == null)
+                {
+                    Debug.LogError("RunManager ou SceneLoader introuvable !");
+                    break;
+                }
+
+                RunManager.Instance.SaveNavigationState(
+                    PlayerX, PlayerY, visitedCells, exploredCells);
+                RunManager.Instance.EnterRoom(cell);
+                RunManager.Instance.currentSpecificEventID = eventPoole.eventID;
+                SceneLoader.Instance.GoToEvent();
+                break;
+            }
+
+            // -----------------------------------------------------------
+            // TÉLÉPORTEUR — événement spécifique curé (specificEvent)
+            // -----------------------------------------------------------
+
+            case CellType.Teleporteur:
+                if (cell.specificEvent == null)
+                {
+                    Debug.LogWarning($"({PlayerX},{PlayerY}) — Teleporteur sans specificEvent assigné, pas de transition.");
+                    break;
+                }
+
+                if (RunManager.Instance == null || SceneLoader.Instance == null)
+                {
+                    Debug.LogError("RunManager ou SceneLoader introuvable !");
+                    break;
+                }
+
+                RunManager.Instance.SaveNavigationState(
+                    PlayerX, PlayerY, visitedCells, exploredCells);
+                RunManager.Instance.EnterRoom(cell);
+                RunManager.Instance.currentSpecificEventID = cell.specificEvent.eventID;
+                SceneLoader.Instance.GoToEvent();
+                break;
+
+            // -----------------------------------------------------------
+            // FERRAILLEUR — placeholder [Chantier futur]
+            // Mécanique complète à implémenter dans un chantier dédié.
+            // Pour l'instant : flux identique à une salle Event poolée.
+            // -----------------------------------------------------------
+
+            case CellType.Ferrailleur:
+            {
+                EventData eventFerrailleur = ChoisirEventAleatoire(cell);
+                if (eventFerrailleur == null)
+                {
+                    Debug.Log($"({PlayerX},{PlayerY}) — Ferrailleur : aucun event disponible, salle ignorée.");
+                    break;
+                }
+
+                if (RunManager.Instance == null || SceneLoader.Instance == null)
+                {
+                    Debug.LogError("RunManager ou SceneLoader introuvable !");
+                    break;
+                }
+
+                RunManager.Instance.SaveNavigationState(
+                    PlayerX, PlayerY, visitedCells, exploredCells);
+                RunManager.Instance.EnterRoom(cell);
+                RunManager.Instance.currentSpecificEventID = eventFerrailleur.eventID;
+                SceneLoader.Instance.GoToEvent();
+                break;
+            }
+
+            // -----------------------------------------------------------
+            // TYPES POST-VISITE — déjà utilisés, aucune transition
+            // -----------------------------------------------------------
+
+            case CellType.FerailleurUtilise:
+                Debug.Log($"({PlayerX},{PlayerY}) — Ferrailleur déjà utilisé, pas de transition.");
+                break;
+
+            case CellType.TeleporteurUtilise:
+                Debug.Log($"({PlayerX},{PlayerY}) — Téléporteur déjà utilisé, pas de transition.");
                 break;
         }
     }

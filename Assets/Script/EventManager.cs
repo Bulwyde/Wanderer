@@ -412,6 +412,10 @@ public class EventManager : MonoBehaviour
     {
         if (effects == null || RunManager.Instance == null) return;
 
+        // Résolu à la demande si un effet TriggerNavEffect est présent dans la liste.
+        // Déclaré ici pour éviter un FindFirstObjectByType par effet en cas d'effets multiples.
+        NavigationManager navManager = null;
+
         foreach (EventEffect effect in effects)
         {
             switch (effect.type)
@@ -586,6 +590,22 @@ public class EventManager : MonoBehaviour
                     RunManager.Instance.AddCredits(effect.creditValue);
                     Debug.Log($"[Event] ModifyCredits — {(effect.creditValue >= 0 ? "+" : "")}{effect.creditValue} " +
                               $"→ {RunManager.Instance.credits} credits");
+                    break;
+
+                // -----------------------------------------------------------
+                // EFFETS DE NAVIGATION
+                // -----------------------------------------------------------
+
+                case EventEffectType.TriggerNavEffect:
+                    if (navManager == null)
+                        navManager = FindFirstObjectByType<NavigationManager>();
+                    if (navManager != null)
+                    {
+                        navManager.AppliquerEffetNav(effect.navEffect);
+                        Debug.Log($"[Event] TriggerNavEffect — effet nav appliqué.");
+                    }
+                    else
+                        Debug.LogWarning("[Event] TriggerNavEffect — NavigationManager introuvable dans la scène.");
                     break;
 
                 default:

@@ -33,6 +33,14 @@ public class InventoryUIManager : MonoBehaviour
         CreateCanvasIfNeeded();
     }
 
+    void Start()
+    {
+        // Si canvas assigné via Inspector (pas créé dynamiquement),
+        // initialiser les partagés du drag'n'drop maintenant.
+        if (dragFloatingIcon != null && inventoryCanvas != null)
+            InventoryDragDropController.InitialiserPartages(dragFloatingIcon, inventoryCanvas);
+    }
+
     // -----------------------------------------------
     // RÉFÉRENCES UI
     // -----------------------------------------------
@@ -51,6 +59,13 @@ public class InventoryUIManager : MonoBehaviour
 
     // Poubelle
     [SerializeField] private RectTransform panelPoubelle;
+
+    // Drag'n'drop
+    [SerializeField] private Image         dragFloatingIcon;
+    [SerializeField] private GameObject    panelConfirmation;
+
+    // Contrôleur en attente de confirmation de suppression (null si aucun)
+    private InventoryDragDropController _confirmationPending;
 
     // -----------------------------------------------
     // ÉTAT
@@ -118,6 +133,46 @@ public class InventoryUIManager : MonoBehaviour
     }
 
     // -----------------------------------------------
+    // DRAG'N'DROP
+    // -----------------------------------------------
+
+    /// <summary>
+    /// Active ou désactive le drag'n'drop de l'inventaire.
+    /// Appeler avec false au début d'un combat, true à l'apparition du loot.
+    /// </summary>
+    public void SetDragDropEnabled(bool enabled)
+    {
+        InventoryDragDropController.EnableDragDrop(enabled);
+    }
+
+    /// <summary>
+    /// Affiche le panel de confirmation de suppression pour l'item dragué vers la poubelle.
+    /// Appelé par InventoryDragDropController quand l'item est déposé sur la PanelPoubelle.
+    /// </summary>
+    public void DemanderConfirmationSuppression(InventoryDragDropController contrôleur)
+    {
+        _confirmationPending = contrôleur;
+        if (panelConfirmation != null)
+            panelConfirmation.SetActive(true);
+    }
+
+    private void OnConfirmerSuppression()
+    {
+        if (_confirmationPending != null)
+            _confirmationPending.ExecuterSuppression();
+        _confirmationPending = null;
+        if (panelConfirmation != null)
+            panelConfirmation.SetActive(false);
+    }
+
+    private void OnAnnulerSuppression()
+    {
+        _confirmationPending = null;
+        if (panelConfirmation != null)
+            panelConfirmation.SetActive(false);
+    }
+
+    // -----------------------------------------------
     // CRÉATION DYNAMIQUE DU CANVAS
     // -----------------------------------------------
 
@@ -149,6 +204,8 @@ public class InventoryUIManager : MonoBehaviour
         canvasGO.SetActive(false);
 
         ConstruireHierarchie(canvasGO.transform);
+        ConstruireIconeFlottante(canvasGO.transform);
+        ConstruirePanelConfirmation(canvasGO.transform);
 
         Debug.Log("[InventoryUIManager] Canvas créé dynamiquement.");
     }
@@ -181,6 +238,9 @@ public class InventoryUIManager : MonoBehaviour
         legsSlot = goLegs.GetComponent<RectTransform>();
         LayoutElement leLegs = goLegs.AddComponent<LayoutElement>();
         leLegs.preferredHeight = 80f;
+        InventoryDropZone legsZone = goLegs.AddComponent<InventoryDropZone>();
+        legsZone.zoneType             = InventoryDropZone.ZoneType.EquipmentSlot;
+        legsZone.targetEquipmentSlot  = EquipmentSlot.Legs;
 
         // Arms container — 2-4 slots bras selon CharacterData.maxEquippedArms
         GameObject goArms = CreerPanel("ArmsContainer", goEquip.transform,
@@ -217,6 +277,8 @@ public class InventoryUIManager : MonoBehaviour
         glgEqInv.startCorner = GridLayoutGroup.Corner.UpperLeft;
         LayoutElement leEqInv = goEqInv.AddComponent<LayoutElement>();
         leEqInv.preferredHeight = 140f;
+        InventoryDropZone eqInvZone = goEqInv.AddComponent<InventoryDropZone>();
+        eqInvZone.zoneType = InventoryDropZone.ZoneType.InventaireEquipements;
 
         // Sous-panel skills en inventaire
         GameObject goSkInv = CreerPanel("PanelSkillInventory", goInv.transform,
@@ -228,6 +290,8 @@ public class InventoryUIManager : MonoBehaviour
         glgSkInv.startCorner = GridLayoutGroup.Corner.UpperLeft;
         LayoutElement leSkInv = goSkInv.AddComponent<LayoutElement>();
         leSkInv.preferredHeight = 200f;
+        InventoryDropZone skInvZone = goSkInv.AddComponent<InventoryDropZone>();
+        skInvZone.zoneType = InventoryDropZone.ZoneType.InventaireSkills;
 
         // ── PanelPoubelle (coin bas-droit) ────────────────────────────
 
@@ -240,6 +304,8 @@ public class InventoryUIManager : MonoBehaviour
                              sizeDelta: new Vector2(60f, 60f),
                              position: new Vector2(-12f, 12f));
         CreerTexte("TextPoubelle", goPoub.transform, "X");
+        InventoryDropZone poubelleZone = goPoub.AddComponent<InventoryDropZone>();
+        poubelleZone.zoneType = InventoryDropZone.ZoneType.Poubelle;
     }
 
     // -----------------------------------------------
@@ -289,5 +355,96 @@ public class InventoryUIManager : MonoBehaviour
         rt.pivot            = new Vector2(pivotX, pivotY);
         rt.sizeDelta        = sizeDelta;
         rt.anchoredPosition = position;
+    }
+
+    // -----------------------------------------------
+    // HELPERS DRAG'N'DROP
+    // -----------------------------------------------
+
+    private void ConstruireIconeFlottante(Transform canvasTransform)
+    {
+        GameObject go = new GameObject("DragFloatingIcon");
+        RectTransform rt = go.AddComponent<RectTransform>();
+        rt.SetParent(canvasTransform, false);
+        rt.sizeDelta = new Vector2(48f, 48f);
+
+        dragFloatingIcon = go.AddComponent<Image>();
+        dragFloatingIcon.raycastTarget = false;  // ne bloque pas les raycasts de dépôt
+        go.SetActive(false);
+
+        InventoryDragDropController.InitialiserPartages(dragFloatingIcon, inventoryCanvas);
+    }
+
+    private void ConstruirePanelConfirmation(Transform canvasTransform)
+    {
+        // Overlay plein écran semi-transparent — bloque les interactions pendant la confirmation
+        GameObject goOverlay = new GameObject("PanelConfirmation");
+        RectTransform rtOverlay = goOverlay.AddComponent<RectTransform>();
+        rtOverlay.SetParent(canvasTransform, false);
+        rtOverlay.anchorMin = Vector2.zero;
+        rtOverlay.anchorMax = Vector2.one;
+        rtOverlay.offsetMin = Vector2.zero;
+        rtOverlay.offsetMax = Vector2.zero;
+        Image imgOverlay = goOverlay.AddComponent<Image>();
+        imgOverlay.color = new Color(0f, 0f, 0f, 0.6f);
+        panelConfirmation = goOverlay;
+
+        // Boîte de dialogue centrée
+        GameObject goDialog = new GameObject("DialogBox");
+        RectTransform rtDialog = goDialog.AddComponent<RectTransform>();
+        rtDialog.SetParent(goOverlay.transform, false);
+        rtDialog.sizeDelta        = new Vector2(200f, 100f);
+        rtDialog.anchoredPosition = Vector2.zero;
+        Image imgDialog = goDialog.AddComponent<Image>();
+        imgDialog.color = new Color(0.15f, 0.15f, 0.2f, 1f);
+
+        // Texte de la question (centré en haut de la dialog)
+        GameObject goTxt = new GameObject("TextQuestion");
+        RectTransform rtTxt = goTxt.AddComponent<RectTransform>();
+        rtTxt.SetParent(goDialog.transform, false);
+        rtTxt.anchorMin        = new Vector2(0f, 0.5f);
+        rtTxt.anchorMax        = new Vector2(1f, 1f);
+        rtTxt.offsetMin        = new Vector2(8f, 0f);
+        rtTxt.offsetMax        = new Vector2(-8f, -4f);
+        TextMeshProUGUI tmp = goTxt.AddComponent<TextMeshProUGUI>();
+        tmp.text      = "Supprimer cet objet ?";
+        tmp.fontSize  = 12f;
+        tmp.alignment = TextAlignmentOptions.Center;
+
+        // Conteneur des boutons (bas de la dialog)
+        GameObject goBtns = new GameObject("BoutonsContainer");
+        RectTransform rtBtns = goBtns.AddComponent<RectTransform>();
+        rtBtns.SetParent(goDialog.transform, false);
+        rtBtns.anchorMin        = new Vector2(0f, 0f);
+        rtBtns.anchorMax        = new Vector2(1f, 0.5f);
+        rtBtns.offsetMin        = new Vector2(8f, 8f);
+        rtBtns.offsetMax        = new Vector2(-8f, -4f);
+        HorizontalLayoutGroup hlg = goBtns.AddComponent<HorizontalLayoutGroup>();
+        hlg.spacing               = 8f;
+        hlg.childForceExpandWidth  = true;
+        hlg.childForceExpandHeight = true;
+
+        Button btnOui = CreerBouton("BoutonOui", goBtns.transform, "Oui",
+                                    new Color(0.7f, 0.2f, 0.2f, 1f));
+        btnOui.onClick.AddListener(OnConfirmerSuppression);
+
+        Button btnNon = CreerBouton("BoutonNon", goBtns.transform, "Non",
+                                    new Color(0.2f, 0.4f, 0.2f, 1f));
+        btnNon.onClick.AddListener(OnAnnulerSuppression);
+
+        // Désactivé par défaut — DemanderConfirmationSuppression() l'activera
+        goOverlay.SetActive(false);
+    }
+
+    private Button CreerBouton(string nom, Transform parent, string texte, Color couleur)
+    {
+        GameObject go = new GameObject(nom);
+        RectTransform rt = go.AddComponent<RectTransform>();
+        rt.SetParent(parent, false);
+        Image img = go.AddComponent<Image>();
+        img.color = couleur;
+        Button btn = go.AddComponent<Button>();
+        CreerTexte("Label", go.transform, texte);
+        return btn;
     }
 }

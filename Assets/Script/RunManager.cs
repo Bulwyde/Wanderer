@@ -153,6 +153,320 @@ public class RunManager : MonoBehaviour
     }
 
     // -----------------------------------------------
+    // INVENTAIRES
+    // -----------------------------------------------
+
+    [Header("Inventaires")]
+    public int maxInventoryEquipments = 5;
+    public int maxInventorySkills = 10;
+
+    private List<EquipmentData> inventoryEquipments = new List<EquipmentData>();
+    private List<SkillData> inventorySkills = new List<SkillData>();
+
+    /// <summary>
+    /// Crée un clone runtime indépendant d'un équipement looté.
+    /// Appeler systématiquement pour tout équipement obtenu en jeu (loot, event, shop) :
+    /// chaque instance doit pouvoir être modifiée sans impacter l'asset SO d'origine.
+    /// </summary>
+    public EquipmentData CloneEquipmentForLoot(EquipmentData original)
+    {
+        if (original == null)
+        {
+            Debug.LogWarning("[RunManager] CloneEquipmentForLoot — original null.");
+            return null;
+        }
+
+        EquipmentData clone = Instantiate(original);
+
+        // Deep copy des skillSlots — chaque clone a ses propres objets SkillSlot,
+        // indépendants de ceux de l'original et des autres clones.
+        clone.skillSlots = new List<SkillSlot>();
+        foreach (SkillSlot s in original.skillSlots)
+        {
+            clone.skillSlots.Add(new SkillSlot
+            {
+                state         = s.state,
+                equippedSkill = s.equippedSkill
+            });
+        }
+
+        Debug.Log($"[RunManager] Équipement cloné : '{original.equipmentName}'.");
+        return clone;
+    }
+
+    /// <summary>
+    /// Ajoute un équipement à l'inventaire si la capacité le permet.
+    /// Retourne true si l'ajout a réussi, false si l'inventaire est plein.
+    /// </summary>
+    public bool AddEquipmentToInventory(EquipmentData equipment)
+    {
+        if (equipment == null) return false;
+
+        if (inventoryEquipments.Count >= maxInventoryEquipments)
+        {
+            Debug.LogWarning($"[RunManager] Inventaire équipements plein ({inventoryEquipments.Count}/{maxInventoryEquipments})" +
+                             $" — '{equipment.equipmentName}' non ajouté.");
+            return false;
+        }
+
+        inventoryEquipments.Add(equipment);
+        Debug.Log($"[RunManager] Inventaire — équipement ajouté : '{equipment.equipmentName}'" +
+                  $" ({inventoryEquipments.Count}/{maxInventoryEquipments}).");
+        return true;
+    }
+
+    /// <summary>
+    /// Retire un équipement de l'inventaire.
+    /// Retourne true si l'équipement était présent et a été retiré, false sinon.
+    /// </summary>
+    public bool RemoveEquipmentFromInventory(EquipmentData equipment)
+    {
+        bool retiré = inventoryEquipments.Remove(equipment);
+        if (retiré)
+            Debug.Log($"[RunManager] Inventaire — équipement retiré : '{equipment?.equipmentName}'.");
+        return retiré;
+    }
+
+    /// <summary>
+    /// Ajoute un skill à l'inventaire si la capacité le permet.
+    /// Retourne true si l'ajout a réussi, false si l'inventaire est plein.
+    /// </summary>
+    public bool AddSkillToInventory(SkillData skill)
+    {
+        if (skill == null) return false;
+
+        if (inventorySkills.Count >= maxInventorySkills)
+        {
+            Debug.LogWarning($"[RunManager] Inventaire skills plein ({inventorySkills.Count}/{maxInventorySkills})" +
+                             $" — '{skill.skillName}' non ajouté.");
+            return false;
+        }
+
+        inventorySkills.Add(skill);
+        Debug.Log($"[RunManager] Inventaire — skill ajouté : '{skill.skillName}'" +
+                  $" ({inventorySkills.Count}/{maxInventorySkills}).");
+        return true;
+    }
+
+    /// <summary>
+    /// Retire un skill de l'inventaire.
+    /// Retourne true si le skill était présent et a été retiré, false sinon.
+    /// </summary>
+    public bool RemoveSkillFromInventory(SkillData skill)
+    {
+        bool retiré = inventorySkills.Remove(skill);
+        if (retiré)
+            Debug.Log($"[RunManager] Inventaire — skill retiré : '{skill?.skillName}'.");
+        return retiré;
+    }
+
+    /// <summary>
+    /// Équipe une pièce dans un slot du joueur en gérant correctement l'ancienne pièce.
+    /// Si le slot est occupé, déplace l'ancienne pièce dans l'inventaire avant d'équiper.
+    /// Si l'inventaire est plein et le slot occupé, l'opération est annulée (retourne false).
+    /// Si la nouvelle pièce vient de l'inventaire, elle en est retirée automatiquement.
+    /// </summary>
+    public bool TryEquipEquipment(EquipmentSlot slot, EquipmentData equipment)
+    {
+        if (equipment == null) return false;
+
+        // Si le slot est occupé, tenter de déplacer l'ancienne pièce en inventaire
+        EquipmentData ancienne = GetEquipped(slot);
+        if (ancienne != null)
+        {
+            if (!AddEquipmentToInventory(ancienne))
+            {
+                Debug.LogWarning($"[RunManager] TryEquipEquipment — inventaire plein," +
+                                 $" impossible de déplacer '{ancienne.equipmentName}'.");
+                return false;
+            }
+        }
+
+        // Retirer la nouvelle pièce de l'inventaire si elle y était
+        RemoveEquipmentFromInventory(equipment);
+
+        equippedItems[slot] = equipment;
+        RecalculerMaxHP();
+
+        Debug.Log($"[RunManager] TryEquipEquipment — {slot} : '{equipment.equipmentName}' équipé" +
+                  (ancienne != null ? $" ('{ancienne.equipmentName}' → inventaire)" : "") + ".");
+        return true;
+    }
+
+    /// <summary>
+    /// Retourne une copie de la liste des équipements en inventaire.
+    /// </summary>
+    public List<EquipmentData> GetInventoryEquipments() => new List<EquipmentData>(inventoryEquipments);
+
+    /// <summary>
+    /// Retourne une copie de la liste des skills en inventaire.
+    /// </summary>
+    public List<SkillData> GetInventorySkills() => new List<SkillData>(inventorySkills);
+
+    // -----------------------------------------------
+    // ÉQUIPEMENT / DÉSÉQUIPEMENT DE SKILLS
+    // -----------------------------------------------
+
+    /// <summary>
+    /// Retourne les tags de l'équipement qui ne sont pas déjà présents dans les tags propres du skill.
+    /// Ces tags sont ceux à ajouter dans inheritedTags lors de l'équipement (et à retirer lors du déséquipement).
+    /// Évite les doublons si le skill et l'équipement partagent un même tag.
+    /// </summary>
+    private List<TagData> GetEquipmentTagsNotInSkill(EquipmentData equipment, SkillData skill)
+    {
+        List<TagData> result = new List<TagData>();
+        if (equipment == null || equipment.tags == null || skill == null || skill.tags == null)
+            return result;
+
+        foreach (TagData tag in equipment.tags)
+        {
+            if (tag == null) continue;
+            bool déjàPrésent = false;
+            foreach (TagData skillTag in skill.tags)
+            {
+                if (skillTag != null && skillTag.tagName == tag.tagName)
+                {
+                    déjàPrésent = true;
+                    break;
+                }
+            }
+            if (!déjàPrésent) result.Add(tag);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Équipe un skill dans un slot d'équipement.
+    /// Le skill doit être dans l'inventaire. Le slot doit être dans l'état Available.
+    /// Les tags de l'équipement non-présents dans le skill sont ajoutés à inheritedTags.
+    /// </summary>
+    public bool EquipSkill(EquipmentData equipment, int slotIndex, SkillData skill)
+    {
+        if (equipment == null || skill == null)
+        {
+            Debug.LogWarning("[RunManager] EquipSkill — equipment ou skill null.");
+            return false;
+        }
+        if (slotIndex < 0 || slotIndex >= equipment.skillSlots.Count)
+        {
+            Debug.LogWarning($"[RunManager] EquipSkill — index {slotIndex} hors limites" +
+                             $" (taille : {equipment.skillSlots.Count}).");
+            return false;
+        }
+
+        SkillSlot slot = equipment.skillSlots[slotIndex];
+
+        switch (slot.state)
+        {
+            case SkillSlot.SlotState.Unavailable:
+                Debug.LogWarning($"[RunManager] EquipSkill — slot {slotIndex} de '{equipment.equipmentName}' non disponible.");
+                return false;
+            case SkillSlot.SlotState.LockedInUse:
+                Debug.LogWarning($"[RunManager] EquipSkill — slot {slotIndex} de '{equipment.equipmentName}' verrouillé.");
+                return false;
+            case SkillSlot.SlotState.Used:
+                Debug.LogWarning($"[RunManager] EquipSkill — slot {slotIndex} de '{equipment.equipmentName}' déjà occupé." +
+                                 " Utiliser SwapSkill() pour remplacer.");
+                return false;
+        }
+
+        // Appliquer les tags hérités (tags de l'équipement absents des tags propres du skill)
+        List<TagData> tagsÀHériter = GetEquipmentTagsNotInSkill(equipment, skill);
+        foreach (TagData tag in tagsÀHériter)
+            skill.inheritedTags.Add(tag);
+
+        slot.state         = SkillSlot.SlotState.Used;
+        slot.equippedSkill = skill;
+        RemoveSkillFromInventory(skill);
+
+        Debug.Log($"[RunManager] EquipSkill — '{skill.skillName}' → slot {slotIndex} de '{equipment.equipmentName}'" +
+                  $" ({tagsÀHériter.Count} tag(s) hérité(s)).");
+        return true;
+    }
+
+    /// <summary>
+    /// Déséquipe le skill d'un slot d'équipement et le remet dans l'inventaire.
+    /// Les tags hérités de l'équipement sont retirés du skill.
+    /// Échoue si le slot est vide, verrouillé ou si l'inventaire de skills est plein.
+    /// </summary>
+    public bool UnequipSkill(EquipmentData equipment, int slotIndex)
+    {
+        if (equipment == null)
+        {
+            Debug.LogWarning("[RunManager] UnequipSkill — equipment null.");
+            return false;
+        }
+        if (slotIndex < 0 || slotIndex >= equipment.skillSlots.Count)
+        {
+            Debug.LogWarning($"[RunManager] UnequipSkill — index {slotIndex} hors limites" +
+                             $" (taille : {equipment.skillSlots.Count}).");
+            return false;
+        }
+
+        SkillSlot slot = equipment.skillSlots[slotIndex];
+
+        if (slot.state != SkillSlot.SlotState.Used && slot.state != SkillSlot.SlotState.LockedInUse)
+        {
+            Debug.LogWarning($"[RunManager] UnequipSkill — slot {slotIndex} de '{equipment.equipmentName}'" +
+                             " n'est pas occupé.");
+            return false;
+        }
+        if (slot.state == SkillSlot.SlotState.LockedInUse)
+        {
+            Debug.LogWarning($"[RunManager] UnequipSkill — slot {slotIndex} de '{equipment.equipmentName}'" +
+                             " verrouillé, impossible de déséquiper.");
+            return false;
+        }
+
+        SkillData skill = slot.equippedSkill;
+
+        // Retirer les tags hérités de l'équipement
+        List<TagData> tagsÀRetirer = GetEquipmentTagsNotInSkill(equipment, skill);
+        foreach (TagData tag in tagsÀRetirer)
+            skill.inheritedTags.Remove(tag);
+
+        // Tenter de remettre le skill en inventaire avant de libérer le slot
+        if (!AddSkillToInventory(skill))
+        {
+            // Revert : remettre les tags hérités
+            foreach (TagData tag in tagsÀRetirer)
+                skill.inheritedTags.Add(tag);
+
+            Debug.LogWarning($"[RunManager] UnequipSkill — inventaire skills plein," +
+                             $" impossible de déséquiper '{skill.skillName}'.");
+            return false;
+        }
+
+        slot.state         = SkillSlot.SlotState.Available;
+        slot.equippedSkill = null;
+
+        Debug.Log($"[RunManager] UnequipSkill — '{skill.skillName}' retiré du slot {slotIndex}" +
+                  $" de '{equipment.equipmentName}' ({tagsÀRetirer.Count} tag(s) hérité(s) retirés).");
+        return true;
+    }
+
+    /// <summary>
+    /// Remplace le skill d'un slot par un nouveau skill en une seule transaction.
+    /// Déséquipe l'ancien (→ inventaire), puis équipe le nouveau (← inventaire).
+    /// Échoue si le slot n'est pas occupé, si le skill est verrouillé, ou si l'inventaire est plein.
+    /// </summary>
+    public bool SwapSkill(EquipmentData equipment, int slotIndex, SkillData newSkill)
+    {
+        if (!UnequipSkill(equipment, slotIndex))
+            return false;
+
+        if (!EquipSkill(equipment, slotIndex, newSkill))
+        {
+            Debug.LogError($"[RunManager] SwapSkill — déséquipement réussi mais EquipSkill a échoué" +
+                           $" pour '{newSkill?.skillName}' au slot {slotIndex}. État incohérent.");
+            return false;
+        }
+
+        return true;
+    }
+
+    // -----------------------------------------------
     // MODULES ACTIFS
     // -----------------------------------------------
 
@@ -598,6 +912,9 @@ public class RunManager : MonoBehaviour
         savedExploredCells.Clear();
 
         hasActiveRun = true;
+
+        inventoryEquipments.Clear();
+        inventorySkills.Clear();
 
         // Seed l'équipement, le module et les consommables de départ
         // dès le lancement du run, pour que la Navigation les affiche immédiatement.

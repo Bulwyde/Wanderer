@@ -597,6 +597,19 @@ public class EventManager : MonoBehaviour
                 // -----------------------------------------------------------
 
                 case EventEffectType.TriggerNavEffect:
+                    // IncrementCounter ne nécessite pas NavigationManager — RunManager est DDOL
+                    // et disponible dans toutes les scènes, y compris la scène Event.
+                    if (effect.navEffect != null &&
+                        effect.navEffect.type == NavEffectType.IncrementCounter)
+                    {
+                        RunManager.Instance?.IncrementCounter(
+                            effect.navEffect.counterKey, effect.navEffect.value);
+                        Debug.Log($"[Event] TriggerNavEffect — IncrementCounter '{effect.navEffect.counterKey}' +{effect.navEffect.value}.");
+                        break;
+                    }
+
+                    // Tous les autres NavEffects (TeleportRandom, RevealZone*, IncreaseVisionRange)
+                    // nécessitent NavigationManager — uniquement disponible en scène Navigation.
                     if (navManager == null)
                         navManager = FindFirstObjectByType<NavigationManager>();
                     if (navManager != null)
@@ -604,8 +617,13 @@ public class EventManager : MonoBehaviour
                         navManager.AppliquerEffetNav(effect.navEffect);
                         Debug.Log($"[Event] TriggerNavEffect — effet nav appliqué.");
                     }
+                    else if (RunManager.Instance != null && effect.navEffect != null)
+                    {
+                        RunManager.Instance.navEffectsEnAttente.Add(effect.navEffect);
+                        Debug.Log($"[Event] TriggerNavEffect — NavigationManager absent, effet '{effect.navEffect.type}' mis en attente.");
+                    }
                     else
-                        Debug.LogWarning("[Event] TriggerNavEffect — NavigationManager introuvable dans la scène.");
+                        Debug.LogWarning("[Event] TriggerNavEffect — NavigationManager introuvable et RunManager indisponible ; effet perdu.");
                     break;
 
                 default:

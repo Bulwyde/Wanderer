@@ -104,6 +104,19 @@ public class NavigationManager : MonoBehaviour
 
         UpdateVisibility();
         mapRenderer.RefreshMap();
+
+        // Applique les NavEffects mis en attente depuis une scène non-Navigation (ex. Event).
+        // La liste est vidée après application pour ne pas rejouer les effets à chaque retour.
+        if (RunManager.Instance != null && RunManager.Instance.navEffectsEnAttente.Count > 0)
+        {
+            foreach (NavEffect effetDiffere in RunManager.Instance.navEffectsEnAttente)
+            {
+                Debug.Log($"[Navigation] Application de l'effet différé : {effetDiffere.type}");
+                AppliquerEffetNav(effetDiffere);
+            }
+            RunManager.Instance.navEffectsEnAttente.Clear();
+        }
+
         mapRenderer.CenterCameraOnPlayer();
 
         // Génère les boutons UI (consommables + skills jambes)
@@ -195,16 +208,9 @@ public class NavigationManager : MonoBehaviour
         }
         else
         {
-            // Comptes initiaux : types effectifs de toutes les cases non-Aléatoires
+            // maxOccurrences limite uniquement les cases issues des tirages Aléatoires,
+            // pas les cases hardcodées sur la carte — le compteur part donc de zéro.
             Dictionary<CellType, int> comptesActuels = new Dictionary<CellType, int>();
-            foreach (CellData cell in mapData.cells)
-            {
-                if (cell == null || cell.cellType == CellType.Aleatoire) continue;
-                CellType typeEff = RunManager.Instance.GetEffectiveCellType(cell);
-                if (!comptesActuels.ContainsKey(typeEff))
-                    comptesActuels[typeEff] = 0;
-                comptesActuels[typeEff]++;
-            }
 
             // Collecter les cases Aléatoires dans un ordre aléatoire (Fisher-Yates)
             List<CellData> casesAleatoires = new List<CellData>();
@@ -318,7 +324,13 @@ public class NavigationManager : MonoBehaviour
     {
         foreach (CellData cell in mapData.cells)
         {
-            if (cell.cellType == CellType.Start)
+            // Utiliser GetEffectiveCellType pour ignorer les cases Start overridées
+            // par InitialiserCarte() (le SO n'est jamais modifié — cellType brut reste Start).
+            CellType typeEffectif = RunManager.Instance != null
+                ? RunManager.Instance.GetEffectiveCellType(cell)
+                : cell.cellType;
+
+            if (typeEffectif == CellType.Start)
             {
                 PlayerX = cell.x;
                 PlayerY = cell.y;
@@ -782,13 +794,19 @@ public class NavigationManager : MonoBehaviour
             }
 
             // -----------------------------------------------------------
-            // TÉLÉPORTEUR — événement spécifique curé (specificEvent)
+            // TÉLÉPORTEUR — specificEvent si assigné, sinon defaultTeleportEvent de la MapData
             // -----------------------------------------------------------
 
             case CellType.Teleporteur:
-                if (cell.specificEvent == null)
+            {
+                // Priorité 1 : event curé directement sur la case
+                // Priorité 2 : fallback global de la MapData (cas Aléatoire résolu → Teleporteur)
+                EventData eventTeleporteur = cell.specificEvent ?? mapData.defaultTeleportEvent;
+
+                if (eventTeleporteur == null)
                 {
-                    Debug.LogWarning($"({PlayerX},{PlayerY}) — Teleporteur sans specificEvent assigné, pas de transition.");
+                    Debug.LogWarning($"[Navigation] Teleporteur ({cell.x},{cell.y}) — aucun event configuré " +
+                                     $"(specificEvent null et defaultTeleportEvent non assigné sur la MapData).");
                     break;
                 }
 
@@ -801,9 +819,10 @@ public class NavigationManager : MonoBehaviour
                 RunManager.Instance.SaveNavigationState(
                     PlayerX, PlayerY, visitedCells, exploredCells);
                 RunManager.Instance.EnterRoom(cell);
-                RunManager.Instance.currentSpecificEventID = cell.specificEvent.eventID;
+                RunManager.Instance.currentSpecificEventID = eventTeleporteur.eventID;
                 SceneLoader.Instance.GoToEvent();
                 break;
+            }
 
             // -----------------------------------------------------------
             // FERRAILLEUR — placeholder [Chantier futur]

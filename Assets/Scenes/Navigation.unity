@@ -253,6 +253,8 @@ MonoBehaviour:
   cellSize: 30
   wallThickness: 6
   iconesParType:
+  - typeDCase: 14
+    icone: {fileID: 6453245655525219228, guid: ad15a7e3dca8ed548b580a8c19a7c072, type: 3}
   - typeDCase: 3
     icone: {fileID: -7436936967371575343, guid: ad15a7e3dca8ed548b580a8c19a7c072, type: 3}
   - typeDCase: 7
@@ -263,6 +265,22 @@ MonoBehaviour:
     icone: {fileID: 6970208164254707157, guid: ad15a7e3dca8ed548b580a8c19a7c072, type: 3}
   - typeDCase: 6
     icone: {fileID: -595001296926682747, guid: ad15a7e3dca8ed548b580a8c19a7c072, type: 3}
+  - typeDCase: 8
+    icone: {fileID: -1388515766092869844, guid: ad15a7e3dca8ed548b580a8c19a7c072, type: 3}
+  - typeDCase: 9
+    icone: {fileID: 8366682682882980584, guid: ad15a7e3dca8ed548b580a8c19a7c072, type: 3}
+  - typeDCase: 11
+    icone: {fileID: -2622211427392443622, guid: ad15a7e3dca8ed548b580a8c19a7c072, type: 3}
+  - typeDCase: 12
+    icone: {fileID: -8855594515904119501, guid: 67325aeea578e3a44b5866be2e6036a7, type: 3}
+  - typeDCase: 10
+    icone: {fileID: 553565022358195372, guid: ad15a7e3dca8ed548b580a8c19a7c072, type: 3}
+  - typeDCase: 15
+    icone: {fileID: 7595232718671947681, guid: ad15a7e3dca8ed548b580a8c19a7c072, type: 3}
+  - typeDCase: 13
+    icone: {fileID: -202889858992623187, guid: ad15a7e3dca8ed548b580a8c19a7c072, type: 3}
+  - typeDCase: 16
+    icone: {fileID: -7533845460127534179, guid: ad15a7e3dca8ed548b580a8c19a7c072, type: 3}
   colorHidden: {r: 0.1, g: 0.1, b: 0.1, a: 1}
   colorEmpty: {r: 0.2, g: 0.2, b: 0.2, a: 1}
   colorStart: {r: 0, g: 0.8, b: 0.2, a: 1}
@@ -502,6 +520,7 @@ MonoBehaviour:
     values: 
   maxConsumableSlots: 3
   startingConsumablesSeeded: 0
+  carteInitialisee: 0
   visionRangeBonus: 0
   combatsTermines: 0
   eventsTermines: 0

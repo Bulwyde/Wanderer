@@ -1,0 +1,47 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2d9e59739edeec740b98c00d8c052605, type: 3}
+  m_Name: EventTeleporteurRandom
+  m_EditorClassIdentifier: Assembly-CSharp::EventData
+  eventID: EventTeleporteurRandom
+  title: EventTeleporteurRandom
+  description: C'est un TP lol
+  backgroundImage: {fileID: 0}
+  tags: []
+  choices:
+  - choiceText: Le prendre
+    outcomeText: Adieu les pieds
+    effects:
+    - type: 7
+      value: 0
+      gainConsumableMode: 0
+      consumablesToGive: []
+      consumableLootTable: {fileID: 0}
+      gainModuleMode: 0
+      modulesToGive: []
+      moduleLootTable: {fileID: 0}
+      gainEquipmentMode: 0
+      equipmentsToGive: []
+      equipmentLootTable: {fileID: 0}
+      flagKey: 
+      flagValue: 0
+      navEffect:
+        type: 0
+        value: 0
+        counterKey: 
+        allowedCellTypes: 00000000
+      statToModify: 0
+      statValue: 0
+      creditValue: 0
+  - choiceText: Ne pas le prendre
+    outcomeText: "Il s'est d\xE9sactiv\xE9"
+    effects: []

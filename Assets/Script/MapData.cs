@@ -63,6 +63,10 @@ public class MapData : ScriptableObject
     [SerializeField] public List<MaxTypeEntry> maximumsParType;
     [SerializeField] public CellType typeDeRemplacement; // Type utilisé quand un maximum est dépassé
 
+    [Header("Événements par défaut")]
+    [Tooltip("Event déclenché par un Teleporteur sans specificEvent — ex : cas issu d'une résolution Aléatoire.")]
+    public EventData defaultTeleportEvent;
+
     /// <summary>
     /// Retourne la case à la position (x, y).
     /// </summary>

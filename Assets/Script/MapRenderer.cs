@@ -381,7 +381,7 @@ public void CenterCameraOnPlayer()
 
     /// <summary>
     /// Retourne le CellType à afficher pour une case selon son état runtime.
-    /// Chaîne de priorité : salle complétée → Aléatoire brut → override maximum → cellType original.
+    /// Chaîne de priorité : postVisitType posé → Aléatoire brut → override maximum → cellType original.
     /// Appelé identiquement depuis RefreshMap() et RefreshSingleCell().
     /// </summary>
     private CellType ObtenirTypeAffiche(CellData cell, int x, int y)
@@ -389,9 +389,11 @@ public void CenterCameraOnPlayer()
         if (RunManager.Instance == null)
             return cell?.cellType ?? CellType.Empty;
 
-        // Salle complétée → type post-visite (Empty, FerailleurUtilise, TeleporteurUtilise…)
+        // postVisitType posé → type post-visite (Empty, FerailleurUtilise, TeleporteurUtilise…)
+        // Couvre deux cas : salle complétée par le joueur (ClearCurrentRoom) ET BloqueurLD
+        // débloqué par VerifierBloqueurLD (jamais dans clearedRooms mais a bien un postVisitType).
         // Le Shop ne va jamais dans clearedRooms — garde défensif contre régression future.
-        if (RunManager.Instance.IsRoomCleared(x, y) && cell?.cellType != CellType.Shop)
+        if (RunManager.Instance.HasPostVisitType(x, y) && cell?.cellType != CellType.Shop)
             return RunManager.Instance.GetPostVisitType(x, y);
 
         // Case Aléatoire non encore visitée → afficher l'icône Aléatoire (pas le type résolu)

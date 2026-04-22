@@ -10,7 +10,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8a2665bff6b8668489f5ea9d9ea392d0, type: 3}
-  m_Name: RandomEvents
+  m_Name: TBC RandomEvents
   m_EditorClassIdentifier: Assembly-CSharp::RandomEvents
   entrees:
   - map: {fileID: 11400000, guid: df486ee24fbd1af4a9ee005cc3f83402, type: 2}

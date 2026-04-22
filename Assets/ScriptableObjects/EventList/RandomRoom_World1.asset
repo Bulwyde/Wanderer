@@ -1,0 +1,36 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8f7c6a5f94af8d340be732ef96f997cd, type: 3}
+  m_Name: RandomRoom_World1
+  m_EditorClassIdentifier: Assembly-CSharp::CellAleaPool
+  entrees:
+  - type: 3
+    poids: 15
+    maxOccurrences: 99
+  - type: 7
+    poids: 2
+    maxOccurrences: 1
+  - type: 6
+    poids: 6
+    maxOccurrences: 2
+  - type: 10
+    poids: 1
+    maxOccurrences: 0
+  - type: 4
+    poids: 7
+    maxOccurrences: 5
+  - type: 12
+    poids: 5
+    maxOccurrences: 99
+  - type: 13
+    poids: 2
+    maxOccurrences: 1

@@ -272,6 +272,10 @@ public class RunManager : MonoBehaviour
     // Indique si la carte courante a déjà été initialisée ce run (cases Aléatoires résolues, etc.).
     public bool carteInitialisee = false;
 
+    // NavEffects déclenchés hors scène Navigation (ex. depuis une scène Event)
+    // et en attente d'application au prochain chargement de NavigationManager.
+    public List<NavEffect> navEffectsEnAttente = new List<NavEffect>();
+
     // -----------------------------------------------
     // COMPTEURS DE NAVIGATION
     // -----------------------------------------------
@@ -583,6 +587,7 @@ public class RunManager : MonoBehaviour
         postVisitCellTypes.Clear();
         overridesMaximum.Clear();
         carteInitialisee = false;
+        navEffectsEnAttente.Clear();
         currentMapData   = null;
         currentEnemyData  = null;
         currentEnemyGroup = null;

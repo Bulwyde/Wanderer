@@ -232,8 +232,12 @@ public class MapEditorWindow : EditorWindow
             EditorUtility.SetDirty(currentMap);
         }
 
-        // Configuration des événements — uniquement pour les cases de type Event
-        if (selectedCell.cellType == CellType.Event)
+        // Configuration des événements — Event, Ferrailleur, Radar et Coffre
+        // utilisent tous ChoisirEventAleatoire() en runtime (eventList / eventPool).
+        if (selectedCell.cellType == CellType.Event      ||
+            selectedCell.cellType == CellType.Ferrailleur ||
+            selectedCell.cellType == CellType.Radar       ||
+            selectedCell.cellType == CellType.Coffre)
         {
             EditorGUILayout.Space(4);
             EditorGUILayout.LabelField("Événements", EditorStyles.boldLabel);

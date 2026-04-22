@@ -1,0 +1,44 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2d9e59739edeec740b98c00d8c052605, type: 3}
+  m_Name: EventInterrupteur 2
+  m_EditorClassIdentifier: Assembly-CSharp::EventData
+  eventID: EventInterrupteur 2
+  title: EventInterrupteur 2
+  description: "Un interrupteur ! C'est le deuxi\xE8me !"
+  backgroundImage: {fileID: 0}
+  tags: []
+  choices:
+  - choiceText: L'activer
+    outcomeText: "GG ! C'est activ\xE9 !"
+    effects:
+    - type: 7
+      value: 0
+      gainConsumableMode: 0
+      consumablesToGive: []
+      consumableLootTable: {fileID: 0}
+      gainModuleMode: 0
+      modulesToGive: []
+      moduleLootTable: {fileID: 0}
+      gainEquipmentMode: 0
+      equipmentsToGive: []
+      equipmentLootTable: {fileID: 0}
+      flagKey: 
+      flagValue: 0
+      navEffect:
+        type: 4
+        value: 1
+        counterKey: interrupteur
+        allowedCellTypes: 
+      statToModify: 0
+      statValue: 0
+      creditValue: 0

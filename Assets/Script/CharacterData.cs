@@ -60,6 +60,11 @@ public class CharacterData : ScriptableObject
     // Ex : Tag_Guerrier, Tag_Mage — créer les assets dans Assets/ScriptableObjects/Tags/
     public List<TagData> tags = new List<TagData>();
 
+    [Header("Équipement — configuration")]
+    // Nombre maximum de bras simultanément équipés (2, 3 ou 4 selon le personnage).
+    // Détermine combien de slots Arm sont affichés dans l'UI d'inventaire.
+    public int maxEquippedArms = 2;
+
     [Header("Module de départ")]
     // Module passif donné au joueur au début de chaque run avec ce personnage.
     // Équivalent d'une relique de départ (comme dans Slay the Spire).

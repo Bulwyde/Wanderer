@@ -45,8 +45,9 @@ public class EquipmentData : ScriptableObject
     public List<EffectData> passiveEffects;
 
     [Header("Compétences actives")]
-    // Bras : 1 à 4 compétences | Autres emplacements : jusqu'à 3
-    public List<SkillData> skills;
+    // Emplacements configurables pour équiper des skills (états : Available / Used / Unavailable / LockedInUse).
+    // Bras : 1 à 4 slots | Autres emplacements : jusqu'à 3 slots.
+    public List<SkillSlot> skillSlots = new List<SkillSlot>();
 
     [Header("Tags")]
     // Tags sémantiques pour les interactions et la gestion du loot

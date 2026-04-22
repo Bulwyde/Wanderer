@@ -44,6 +44,11 @@ public class SkillData : ScriptableObject
     // Ex : Tag_Physique, Tag_Magie, Tag_Soin — créer les assets dans Assets/ScriptableObjects/Tags/
     public List<TagData> tags = new List<TagData>();
 
+    // Runtime uniquement — rempli quand le skill est équipé dans un slot, vidé au déséquipement.
+    // Contient les tags hérités de l'équipement porteur (sans doublons avec "tags").
+    [HideInInspector]
+    public List<TagData> inheritedTags = new List<TagData>();
+
     // -----------------------------------------------
     // COMPÉTENCE DE NAVIGATION (jambes)
     // -----------------------------------------------

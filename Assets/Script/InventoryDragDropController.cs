@@ -50,6 +50,16 @@ public class InventoryDragDropController : MonoBehaviour,
     private bool _isDragging = false;
 
     // -----------------------------------------------
+    // INITIALISATION
+    // -----------------------------------------------
+
+    void Awake()
+    {
+        if (dragIcon == null)
+            dragIcon = GetComponent<Image>();
+    }
+
+    // -----------------------------------------------
     // SETUP
     // -----------------------------------------------
 

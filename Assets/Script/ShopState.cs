@@ -39,6 +39,14 @@ public class ShopItemConsomable
     public bool           achete;
 }
 
+[System.Serializable]
+public class ShopItemSkill
+{
+    public SkillData data;
+    public int       prix;
+    public bool      achete;
+}
+
 // -----------------------------------------------
 // ÉTAT COMPLET DU SHOP
 // -----------------------------------------------
@@ -52,4 +60,5 @@ public class ShopState
     public List<ShopItemEquipment>  equipements  = new List<ShopItemEquipment>();
     public List<ShopItemModule>     modules      = new List<ShopItemModule>();
     public List<ShopItemConsomable> consommables = new List<ShopItemConsomable>();
+    public List<ShopItemSkill>      skills       = new List<ShopItemSkill>();
 }

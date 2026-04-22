@@ -28,4 +28,9 @@ public class ShopData : ScriptableObject
     public ConsumableLootTable consumableLootTable;
     public int                 consumableCount      = 3;
     public Vector2Int          consumablePriceRange = new Vector2Int(20, 60);
+
+    [Header("Skills")]
+    public SkillLootTable skillLootTable;
+    public int            skillCount        = 2;
+    public Vector2Int     skillPriceRange   = new Vector2Int(30, 80);
 }

@@ -50,10 +50,11 @@ public class ShopManager : MonoBehaviour
     // -----------------------------------------------
 
     [Header("UI — Articles du shop")]
-    // Containers pour les 3 catégories d'articles vendus par le marchand
+    // Containers pour les 4 catégories d'articles vendus par le marchand
     public Transform equipementContainer;
     public Transform moduleContainer;
     public Transform consommableShopContainer;
+    public Transform skillShopContainer;
 
     // Espacement vertical entre les items dans chaque colonne d'équipement
     public float equipementColonneSpacing = 4f;
@@ -122,6 +123,7 @@ public class ShopManager : MonoBehaviour
     private readonly List<(ShopItemButton btn, ShopItemEquipment item)>  _boutonsEquipement   = new();
     private readonly List<(ShopItemButton btn, ShopItemModule item)>     _boutonsModules      = new();
     private readonly List<(ShopItemButton btn, ShopItemConsomable item)> _boutonsConsommables = new();
+    private readonly List<(ShopItemButton btn, ShopItemSkill item)>      _boutonsSkills       = new();
 
     // -----------------------------------------------
     // INITIALISATION
@@ -201,6 +203,7 @@ public class ShopManager : MonoBehaviour
         GenererArticlesEquipement();
         GenererArticlesModules();
         GenererArticlesConsommables();
+        GenererArticlesSkills();
     }
 
     private void GenererArticlesEquipement()
@@ -318,6 +321,33 @@ public class ShopManager : MonoBehaviour
                 () => AcheterConsommable(itemRef), label);
 
             _boutonsConsommables.Add((btn, item));
+        }
+    }
+
+    private void GenererArticlesSkills()
+    {
+        if (skillShopContainer == null || shopItemPrefab == null) return;
+        ViderContainer(skillShopContainer);
+        _boutonsSkills.Clear();
+
+        foreach (ShopItemSkill item in shopState.skills)
+        {
+            if (item?.data == null) continue;
+            ShopItemSkill itemRef = item;
+
+            bool achetable = !item.achete &&
+                             RunManager.Instance.HasEnoughCredits(item.prix);
+
+            string label = item.achete ? "Acheté" : null;
+
+            GameObject go = Instantiate(shopItemPrefab, skillShopContainer);
+            ShopItemButton btn = go.GetComponent<ShopItemButton>();
+            if (btn == null) continue;
+
+            btn.Setup(item.data.skillName, item.prix, achetable,
+                () => AcheterSkill(itemRef), label);
+
+            _boutonsSkills.Add((btn, item));
         }
     }
 
@@ -578,6 +608,27 @@ public class ShopManager : MonoBehaviour
         RafraichirArticles();
     }
 
+    private void AcheterSkill(ShopItemSkill item)
+    {
+        if (item == null || item.achete) return;
+        if (!RunManager.Instance.HasEnoughCredits(item.prix)) return;
+
+        bool ajouté = RunManager.Instance.AddSkillToInventory(item.data);
+        if (!ajouté)
+        {
+            Debug.Log($"[ShopManager] Impossible d'acheter '{item.data.skillName}' — inventaire skills plein.");
+            return;
+        }
+
+        RunManager.Instance.AddCredits(-item.prix);
+        item.achete = true;
+
+        Debug.Log($"[ShopManager] Skill acheté : {item.data.skillName} | -{item.prix} credits");
+
+        RafraichirHUD();
+        RafraichirArticles();
+    }
+
     private void AcheterConsommable(ShopItemConsomable item)
     {
         if (item == null || item.achete) return;
@@ -639,6 +690,12 @@ public class ShopManager : MonoBehaviour
             btn.SetInteractable(achetable);
         }
         foreach (var (btn, item) in _boutonsConsommables)
+        {
+            if (btn == null) continue;
+            bool achetable = !item.achete && RunManager.Instance.HasEnoughCredits(item.prix);
+            btn.SetInteractable(achetable);
+        }
+        foreach (var (btn, item) in _boutonsSkills)
         {
             if (btn == null) continue;
             bool achetable = !item.achete && RunManager.Instance.HasEnoughCredits(item.prix);

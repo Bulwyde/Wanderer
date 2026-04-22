@@ -1360,10 +1360,32 @@ public class RunManager : MonoBehaviour
             }
         }
 
+        // ── Skills ───────────────────────────────────────────────────────────
+        if (shopData.skillLootTable != null && shopData.skillCount > 0)
+        {
+            List<SkillData> pool = new List<SkillData>(shopData.skillLootTable.skills);
+            pool.RemoveAll(s => s == null);
+
+            int nbATirer = Mathf.Min(shopData.skillCount, pool.Count);
+            for (int i = 0; i < nbATirer; i++)
+            {
+                int idx = Random.Range(0, pool.Count);
+                SkillData item = pool[idx];
+                pool.RemoveAt(idx);
+
+                state.skills.Add(new ShopItemSkill
+                {
+                    data = item,
+                    prix = Random.Range(shopData.skillPriceRange.x,
+                                        shopData.skillPriceRange.y + 1)
+                });
+            }
+        }
+
         shopStates[key] = state;
         Debug.Log($"[RunManager] Shop généré en ({cell.x},{cell.y}) avec '{shopData.name}' — " +
                   $"{state.equipements.Count} équipements, {state.modules.Count} modules, " +
-                  $"{state.consommables.Count} consommables.");
+                  $"{state.consommables.Count} consommables, {state.skills.Count} skills.");
         return state;
     }
 

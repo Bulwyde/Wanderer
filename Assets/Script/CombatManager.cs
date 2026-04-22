@@ -301,6 +301,7 @@ public class CombatManager : MonoBehaviour
         SpawnConsumableButtons();
         UpdatePlayerUI();
         Log($"Combat commencé — {GetPlayerName()} vs {GetRencontreName()}");
+        InventoryUIManager.Instance?.SetDragDropEnabled(false);
         StartPlayerTurn();
     }
 
@@ -2085,7 +2086,9 @@ public class CombatManager : MonoBehaviour
         if (lootPanel == null) return;
         lootPanel.SetActive(true);
 
+        InventoryUIManager.Instance?.SetDragDropEnabled(true);
         TryGrantConsumableLoot();
+        TryGrantSkillLoot();
 
         if (lootContinueButton != null)
         {
@@ -2096,6 +2099,21 @@ public class CombatManager : MonoBehaviour
         List<EquipmentData> offers = PickLootOffers();
         if (offers.Count == 0 || equipmentOfferController == null) return;
         equipmentOfferController.StartOffresSimultanées(offers, null);
+    }
+
+    private void TryGrantSkillLoot()
+    {
+        SkillLootTable table = RunManager.Instance?.currentMapData?.defaultCombatSkillLootTable;
+        if (table == null) return;
+
+        SkillData skill = table.GetRandom();
+        if (skill == null) return;
+
+        bool ajouté = RunManager.Instance.AddSkillToInventory(skill);
+        if (ajouté)
+            Log($"Loot — Skill '{skill.skillName}' ajouté à l'inventaire.");
+        else
+            Log($"Loot — Inventaire skills plein, '{skill.skillName}' perdu.");
     }
 
     /// <summary>
@@ -2114,7 +2132,14 @@ public class CombatManager : MonoBehaviour
         }
         equipementsLootDifféré.Clear();
 
-        return offresBase;
+        // Clone chaque équipement pour garantir l'indépendance des instances runtime
+        List<EquipmentData> clones = new List<EquipmentData>(offresBase.Count);
+        foreach (EquipmentData e in offresBase)
+        {
+            if (e != null)
+                clones.Add(RunManager.Instance.CloneEquipmentForLoot(e));
+        }
+        return clones;
     }
 
     /// <summary>

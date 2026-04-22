@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using System.Collections.Generic;
 
 /// <summary>
 /// Singleton DDOL qui gère le Canvas d'inventaire overlay.
@@ -120,16 +121,63 @@ public class InventoryUIManager : MonoBehaviour
     }
 
     // -----------------------------------------------
-    // REFRESH (stub — Phase 5)
+    // REFRESH
     // -----------------------------------------------
 
-    /// <summary>
-    /// Rafraîchit l'ensemble de l'UI d'inventaire à partir de l'état courant du RunManager.
-    /// Stub en Phase 4 — sera implémenté en Phase 5 pour générer les icônes.
-    /// </summary>
     public void RefreshUI()
     {
-        // Phase 5 : générer icônes équipements portés, inventaire équipements, inventaire skills
+        if (RunManager.Instance == null) return;
+        RafraichirInventaireEquipements();
+        RafraichirInventaireSkills();
+    }
+
+    private void RafraichirInventaireEquipements()
+    {
+        if (panelEquipmentInventory == null) return;
+        ViderPanel(panelEquipmentInventory);
+
+        foreach (EquipmentData equip in RunManager.Instance.GetInventoryEquipments())
+        {
+            if (equip == null) continue;
+            GameObject icone = CreerIcone(equip.icon, panelEquipmentInventory);
+            InventoryDragDropController ctrl = icone.AddComponent<InventoryDragDropController>();
+            ctrl.SetupEquipment(equip);
+        }
+    }
+
+    private void RafraichirInventaireSkills()
+    {
+        if (panelSkillInventory == null) return;
+        ViderPanel(panelSkillInventory);
+
+        foreach (SkillData skill in RunManager.Instance.GetInventorySkills())
+        {
+            if (skill == null) continue;
+            GameObject icone = CreerIcone(skill.icon, panelSkillInventory);
+            InventoryDragDropController ctrl = icone.AddComponent<InventoryDragDropController>();
+            ctrl.SetupSkill(skill);
+        }
+    }
+
+    private GameObject CreerIcone(Sprite sprite, RectTransform parent)
+    {
+        GameObject go = new GameObject("Icone");
+        RectTransform rt = go.AddComponent<RectTransform>();
+        rt.SetParent(parent, false);
+        Image img = go.AddComponent<Image>();
+        if (sprite != null)
+            img.sprite = sprite;
+        return go;
+    }
+
+    private void ViderPanel(RectTransform panel)
+    {
+        for (int i = panel.childCount - 1; i >= 0; i--)
+        {
+            GameObject child = panel.GetChild(i).gameObject;
+            child.SetActive(false);
+            Destroy(child);
+        }
     }
 
     // -----------------------------------------------

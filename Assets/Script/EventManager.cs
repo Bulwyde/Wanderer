@@ -647,24 +647,32 @@ public class EventManager : MonoBehaviour
     {
         if (pièce == null || RunManager.Instance == null) return;
 
+        EquipmentData clone = RunManager.Instance.CloneEquipmentForLoot(pièce);
+
         if (pièce.equipmentType == EquipmentType.Arm)
         {
             // Pour les bras : cherche un slot libre en priorité
             if (RunManager.Instance.IsSlotFree(EquipmentSlot.Arm1))
             {
-                RunManager.Instance.EquipItem(EquipmentSlot.Arm1, pièce);
-                Debug.Log($"[Event] '{pièce.equipmentName}' équipé automatiquement → Arm1");
+                RunManager.Instance.EquipItem(EquipmentSlot.Arm1, clone);
+                Debug.Log($"[Event] '{clone.equipmentName}' équipé automatiquement → Arm1");
             }
             else if (RunManager.Instance.IsSlotFree(EquipmentSlot.Arm2))
             {
-                RunManager.Instance.EquipItem(EquipmentSlot.Arm2, pièce);
-                Debug.Log($"[Event] '{pièce.equipmentName}' équipé automatiquement → Arm2");
+                RunManager.Instance.EquipItem(EquipmentSlot.Arm2, clone);
+                Debug.Log($"[Event] '{clone.equipmentName}' équipé automatiquement → Arm2");
             }
             else
             {
-                // Les deux bras sont occupés → proposer le remplacement au joueur
-                Debug.Log($"[Event] '{pièce.equipmentName}' mis en attente — les deux bras sont occupés.");
-                pendingEquipmentOffers.Add(pièce);
+                // Les deux bras sont occupés → inventaire, ou remplacement interactif si plein
+                bool ajouté = RunManager.Instance.AddEquipmentToInventory(clone);
+                if (ajouté)
+                    Debug.Log($"[Event] '{clone.equipmentName}' ajouté à l'inventaire (bras occupés).");
+                else
+                {
+                    Debug.Log($"[Event] '{clone.equipmentName}' mis en attente — inventaire et bras pleins.");
+                    pendingEquipmentOffers.Add(clone);
+                }
             }
         }
         else
@@ -672,14 +680,20 @@ public class EventManager : MonoBehaviour
             EquipmentSlot slot = EquipmentTypeToSlot(pièce.equipmentType);
             if (RunManager.Instance.IsSlotFree(slot))
             {
-                RunManager.Instance.EquipItem(slot, pièce);
-                Debug.Log($"[Event] '{pièce.equipmentName}' équipé automatiquement → {slot}");
+                RunManager.Instance.EquipItem(slot, clone);
+                Debug.Log($"[Event] '{clone.equipmentName}' équipé automatiquement → {slot}");
             }
             else
             {
-                // Slot occupé → proposer le remplacement au joueur
-                Debug.Log($"[Event] '{pièce.equipmentName}' mis en attente — slot {slot} occupé.");
-                pendingEquipmentOffers.Add(pièce);
+                // Slot occupé → inventaire, ou remplacement interactif si plein
+                bool ajouté = RunManager.Instance.AddEquipmentToInventory(clone);
+                if (ajouté)
+                    Debug.Log($"[Event] '{clone.equipmentName}' ajouté à l'inventaire (slot {slot} occupé).");
+                else
+                {
+                    Debug.Log($"[Event] '{clone.equipmentName}' mis en attente — inventaire et slot {slot} pleins.");
+                    pendingEquipmentOffers.Add(clone);
+                }
             }
         }
     }

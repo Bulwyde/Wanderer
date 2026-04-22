@@ -56,6 +56,9 @@ public class MapData : ScriptableObject
     [Range(1, 4)]
     public int defaultLootOfferCount = 2;
 
+    // Table de skills donnés après combat (fallback global — null = pas de skill loot).
+    public SkillLootTable defaultCombatSkillLootTable;
+
     [Header("Aléatoire")]
     [SerializeField] public CellAleaPool aleatoirePool;
 

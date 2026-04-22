@@ -45,6 +45,11 @@ Roguelike tour par tour Unity/C#, inspiré Slay the Spire + Darkest Dungeon. Car
 
 **`ModuleManager.cs`** — DDOL, **doit être dans la scène Navigation**. `OnModulesChanged` statique (HUD sans instance) mais les effets GameEvents nécessitent une instance.
 
+**`InventoryUIManager.cs`** — DDOL, **gère l'inventaire overlay** (équipements + skills). Canvas persiste entre les scènes. Pour les détails complets : voir **INVENTAIRE.md**.
+- `Open()` / `Close()` / `Toggle()` : gestion de l'interface
+- Drag'n'drop activé/désactivé selon contexte (désactivé en combat, réactivé à loot)
+- Layouts : équipement à gauche (Legs + Arm1-4), inventaire à droite (équipements haut, skills bas)
+
 ### Navigation
 
 **`NavigationManager.cs`** — Déplacements, brouillard de guerre, NavEffects, tirage d'events.
@@ -171,6 +176,28 @@ Roguelike tour par tour Unity/C#, inspiré Slay the Spire + Darkest Dungeon. Car
 - Événements de craft
 - Localisation (`com.unity.localization`) — après 1ère version jouable
 - **D** : Conditions tags → influence navigation/génération (EnemyPools + NavigationManager)
+- **🔄 EN COURS** : **Système d'inventaire + skills équipés** (voir **INVENTAIRE.md**)
+
+---
+
+## Inventaire et Skills équipés
+
+> **Voir INVENTAIRE.md pour l'architecture complète, les phases d'implémentation et les pièges spécifiques.**
+
+En développement : système complet de gestion d'inventaire, d'équipement de skills et drag'n'drop.
+
+**Éléments clés** :
+- **SkillSlot** : emplacements pour équiper des skills (libre/utilisé/non-disponible/bloqué)
+- **Clonage** : chaque équipement loot est une instance indépendante du SO asset
+- **Tags hérités** : un skill équipé hérite des tags de son équipement (appliqués/retirés immédiatement)
+- **InventoryUIManager** : DDOL overlay (Canvas persiste entre les scènes)
+- **Drag'n'drop** : activé/désactivé selon le contexte (désactivé en combat)
+
+**Conventions spécifiques** :
+- RunManager gère les inventaires : `List<EquipmentData> inventoryEquipments` + `List<SkillData> inventorySkills`
+- Tous les clones passent par `RunManager.CloneEquipmentForLoot()`
+- Équipement/déséquipement via `EquipSkill()` / `UnequipSkill()` / `SwapSkill()`
+- Tags hérités stockés dans `SkillData.inheritedTags` (runtime, caché dans l'inspector)
 
 ---
 

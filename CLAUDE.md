@@ -45,10 +45,14 @@ Roguelike tour par tour Unity/C#, inspiré Slay the Spire + Darkest Dungeon. Car
 
 **`ModuleManager.cs`** — DDOL, **doit être dans la scène Navigation**. `OnModulesChanged` statique (HUD sans instance) mais les effets GameEvents nécessitent une instance.
 
-**`InventoryUIManager.cs`** — DDOL, **gère l'inventaire overlay** (équipements + skills). Canvas persiste entre les scènes. Pour les détails complets : voir **INVENTAIRE.md**.
-- `Open()` / `Close()` / `Toggle()` : gestion de l'interface
-- Drag'n'drop activé/désactivé selon contexte (désactivé en combat, réactivé à loot)
-- Layouts : équipement à gauche (Legs + Arm1-4), inventaire à droite (équipements haut, skills bas)
+**`InventoryUIManager.cs`** — DDOL, **ne doit pas être dans une scène spécifique** (DDOL).
+Canvas créé dynamiquement au démarrage si aucun Canvas n'est assigné dans l'Inspector.
+Pour les détails complets : voir **INVENTAIRE.md**.
+- `Open()` / `Close()` / `Toggle()` : gestion de l'interface. Raccourci : touche `I`, Escape ferme.
+- `RefreshUI()` : rebuild complet du panneau gauche (équipements portés + skill slots) ET du panneau droit (inventaires).
+- `SetDragDropEnabled(bool)` : désactivé en combat (`InitializeCombat`), réactivé au loot (`ShowLootPanel`).
+- **Panneau gauche** : Legs + Arm1/Arm2 (selon `selectedCharacter.maxEquippedArms`). Chaque équipement affiché avec ses skill slots. Slots `Unavailable` masqués.
+- **Panneau droit** : GridLayout équipements (64×64) + GridLayout skills (48×48).
 
 ### Navigation
 
@@ -103,21 +107,21 @@ Roguelike tour par tour Unity/C#, inspiré Slay the Spire + Darkest Dungeon. Car
 
 | Script | Rôle | Notes non-évidentes |
 |---|---|---|
-| `CharacterData` | Stats base, équipement/module/consommables départ, `baseVisionRange`, `startingCredits` | |
+| `CharacterData` | Stats base, équipement/module/consommables départ, `baseVisionRange`, `startingCredits` | `maxEquippedArms` (nb de slots bras affichés dans l'inventaire UI) |
 | `EnemyData` | Stats, actions IA, `spawnEffects`, `deathEffects`, lootPool, `creditsLoot` | `deathEffects` appliqués avant `AllEnemiesDead()` |
 | `EnemyGroup` | Groupe multi-ennemis (1–4 EnemyData). Loot propre. | Prioritaire sur `EnemyData` dans `CellData` |
 | `EnemyPool` | Pool mixte `EnemyData`/`EnemyGroup` via `List<EnemyPoolEntry>`. `PickRandom()` pondéré. | |
 | `SkillData` | Skills combat + nav (`isNavigationSkill`, `navEffects`, `navCooldownType/Count/Tag`, `skillID`) | `skillID` vide = cooldown ignoré silencieusement |
 | `EffectData` | Effet universel — A (conditionTag), B (DonnerItems filtrés par tag), C (scalingSource/comptageTag) | Tout nouveau champ → aussi dans `EffectDataEditor.cs` sinon invisible |
 | `StatusData` | Statut (behavior, perTurnAction, decayPerTurn, decayTiming, maxStacks) | |
-| `EquipmentData` | Slot, bonus stats, skills, passiveEffects | `isUnique` remplacé par tag `Tag_Unique` |
+| `EquipmentData` | Slot, bonus stats, `skillSlots (List<SkillSlot>)`, passiveEffects | `isUnique` remplacé par tag `Tag_Unique` |
 | `ModuleData` | moduleID, `List<EffectData> effects` (chaque effet porte son propre trigger) | |
 | `ConsumableData` | effects, `usableInCombat/OnMap/InEvents` (false par défaut) | |
 | `EventData` | eventID, title, choices avec `List<EventEffect>` | |
 | `CellAleaPool` | Pool types cases Aléatoires, tirage pondéré avec `maxOccurrences`. Retourne `Empty` si épuisé. | |
 | `NavEffect` | TeleportRandom, RevealZoneRandom/Choice, IncreaseVisionRange, IncrementCounter | |
 | `EventPool` | Pool d'events (filtre déjà joués) | |
-| `ShopData` | Loot tables, quantités, fourchettes de prix | |
+| `ShopData` | Loot tables, quantités, fourchettes de prix | Inclut `skillLootTable` + `skillCount` + `skillPriceRange` |
 | `EventDatabase` | Liste globale `GetByID(string)` | |
 | `TagData` | Tag sémantique — `tagName`, `[Flags] TagCategorie`, `Color`. Sync auto nom asset ↔ `tagName`. | Ne pas fusionner avec `KeywordData` (= tooltips joueur) |
 | `MapData` | Grille SO — `defaultShopData`, `defaultTeleportEvent`, `aleatoirePool`, `maximumsParType`, pools ennemis | `defaultTeleportEvent` = fallback Teleporteur sans `specificEvent` |
@@ -165,6 +169,7 @@ Roguelike tour par tour Unity/C#, inspiré Slay the Spire + Darkest Dungeon. Car
 - **Events** : tous EventEffectType, pool anti-doublon, offres équipement interactives, consommables utilisables en event.
 - **Shop** : ShopData, persistance par case, deux modes UI (destroy+recreate / in-place). Modules, consommables, crédits.
 - **Divers** : Seeding au StartNewRun, boss (EndRun+MainMenu), icônes par type de case, zoom vers la souris, EnemyPool mixte, tags (TagData, filtrage catégorie dans 9 editors), cooldowns nav (5 types), scaling EffectData catégories A/B/C, MapEditorWindow (section événements pour Event/Ferrailleur/Radar/Coffre).
+- **Inventaire** : inventaire équipements (5 slots) + skills (10 slots), drag'n'drop complet, clonage automatique des équipements, tags hérités, InventoryUIManager DDOL overlay, désactivation drag'n'drop en combat, skills à vendre dans le shop.
 
 ### À faire 🔧
 - Scène de sélection de personnage (`MainMenuManager.defaultCharacter` = placeholder)
@@ -176,7 +181,6 @@ Roguelike tour par tour Unity/C#, inspiré Slay the Spire + Darkest Dungeon. Car
 - Événements de craft
 - Localisation (`com.unity.localization`) — après 1ère version jouable
 - **D** : Conditions tags → influence navigation/génération (EnemyPools + NavigationManager)
-- **🔄 EN COURS** : **Système d'inventaire + skills équipés** (voir **INVENTAIRE.md**)
 
 ---
 
@@ -184,7 +188,7 @@ Roguelike tour par tour Unity/C#, inspiré Slay the Spire + Darkest Dungeon. Car
 
 > **Voir INVENTAIRE.md pour l'architecture complète, les phases d'implémentation et les pièges spécifiques.**
 
-En développement : système complet de gestion d'inventaire, d'équipement de skills et drag'n'drop.
+Implémenté. Se référer à INVENTAIRE.md pour l'architecture complète.
 
 **Éléments clés** :
 - **SkillSlot** : emplacements pour équiper des skills (libre/utilisé/non-disponible/bloqué)
@@ -245,3 +249,8 @@ En développement : système complet de gestion d'inventaire, d'équipement de s
 40. **`EnemyStatusContainer` — nom exact** : `SpawnEnemyUI` cherche par `Find("EnemyStatusContainer")`. Nom différent → icônes ennemis absentes (pas d'erreur).
 41. **`StatusIconPrefab` — `RectTransform` obligatoire** : créer depuis la hiérarchie Canvas (UI → Empty), pas Project panel. Transform 3D → icônes superposées à `(0,0)`. `SetActive(false)` avant `Destroy()` pour retrait immédiat du layout.
 42. **Test RunManager-dépendant** : lancer depuis le MainMenu — scène Navigation/Combat isolée laisse RunManager non initialisé (effets silencieusement échoués).
+43. **`EquipmentData` — ne plus référencer `.skills`** : le champ a été supprimé. Utiliser `.skillSlots` et filtrer les états `Used`/`LockedInUse` pour obtenir les skills actifs.
+44. **`CloneEquipmentForLoot` obligatoire** : tout équipement obtenu en jeu (loot, event, shop) doit passer par `RunManager.CloneEquipmentForLoot()` avant d'être équipé ou ajouté à l'inventaire. Ne jamais modifier un SO asset directement.
+45. **`InventoryUIManager` — setup scène** : ajouter un GameObject vide avec le composant `InventoryUIManager` dans la première scène chargée. Il se place en DDOL seul. Pas besoin de Canvas dans la scène.
+46. **`armsContainer` — GridLayoutGroup fixe** : les panneaux bras ont `cellSize = 80×80`. Si un équipement a beaucoup de skill slots, le contenu peut être clippé visuellement. Ajuster `cellSize` ou `preferredHeight` selon les assets.
+47. **`SkillData.inheritedTags`** : liste runtime uniquement (`[HideInInspector]`). Ne jamais la pré-remplir dans l'Inspector. Remplie par `EquipSkill()`, vidée par `UnequipSkill()`.

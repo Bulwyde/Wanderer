@@ -1,7 +1,7 @@
 # INVENTAIRE.md — Système d'inventaire et skills équipés
 
 **Dernière mise à jour** : 2026-04-23  
-**État** : Conception finalisée, prêt pour implémentation (6 phases)
+**État** : ✅ Implémenté — en attente de tests Unity
 
 ---
 
@@ -164,6 +164,8 @@ Canvas (overlay)
 
 ## Phases d'implémentation
 
+> ✅ **Les 6 phases sont implémentées.** Les phases ci-dessous sont conservées à titre de référence.
+
 ### Phase 1 : Structures de données (indépendant)
 - SkillSlot.cs création
 - EquipmentData : remplacer skills → skillSlots
@@ -232,12 +234,16 @@ Canvas (overlay)
 
 ## Tests de validation
 
-- [ ] Phase 1 : Structures compilent, inspector affiche bien
-- [ ] Phase 2 : Clone indépendant, inventaires Add/Remove OK
-- [ ] Phase 3 : Équip skill → inventaire vide, tags hérités appliqués. Déséquip → retour inventaire, tags retirés
-- [ ] Phase 4 : UI affichée, updatee avec équipements et skills. Escape ferme, I ouvre
-- [ ] Phase 5 : Drag skill → slot vide = équipé. Drag vers poubelle + confirm = détruit. Erreur si bloqué
-- [ ] Phase 6 : Loot équipement + skill en combat/event → clonés, ajoutés correctement. Erreur si inventaire plein
+- [ ] Inventaire — équipements et skills s'affichent dans l'UI (touche `I`)
+- [ ] Drag skill → slot Available d'un équipement = équipé, skill retiré de l'inventaire
+- [ ] Drag skill → slot Used d'un équipement = swap
+- [ ] Drag skill LockedInUse → pas draggable
+- [ ] Drag équipement → slot joueur = équipé, ancien équipement va en inventaire
+- [ ] Drag item → poubelle + confirmation = supprimé
+- [ ] Loot combat → équipement cloné, skills ajoutés à l'inventaire
+- [ ] Shop → skill achetable, ajouté à l'inventaire
+- [ ] Tags hérités : équiper skill → inheritedTags remplis. Déséquiper → inheritedTags vidés.
+- [ ] Combat : drag'n'drop désactivé au démarrage. Réactivé à l'apparition du loot.
 
 ---
 
@@ -259,3 +265,15 @@ Canvas (overlay)
 - **EquipmentLootTable.cs** : pattern à copier pour SkillLootTable
 - **RunManager.cs** : structure actuelle des équipements
 - **SkillData.cs** et **EquipmentData.cs** : structures existantes à adapter
+
+---
+
+## Limites connues
+
+- **Bras — clipping visuel** : `armsContainer` utilise un `GridLayoutGroup` avec `cellSize = 80×80`.
+  Si un équipement possède de nombreux skill slots, le contenu peut dépasser la cellule et être clippé.
+  Ajuster `cellSize` ou `leArms.preferredHeight` dans `ConstruireHierarchie()` selon les assets réels.
+- **Tête et Torse non affichés** : le panneau gauche n'affiche que Legs + Arm1/Arm2. Head et Torso ne
+  sont pas visibles dans l'inventaire UI actuel (pas de skill slots sur ces slots par design actuel).
+- **Inventaire plein** : si inventaire équipements ou skills plein lors d'un loot, un log warning est
+  émis mais aucun feedback visuel n'est présenté au joueur. À améliorer.

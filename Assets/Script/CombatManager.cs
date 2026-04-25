@@ -459,8 +459,13 @@ public class CombatManager : MonoBehaviour
             effectiveCriticalMultiplier += equip.bonusCriticalMultiplier;
             effectiveRegeneration       += equip.bonusRegeneration;
             effectiveLifeSteal          += equip.bonusLifeSteal;
-            foreach (SkillData skill in equip.skills)
-                if (skill != null) availableSkills.Add(skill);
+            foreach (SkillSlot slot in equip.skillSlots)
+            {
+                if (slot == null) continue;
+                if (slot.state != SkillSlot.SlotState.Used &&
+                    slot.state != SkillSlot.SlotState.LockedInUse) continue;
+                if (slot.equippedSkill != null) availableSkills.Add(slot.equippedSkill);
+            }
         }
 
         if (RunManager.Instance != null)

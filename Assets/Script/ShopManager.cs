@@ -510,7 +510,8 @@ public class ShopManager : MonoBehaviour
     /// </summary>
     private void ConfirmerAchatEquipement(ShopItemEquipment item, EquipmentSlot slot, EquipmentData equip)
     {
-        RunManager.Instance.EquipItem(slot, equip);
+        EquipmentData clone = RunManager.Instance.CloneEquipmentForLoot(equip);
+        RunManager.Instance.TryEquipEquipment(slot, clone);
         RunManager.Instance.AddCredits(-item.prix);
         item.achete = true;
 

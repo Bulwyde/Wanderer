@@ -1209,8 +1209,14 @@ public class NavigationManager : MonoBehaviour
         EquipmentData jambes = RunManager.Instance.GetEquipped(EquipmentSlot.Legs);
         if (jambes == null) return;
 
-        foreach (SkillData skill in jambes.skills)
+        foreach (SkillSlot slot in jambes.skillSlots)
         {
+            if (slot == null) continue;
+            if (slot.state != SkillSlot.SlotState.Used &&
+                slot.state != SkillSlot.SlotState.LockedInUse) continue;
+            SkillData skill = slot.equippedSkill;
+            if (skill == null) continue;
+
             if (!skill.isNavigationSkill) continue;
             if (skill.navEffects == null || skill.navEffects.Count == 0) continue;
 

@@ -294,6 +294,20 @@ public class RunManager : MonoBehaviour
     }
 
     /// <summary>
+    /// Vide un slot d'équipement sans interaction avec l'inventaire.
+    /// Utilisé lors d'un déplacement slot → slot pour libérer l'origine
+    /// avant d'équiper dans la destination.
+    /// </summary>
+    public void ClearEquipmentSlot(EquipmentSlot slot)
+    {
+        if (!equippedItems.ContainsKey(slot)) return;
+        string nom = equippedItems[slot]?.equipmentName ?? "aucun";
+        equippedItems.Remove(slot);
+        RecalculerMaxHP();
+        Debug.Log($"[RunManager] ClearEquipmentSlot — {slot} vidé ('{nom}').");
+    }
+
+    /// <summary>
     /// Retourne une copie de la liste des équipements en inventaire.
     /// </summary>
     public List<EquipmentData> GetInventoryEquipments() => new List<EquipmentData>(inventoryEquipments);

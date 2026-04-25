@@ -127,8 +127,113 @@ public class InventoryUIManager : MonoBehaviour
     public void RefreshUI()
     {
         if (RunManager.Instance == null) return;
+        RafraichirEquipementsPortes();
         RafraichirInventaireEquipements();
         RafraichirInventaireSkills();
+    }
+
+    private void RafraichirEquipementsPortes()
+    {
+        if (RunManager.Instance == null) return;
+
+        // ── Legs ─────────────────────────────────────────────
+        if (legsSlot != null)
+            RafraichirSlotEquipement(legsSlot, EquipmentSlot.Legs);
+
+        // ── Bras (jusqu'à maxEquippedArms) ───────────────────
+        if (armsContainer == null) return;
+        ViderPanel(armsContainer);
+
+        // EquipmentSlot ne définit que Arm1 et Arm2 — clamp à 1-2
+        int maxBras = RunManager.Instance.selectedCharacter != null
+                      ? RunManager.Instance.selectedCharacter.maxEquippedArms
+                      : 2;
+        maxBras = Mathf.Clamp(maxBras, 1, 2);
+
+        EquipmentSlot[] slotsArm = { EquipmentSlot.Arm1, EquipmentSlot.Arm2 };
+
+        for (int i = 0; i < maxBras; i++)
+        {
+            GameObject panelBras = CreerPanel($"ArmSlot_{i}", armsContainer,
+                                              new Color(0.12f, 0.12f, 0.18f, 1f));
+            RectTransform rtBras = panelBras.GetComponent<RectTransform>();
+
+            VerticalLayoutGroup vlg = panelBras.AddComponent<VerticalLayoutGroup>();
+            vlg.spacing = 4f;
+            vlg.padding = new RectOffset(4, 4, 4, 4);
+            vlg.childForceExpandWidth  = true;
+            vlg.childForceExpandHeight = false;
+
+            ContentSizeFitter csf = panelBras.AddComponent<ContentSizeFitter>();
+            csf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+            RafraichirSlotEquipement(rtBras, slotsArm[i]);
+        }
+    }
+
+    private void RafraichirSlotEquipement(RectTransform conteneur, EquipmentSlot slot)
+    {
+        ViderPanel(conteneur);
+
+        // Zone de dépôt pour recevoir un équipement par drag
+        InventoryDropZone dropEquip = conteneur.GetComponent<InventoryDropZone>();
+        if (dropEquip == null)
+        {
+            dropEquip = conteneur.gameObject.AddComponent<InventoryDropZone>();
+            dropEquip.zoneType            = InventoryDropZone.ZoneType.EquipmentSlot;
+            dropEquip.targetEquipmentSlot = slot;
+        }
+
+        EquipmentData equip = RunManager.Instance.GetEquipped(slot);
+        if (equip == null) return;
+
+        // Icône de l'équipement (draggable)
+        GameObject iconeEquip = CreerIcone(equip.icon, conteneur);
+        LayoutElement leIcone = iconeEquip.AddComponent<LayoutElement>();
+        leIcone.preferredWidth  = 48f;
+        leIcone.preferredHeight = 48f;
+        InventoryDragDropController ctrlEquip = iconeEquip.AddComponent<InventoryDragDropController>();
+        ctrlEquip.SetupEquipment(equip, slot);
+
+        // Skill slots de cet équipement
+        for (int idx = 0; idx < equip.skillSlots.Count; idx++)
+        {
+            SkillSlot skillSlot = equip.skillSlots[idx];
+            if (skillSlot == null) continue;
+            // Les slots Unavailable sont cachés
+            if (skillSlot.state == SkillSlot.SlotState.Unavailable) continue;
+
+            // Panneau du slot skill
+            GameObject panelSkillSlot = CreerPanel($"SkillSlot_{idx}", conteneur,
+                                                   new Color(0.18f, 0.18f, 0.25f, 1f));
+            RectTransform rtSkillSlot = panelSkillSlot.GetComponent<RectTransform>();
+
+            LayoutElement leSlot = panelSkillSlot.AddComponent<LayoutElement>();
+            leSlot.preferredWidth  = 40f;
+            leSlot.preferredHeight = 40f;
+
+            // Drop zone pour recevoir un skill par drag
+            int capturedIdx             = idx;
+            EquipmentData capturedEquip = equip;
+            InventoryDropZone dropSkill = panelSkillSlot.AddComponent<InventoryDropZone>();
+            dropSkill.zoneType        = InventoryDropZone.ZoneType.SkillSlot;
+            dropSkill.targetEquipment = capturedEquip;
+            dropSkill.targetSlotIndex = capturedIdx;
+
+            // Si le slot contient un skill (Used ou LockedInUse), afficher son icône
+            if ((skillSlot.state == SkillSlot.SlotState.Used ||
+                 skillSlot.state == SkillSlot.SlotState.LockedInUse)
+                && skillSlot.equippedSkill != null)
+            {
+                GameObject iconeSkill = CreerIcone(skillSlot.equippedSkill.icon, rtSkillSlot);
+                LayoutElement leSkill = iconeSkill.AddComponent<LayoutElement>();
+                leSkill.preferredWidth  = 40f;
+                leSkill.preferredHeight = 40f;
+                // LockedInUse : le drag sera bloqué par InventoryDragDropController (déjà géré)
+                InventoryDragDropController ctrlSkill = iconeSkill.AddComponent<InventoryDragDropController>();
+                ctrlSkill.SetupSkill(skillSlot.equippedSkill, capturedEquip, capturedIdx);
+            }
+        }
     }
 
     private void RafraichirInventaireEquipements()
@@ -284,11 +389,14 @@ public class InventoryUIManager : MonoBehaviour
         GameObject goLegs = CreerPanel("LegsSlot", goEquip.transform,
                                        new Color(0.12f, 0.12f, 0.18f, 1f));
         legsSlot = goLegs.GetComponent<RectTransform>();
-        LayoutElement leLegs = goLegs.AddComponent<LayoutElement>();
-        leLegs.preferredHeight = 80f;
-        InventoryDropZone legsZone = goLegs.AddComponent<InventoryDropZone>();
-        legsZone.zoneType             = InventoryDropZone.ZoneType.EquipmentSlot;
-        legsZone.targetEquipmentSlot  = EquipmentSlot.Legs;
+        VerticalLayoutGroup vlgLegs = goLegs.AddComponent<VerticalLayoutGroup>();
+        vlgLegs.spacing = 4f;
+        vlgLegs.padding = new RectOffset(4, 4, 4, 4);
+        vlgLegs.childForceExpandWidth  = true;
+        vlgLegs.childForceExpandHeight = false;
+        ContentSizeFitter csfLegs = goLegs.AddComponent<ContentSizeFitter>();
+        csfLegs.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+        // La DropZone et son contenu seront créés dynamiquement par RafraichirSlotEquipement()
 
         // Arms container — 2-4 slots bras selon CharacterData.maxEquippedArms
         GameObject goArms = CreerPanel("ArmsContainer", goEquip.transform,

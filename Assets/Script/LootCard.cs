@@ -120,11 +120,16 @@ public class LootCard : MonoBehaviour
         if (equip.bonusAttack  != 0) parts.Add($"ATK {Sign(equip.bonusAttack)}{equip.bonusAttack}");
         if (equip.bonusDefense != 0) parts.Add($"DEF {Sign(equip.bonusDefense)}{equip.bonusDefense}");
 
-        if (equip.skills != null && equip.skills.Count > 0)
+        var equippedSkillNames = new System.Collections.Generic.List<string>();
+        foreach (SkillSlot slot in equip.skillSlots)
         {
-            string skills = string.Join(", ", equip.skills.ConvertAll(s => s != null ? s.skillName : "?"));
-            parts.Add($"Sorts : {skills}");
+            if (slot == null) continue;
+            if (slot.state != SkillSlot.SlotState.Used &&
+                slot.state != SkillSlot.SlotState.LockedInUse) continue;
+            equippedSkillNames.Add(slot.equippedSkill != null ? slot.equippedSkill.skillName : "?");
         }
+        if (equippedSkillNames.Count > 0)
+            parts.Add($"Sorts : {string.Join(", ", equippedSkillNames)}");
 
         return parts.Count > 0 ? string.Join("\n", parts) : "Aucun bonus";
     }

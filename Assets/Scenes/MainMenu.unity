@@ -2046,14 +2046,19 @@ MonoBehaviour:
   currentRoomY: 0
   currentCellType: 0
   currentEnemyData: {fileID: 0}
+  currentEnemyGroup: {fileID: 0}
   currentSpecificEventID: 
   currentMapData: {fileID: 0}
   difficultyModifier: 1
   eventFlags:
     keys: []
     values: 
+  maxInventoryEquipments: 5
+  maxInventorySkills: 10
   maxConsumableSlots: 3
   startingConsumablesSeeded: 0
+  carteInitialisee: 0
+  navEffectsEnAttente: []
   visionRangeBonus: 0
   combatsTermines: 0
   eventsTermines: 0
@@ -2432,6 +2437,60 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1375578352
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1375578354}
+  - component: {fileID: 1375578353}
+  m_Layer: 0
+  m_Name: InventoryUIManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1375578353
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1375578352}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 483d1deea68fa854cb4fb112110e4cd0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::InventoryUIManager
+  inventoryCanvas: {fileID: 0}
+  panelEquipement: {fileID: 0}
+  legsSlot: {fileID: 0}
+  armsContainer: {fileID: 0}
+  panelInventaire: {fileID: 0}
+  panelEquipmentInventory: {fileID: 0}
+  panelSkillInventory: {fileID: 0}
+  panelPoubelle: {fileID: 0}
+  dragFloatingIcon: {fileID: 0}
+  panelConfirmation: {fileID: 0}
+--- !u!4 &1375578354
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1375578352}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 429.31943, y: 173.66356, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1561821656
 GameObject:
   m_ObjectHideFlags: 0
@@ -2775,3 +2834,4 @@ SceneRoots:
   - {fileID: 195969514}
   - {fileID: 1331672072}
   - {fileID: 1075360827}
+  - {fileID: 1375578354}

@@ -44,8 +44,9 @@ public class InventoryDragDropController : MonoBehaviour,
     private EquipmentData _dragEquipmentData;
 
     // Origine : _originEquipment null = skill venant de l'inventaire libre.
-    private EquipmentData _originEquipment;
-    private int           _originSlotIndex = -1;
+    private EquipmentData  _originEquipment;
+    private int            _originSlotIndex     = -1;
+    private EquipmentSlot? _originEquipmentSlot = null;
 
     private bool _isDragging = false;
 
@@ -80,15 +81,18 @@ public class InventoryDragDropController : MonoBehaviour,
     }
 
     /// <summary>
-    /// Configure ce contrôleur pour un équipement (toujours depuis l'inventaire).
+    /// Configure ce contrôleur pour un équipement.
+    /// originSlot non-null = équipement venant d'un slot équipé (panneau gauche).
+    /// originSlot null     = équipement venant de l'inventaire libre (panneau droit).
     /// </summary>
-    public void SetupEquipment(EquipmentData equipment)
+    public void SetupEquipment(EquipmentData equipment, EquipmentSlot? originSlot = null)
     {
-        _dragType          = DragItemType.Equipment;
-        _dragEquipmentData = equipment;
-        _dragSkillData     = null;
-        _originEquipment   = null;
-        _originSlotIndex   = -1;
+        _dragType            = DragItemType.Equipment;
+        _dragEquipmentData   = equipment;
+        _dragSkillData       = null;
+        _originEquipment     = null;
+        _originSlotIndex     = -1;
+        _originEquipmentSlot = originSlot;
 
         if (dragIcon != null && equipment != null)
             dragIcon.sprite = equipment.icon;
@@ -201,7 +205,15 @@ public class InventoryDragDropController : MonoBehaviour,
                 break;
 
             case InventoryDropZone.ZoneType.InventaireEquipements:
-                // Les équipements de l'inventaire sont déjà en inventaire — pas d'action supplémentaire
+                // Si l'équipement vient d'un slot équipé → le déséquiper vers l'inventaire
+                if (_dragType == DragItemType.Equipment &&
+                    _originEquipmentSlot.HasValue &&
+                    _dragEquipmentData != null)
+                {
+                    run.ClearEquipmentSlot(_originEquipmentSlot.Value);
+                    if (!run.AddEquipmentToInventory(_dragEquipmentData))
+                        Debug.LogWarning($"[InventoryDragDrop] Inventaire plein — '{_dragEquipmentData.equipmentName}' non ajouté.");
+                }
                 break;
         }
 
@@ -239,6 +251,17 @@ public class InventoryDragDropController : MonoBehaviour,
     private void TraiterDropEquipmentSlot(RunManager run, InventoryDropZone cible)
     {
         if (_dragType != DragItemType.Equipment || _dragEquipmentData == null) return;
+
+        // Si l'équipement vient d'un slot équipé
+        if (_originEquipmentSlot.HasValue)
+        {
+            // Drop sur le même slot → rien à faire
+            if (_originEquipmentSlot.Value == cible.targetEquipmentSlot) return;
+
+            // Libérer le slot d'origine sans envoyer en inventaire
+            // (TryEquipEquipment va le placer dans le slot cible)
+            run.ClearEquipmentSlot(_originEquipmentSlot.Value);
+        }
 
         if (!run.TryEquipEquipment(cible.targetEquipmentSlot, _dragEquipmentData))
             Debug.LogWarning($"[InventoryDragDrop] Impossible d'equiper '{_dragEquipmentData.equipmentName}'" +

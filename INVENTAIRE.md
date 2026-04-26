@@ -1,7 +1,7 @@
 # INVENTAIRE.md — Système d'inventaire et skills équipés
 
-**Dernière mise à jour** : 2026-04-23  
-**État** : ✅ Implémenté — en attente de tests Unity
+**Dernière mise à jour** : 2026-04-26  
+**État** : ✅ Implémenté et testé — tous les bugs corrigés
 
 ---
 
@@ -219,6 +219,72 @@ Canvas (overlay)
 
 ---
 
+## Bugs corrigés et architecture finalisée
+
+### CloneEquipmentForLoot — Deep copy des skillSlots
+**Bug :** Équipements clones partageaient les mêmes skillSlots → modifier un skill sur un clone l'affectait sur tous les autres.
+**Fix :** `CloneEquipmentForLoot()` effectue une deep copy : chaque clone a sa propre `List<SkillSlot>` indépendante.
+
+### SeedSlotSiVide — Clonage des équipements de départ
+**Bug :** Les équipements de départ (`startingArm1`, `startingArm2`, etc.) modifiaient l'asset ScriptableObject.
+**Fix :** `SeedSlotSiVide()` appelle `CloneEquipmentForLoot()` avant d'équiper, garantissant l'indépendance des clones.
+
+### Équipements indexés — Inventaires à slots fixes
+**Architecture :** Les inventaires (`inventoryEquipments` et `inventorySkills`) sont maintenant des `List<T>` de taille fixe (`maxInventoryEquipments` / `maxInventorySkills`) remplies de nulls.
+**Bénéfice :** Permet le placement d'items à des slots spécifiques au lieu du "premier disponible" → drag'n'drop plus intuitif.
+
+### Placement avant modification
+**Bug :** Quand on déséquipait un item en le draggant vers l'inventaire, s'il ne pouvait pas être placé, l'item était perdu.
+**Fix :** Tous les `TraiterDrop*` tentent le placement AVANT de modifier l'état (unequip, clear origin slot).
+
+### Validation skills — Navigation vs Arms
+**Règle :** Les skills avec `isNavigationSkill=true` ne peuvent aller que sur Legs. Les autres ne peuvent aller que sur Arms (Arm1/2/3/4).
+**Implémentation :** `TraiterDropSkillSlot()` valide le type avant d'équiper.
+
+### MaxEquippedArms — Validation runtime
+**Règle :** Arm3 et Arm4 ne sont accessibles que si `maxEquippedArms >= 3/4`.
+**Implémentation :**
+- `RafraichirEquipementsPortes()` masque `arm3Container`/`arm4Container` visuellement
+- `TryEquipEquipment()` rejette les placements sur Arm3/Arm4 si `maxEquippedArms < 3/4`
+
+### Modal blocker — Bloquer interactions en arrière-plan
+**Implémentation :** Un Panel semi-transparent (`raycastTarget=true`, couleur noire alpha=0) masque les éléments en arrière-plan quand l'inventaire est ouvert. Assigné via `[SerializeField] Image modalBlocker`.
+
+### Container-per-slot architecture
+**Pattern :** Au lieu de générer toute la hiérarchie du panneau gauche dynamiquement, chaque slot d'équipement (Legs, Arm1-4) a ses propres `[SerializeField] RectTransform` :
+- `legsContainer`, `arm1Container`, etc. (pour l'icône d'équipement)
+- `legsSkillGrid`, `arm1SkillGrid`, etc. (pour la grille de skills)
+
+Le code ne peuple que l'intérieur de ces containers, laissant la disposition aux mains du designer.
+
+### Floating icon taille dynamique
+**Implémentation :** `OnBeginDrag()` définit la taille du `DragFloatingIcon` selon le type d'item :
+- 32×32 pour les skills
+- 64×64 pour les équipements
+
+### Unequip avec gestion des skills
+**Implémentation :** `UnequipEquipmentAndMoveSkillsToInventory()` :
+1. Itère les skillSlots équipés (Used/LockedInUse)
+2. Ajoute chaque skill à l'inventaire
+3. Reset le skillSlot à Available avec `equippedSkill=null`
+4. Libère le slot d'équipement
+
+### ViderPanel — DestroyImmediate au lieu de Destroy
+**Bug :** `Destroy()` est différé (fin de frame) → les anciens et nouveaux enfants étaient présents simultanément → layout calculé incorrectement.
+**Fix :** `ViderPanel()` utilise `DestroyImmediate()` pour nettoyer immédiatement.
+
+### Icônes équipement 64×64 fixes
+**Bug :** Icônes s'étiraient à cause du `VerticalLayoutGroup` du container.
+**Fix :** `RafraichirContenuSlot()` :
+- Set `RectTransform.sizeDelta = (64, 64)`
+- `LayoutElement` : `minWidth`/`preferredWidth` = 64, `flexibleWidth = 0`
+
+### Container DropZone — Image transparente requise
+**Bug :** Un `RectTransform` sans `Image` est invisible aux raycasts UI → la `DropZone` n'était jamais détectée.
+**Fix :** `RafraichirContenuSlot()` ajoute une `Image` transparente (`color alpha=0`, `raycastTarget=true`) sur chaque container si absente.
+
+---
+
 ## Pièges et points d'attention
 
 1. **Clonage vs. asset modifié** : Ne JAMAIS modifier un EquipmentData asset en runtime. Cloner toujours.
@@ -255,7 +321,10 @@ Canvas (overlay)
 - Logs préfixés `[RunManager]` ou `[InventoryUIManager]`
 - `FindFirstObjectByType<T>()` (pas `FindObjectOfType<T>()` déprécié)
 - Vérifier null avec `if (x == null)` pas `??` avec objets Unity
-- SkriptableObjects jamais modifiés directement
+- ScriptableObjects jamais modifiés directement
+- Toujours cloner les équipements via `CloneEquipmentForLoot()` avant d'équiper ou d'ajouter à l'inventaire
+- `SetupEquipment`/`SetupSkill` acceptent des paramètres optionnels pour tracker l'origine (`originSlot`, `originInventorySlotIndex`)
+- Placement d'item = premier essai. Modification d'état = seulement si placement réussit (atomicité)
 
 ---
 

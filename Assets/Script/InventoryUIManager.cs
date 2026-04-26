@@ -50,8 +50,22 @@ public class InventoryUIManager : MonoBehaviour
 
     // Panneau gauche — équipements portés
     [SerializeField] private RectTransform panelEquipement;
-    [SerializeField] private RectTransform legsSlot;
-    [SerializeField] private RectTransform armsContainer;
+    [SerializeField] private Sprite defaultEquipmentSlotIcon;
+    [SerializeField] private Sprite defaultSkillSlotIcon;
+
+    [Header("Slots équipés — containers assignés depuis l'Inspector")]
+    [SerializeField] private RectTransform legsContainer;
+    [SerializeField] private RectTransform arm1Container;
+    [SerializeField] private RectTransform arm2Container;
+    [SerializeField] private RectTransform arm3Container;
+    [SerializeField] private RectTransform arm4Container;
+
+    [Header("Grilles de skills — pré-créées dans l'Editor, une par slot")]
+    [SerializeField] private RectTransform legsSkillGrid;
+    [SerializeField] private RectTransform arm1SkillGrid;
+    [SerializeField] private RectTransform arm2SkillGrid;
+    [SerializeField] private RectTransform arm3SkillGrid;
+    [SerializeField] private RectTransform arm4SkillGrid;
 
     // Panneau droit — inventaires
     [SerializeField] private RectTransform panelInventaire;
@@ -60,6 +74,9 @@ public class InventoryUIManager : MonoBehaviour
 
     // Poubelle
     [SerializeField] private RectTransform panelPoubelle;
+
+    // Modal blocker
+    [SerializeField] private Image         modalBlocker;     // Panneau semi-transparent qui bloque les raycasts
 
     // Drag'n'drop
     [SerializeField] private Image         dragFloatingIcon;
@@ -85,6 +102,11 @@ public class InventoryUIManager : MonoBehaviour
     {
         if (inventoryCanvas == null) return;
         inventoryCanvas.gameObject.SetActive(true);
+
+        // Montrer le blocker pour empêcher les interactions en arrière-plan
+        if (modalBlocker != null)
+            modalBlocker.gameObject.SetActive(true);
+
         RefreshUI();
         Debug.Log("[InventoryUIManager] Ouvert.");
     }
@@ -96,6 +118,11 @@ public class InventoryUIManager : MonoBehaviour
     {
         if (inventoryCanvas == null) return;
         inventoryCanvas.gameObject.SetActive(false);
+
+        // Cacher le blocker
+        if (modalBlocker != null)
+            modalBlocker.gameObject.SetActive(false);
+
         Debug.Log("[InventoryUIManager] Fermé.");
     }
 
@@ -136,131 +163,215 @@ public class InventoryUIManager : MonoBehaviour
     {
         if (RunManager.Instance == null) return;
 
-        // ── Legs ─────────────────────────────────────────────
-        if (legsSlot != null)
-            RafraichirSlotEquipement(legsSlot, EquipmentSlot.Legs);
+        CharacterData chara = RunManager.Instance.selectedCharacter;
+        int maxArms = (chara != null) ? chara.maxEquippedArms : 2;
 
-        // ── Bras (jusqu'à maxEquippedArms) ───────────────────
-        if (armsContainer == null) return;
-        ViderPanel(armsContainer);
+        RafraichirContenuSlot(legsContainer, legsSkillGrid, EquipmentSlot.Legs);
+        RafraichirContenuSlot(arm1Container, arm1SkillGrid, EquipmentSlot.Arm1);
+        RafraichirContenuSlot(arm2Container, arm2SkillGrid, EquipmentSlot.Arm2);
 
-        // EquipmentSlot ne définit que Arm1 et Arm2 — clamp à 1-2
-        int maxBras = RunManager.Instance.selectedCharacter != null
-                      ? RunManager.Instance.selectedCharacter.maxEquippedArms
-                      : 2;
-        maxBras = Mathf.Clamp(maxBras, 1, 2);
+        // Arm3 et Arm4 affichés seulement si maxEquippedArms >= 3 et >= 4
+        if (maxArms >= 3)
+            RafraichirContenuSlot(arm3Container, arm3SkillGrid, EquipmentSlot.Arm3);
+        else if (arm3Container != null)
+            arm3Container.gameObject.SetActive(false);
 
-        EquipmentSlot[] slotsArm = { EquipmentSlot.Arm1, EquipmentSlot.Arm2 };
-
-        for (int i = 0; i < maxBras; i++)
-        {
-            GameObject panelBras = CreerPanel($"ArmSlot_{i}", armsContainer,
-                                              new Color(0.12f, 0.12f, 0.18f, 1f));
-            RectTransform rtBras = panelBras.GetComponent<RectTransform>();
-
-            VerticalLayoutGroup vlg = panelBras.AddComponent<VerticalLayoutGroup>();
-            vlg.spacing = 4f;
-            vlg.padding = new RectOffset(4, 4, 4, 4);
-            vlg.childForceExpandWidth  = true;
-            vlg.childForceExpandHeight = false;
-
-            ContentSizeFitter csf = panelBras.AddComponent<ContentSizeFitter>();
-            csf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-
-            RafraichirSlotEquipement(rtBras, slotsArm[i]);
-        }
+        if (maxArms >= 4)
+            RafraichirContenuSlot(arm4Container, arm4SkillGrid, EquipmentSlot.Arm4);
+        else if (arm4Container != null)
+            arm4Container.gameObject.SetActive(false);
     }
 
-    private void RafraichirSlotEquipement(RectTransform conteneur, EquipmentSlot slot)
+    private void RafraichirContenuSlot(RectTransform container, RectTransform skillGridContainer, EquipmentSlot slot)
     {
-        ViderPanel(conteneur);
+        if (container == null) return;
+        ViderPanel(container);
 
-        // Zone de dépôt pour recevoir un équipement par drag
-        InventoryDropZone dropEquip = conteneur.GetComponent<InventoryDropZone>();
+        // S'assurer que la DropZone est présente sur le container (une seule fois)
+        InventoryDropZone dropEquip = container.GetComponent<InventoryDropZone>();
         if (dropEquip == null)
         {
-            dropEquip = conteneur.gameObject.AddComponent<InventoryDropZone>();
+            dropEquip                     = container.gameObject.AddComponent<InventoryDropZone>();
             dropEquip.zoneType            = InventoryDropZone.ZoneType.EquipmentSlot;
             dropEquip.targetEquipmentSlot = slot;
         }
 
+        // Un container sans Image est invisible aux raycasts UI → la DropZone ne serait jamais détectée
+        if (container.GetComponent<Image>() == null)
+        {
+            Image bg         = container.gameObject.AddComponent<Image>();
+            bg.color         = new Color(0f, 0f, 0f, 0f);  // transparent
+            bg.raycastTarget = true;
+        }
+
         EquipmentData equip = RunManager.Instance.GetEquipped(slot);
+
+        // ── Icône équipement (64×64, taille fixe, pas d'étirement) ──
+        GameObject goIcon = new GameObject("EquipIcon", typeof(RectTransform));
+        goIcon.transform.SetParent(container, false);
+        Image imgEquip             = goIcon.AddComponent<Image>();
+        RectTransform iconRT       = goIcon.GetComponent<RectTransform>();
+        iconRT.sizeDelta           = new Vector2(64f, 64f);
+        LayoutElement leIcon       = goIcon.AddComponent<LayoutElement>();
+        leIcon.minWidth            = 64f;
+        leIcon.preferredWidth      = 64f;
+        leIcon.minHeight           = 64f;
+        leIcon.preferredHeight     = 64f;
+        leIcon.flexibleWidth       = 0f;
+        leIcon.flexibleHeight      = 0f;
+
+        if (equip != null)
+        {
+            imgEquip.sprite = equip.icon != null ? equip.icon : defaultEquipmentSlotIcon;
+            imgEquip.color  = Color.white;
+            InventoryDragDropController ctrl = goIcon.AddComponent<InventoryDragDropController>();
+            ctrl.SetupEquipment(equip, slot);
+        }
+        else
+        {
+            imgEquip.sprite = defaultEquipmentSlotIcon;
+            imgEquip.color  = new Color(1f, 1f, 1f, 0.35f);
+        }
+
+        // ── Grille de skill slots ──
         if (equip == null) return;
 
-        // Icône de l'équipement (draggable)
-        GameObject iconeEquip = CreerIcone(equip.icon, conteneur);
-        LayoutElement leIcone = iconeEquip.AddComponent<LayoutElement>();
-        leIcone.preferredWidth  = 48f;
-        leIcone.preferredHeight = 48f;
-        InventoryDragDropController ctrlEquip = iconeEquip.AddComponent<InventoryDragDropController>();
-        ctrlEquip.SetupEquipment(equip, slot);
+        bool aDesSlots = false;
+        foreach (SkillSlot ss in equip.skillSlots)
+            if (ss != null && ss.state != SkillSlot.SlotState.Unavailable) { aDesSlots = true; break; }
+        if (!aDesSlots) return;
 
-        // Skill slots de cet équipement
+        // Utiliser le container externe assigné dans l'Inspector si disponible,
+        // sinon créer une grille dynamique comme enfant du container d'équipement.
+        RectTransform gridParent;
+        if (skillGridContainer != null)
+        {
+            ViderPanel(skillGridContainer);
+            gridParent = skillGridContainer;
+        }
+        else
+        {
+            GameObject goGrid = new GameObject("SkillGrid");
+            goGrid.transform.SetParent(container, false);
+
+            GridLayoutGroup glg = goGrid.AddComponent<GridLayoutGroup>();
+            glg.cellSize        = new Vector2(32f, 32f);
+            glg.spacing         = new Vector2(2f, 2f);
+            glg.startCorner     = GridLayoutGroup.Corner.UpperLeft;
+            glg.startAxis       = GridLayoutGroup.Axis.Horizontal;
+            glg.constraint      = GridLayoutGroup.Constraint.FixedColumnCount;
+            glg.constraintCount = 2;
+
+            ContentSizeFitter csfGrid = goGrid.AddComponent<ContentSizeFitter>();
+            csfGrid.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+            csfGrid.verticalFit   = ContentSizeFitter.FitMode.PreferredSize;
+
+            gridParent = goGrid.GetComponent<RectTransform>();
+        }
+
         for (int idx = 0; idx < equip.skillSlots.Count; idx++)
         {
-            SkillSlot skillSlot = equip.skillSlots[idx];
-            if (skillSlot == null) continue;
-            // Les slots Unavailable sont cachés
-            if (skillSlot.state == SkillSlot.SlotState.Unavailable) continue;
+            SkillSlot ss = equip.skillSlots[idx];
+            if (ss == null || ss.state == SkillSlot.SlotState.Unavailable) continue;
 
-            // Panneau du slot skill
-            GameObject panelSkillSlot = CreerPanel($"SkillSlot_{idx}", conteneur,
-                                                   new Color(0.18f, 0.18f, 0.25f, 1f));
-            RectTransform rtSkillSlot = panelSkillSlot.GetComponent<RectTransform>();
-
-            LayoutElement leSlot = panelSkillSlot.AddComponent<LayoutElement>();
-            leSlot.preferredWidth  = 40f;
-            leSlot.preferredHeight = 40f;
-
-            // Drop zone pour recevoir un skill par drag
-            int capturedIdx             = idx;
+            int           capturedIdx   = idx;
             EquipmentData capturedEquip = equip;
-            InventoryDropZone dropSkill = panelSkillSlot.AddComponent<InventoryDropZone>();
+
+            GameObject goSlot = new GameObject($"SkillSlot_{idx}");
+            goSlot.transform.SetParent(gridParent, false);
+            Image imgSlot = goSlot.AddComponent<Image>();
+
+            InventoryDropZone dropSkill = goSlot.AddComponent<InventoryDropZone>();
             dropSkill.zoneType        = InventoryDropZone.ZoneType.SkillSlot;
             dropSkill.targetEquipment = capturedEquip;
             dropSkill.targetSlotIndex = capturedIdx;
 
-            // Si le slot contient un skill (Used ou LockedInUse), afficher son icône
-            if ((skillSlot.state == SkillSlot.SlotState.Used ||
-                 skillSlot.state == SkillSlot.SlotState.LockedInUse)
-                && skillSlot.equippedSkill != null)
+            if ((ss.state == SkillSlot.SlotState.Used ||
+                 ss.state == SkillSlot.SlotState.LockedInUse)
+                && ss.equippedSkill != null)
             {
-                GameObject iconeSkill = CreerIcone(skillSlot.equippedSkill.icon, rtSkillSlot);
-                LayoutElement leSkill = iconeSkill.AddComponent<LayoutElement>();
-                leSkill.preferredWidth  = 40f;
-                leSkill.preferredHeight = 40f;
-                // LockedInUse : le drag sera bloqué par InventoryDragDropController (déjà géré)
-                InventoryDragDropController ctrlSkill = iconeSkill.AddComponent<InventoryDragDropController>();
-                ctrlSkill.SetupSkill(skillSlot.equippedSkill, capturedEquip, capturedIdx);
+                imgSlot.sprite = ss.equippedSkill.icon != null ? ss.equippedSkill.icon : defaultSkillSlotIcon;
+                imgSlot.color  = Color.white;
+                InventoryDragDropController ctrlSkill = goSlot.AddComponent<InventoryDragDropController>();
+                ctrlSkill.SetupSkill(ss.equippedSkill, capturedEquip, capturedIdx);
+            }
+            else
+            {
+                imgSlot.sprite = defaultSkillSlotIcon;
+                imgSlot.color  = new Color(1f, 1f, 1f, 0.35f);
             }
         }
     }
 
     private void RafraichirInventaireEquipements()
     {
-        if (panelEquipmentInventory == null) return;
+        if (panelEquipmentInventory == null || RunManager.Instance == null) return;
         ViderPanel(panelEquipmentInventory);
 
-        foreach (EquipmentData equip in RunManager.Instance.GetInventoryEquipments())
+        List<EquipmentData> items = RunManager.Instance.GetInventoryEquipments();
+        int total = RunManager.Instance.maxInventoryEquipments;
+
+        for (int i = 0; i < total; i++)
         {
-            if (equip == null) continue;
-            GameObject icone = CreerIcone(equip.icon, panelEquipmentInventory);
-            InventoryDragDropController ctrl = icone.AddComponent<InventoryDragDropController>();
-            ctrl.SetupEquipment(equip);
+            GameObject go = new GameObject($"SlotEquip_{i}");
+            RectTransform rt = go.AddComponent<RectTransform>();
+            rt.SetParent(panelEquipmentInventory, false);
+
+            Image img = go.AddComponent<Image>();
+
+            // Ajouter InventoryDropZone avec l'index du slot
+            InventoryDropZone dropZone = go.AddComponent<InventoryDropZone>();
+            dropZone.zoneType        = InventoryDropZone.ZoneType.InventaireEquipements;
+            dropZone.targetSlotIndex = i;
+
+            if (i < items.Count && items[i] != null)
+            {
+                img.sprite = items[i].icon != null ? items[i].icon : defaultEquipmentSlotIcon;
+                img.color  = Color.white;
+                InventoryDragDropController ctrl = go.AddComponent<InventoryDragDropController>();
+                ctrl.SetupEquipment(items[i], null, i);
+            }
+            else
+            {
+                img.sprite = defaultEquipmentSlotIcon;
+                img.color  = new Color(1f, 1f, 1f, 0.35f);
+            }
         }
     }
 
     private void RafraichirInventaireSkills()
     {
-        if (panelSkillInventory == null) return;
+        if (panelSkillInventory == null || RunManager.Instance == null) return;
         ViderPanel(panelSkillInventory);
 
-        foreach (SkillData skill in RunManager.Instance.GetInventorySkills())
+        List<SkillData> items = RunManager.Instance.GetInventorySkills();
+        int total = RunManager.Instance.maxInventorySkills;
+
+        for (int i = 0; i < total; i++)
         {
-            if (skill == null) continue;
-            GameObject icone = CreerIcone(skill.icon, panelSkillInventory);
-            InventoryDragDropController ctrl = icone.AddComponent<InventoryDragDropController>();
-            ctrl.SetupSkill(skill);
+            GameObject go = new GameObject($"SlotSkill_{i}");
+            RectTransform rt = go.AddComponent<RectTransform>();
+            rt.SetParent(panelSkillInventory, false);
+
+            Image img = go.AddComponent<Image>();
+
+            // Ajouter InventoryDropZone avec l'index du slot
+            InventoryDropZone dropZone = go.AddComponent<InventoryDropZone>();
+            dropZone.zoneType        = InventoryDropZone.ZoneType.InventaireSkills;
+            dropZone.targetSlotIndex = i;
+
+            if (i < items.Count && items[i] != null)
+            {
+                img.sprite = items[i].icon != null ? items[i].icon : defaultSkillSlotIcon;
+                img.color  = Color.white;
+                InventoryDragDropController ctrl = go.AddComponent<InventoryDragDropController>();
+                ctrl.SetupSkill(items[i], null, -1, i);
+            }
+            else
+            {
+                img.sprite = defaultSkillSlotIcon;
+                img.color  = new Color(1f, 1f, 1f, 0.35f);
+            }
         }
     }
 
@@ -278,11 +389,7 @@ public class InventoryUIManager : MonoBehaviour
     private void ViderPanel(RectTransform panel)
     {
         for (int i = panel.childCount - 1; i >= 0; i--)
-        {
-            GameObject child = panel.GetChild(i).gameObject;
-            child.SetActive(false);
-            Destroy(child);
-        }
+            DestroyImmediate(panel.GetChild(i).gameObject);
     }
 
     // -----------------------------------------------
@@ -309,7 +416,7 @@ public class InventoryUIManager : MonoBehaviour
             panelConfirmation.SetActive(true);
     }
 
-    private void OnConfirmerSuppression()
+    public void OnConfirmerSuppression()
     {
         if (_confirmationPending != null)
             _confirmationPending.ExecuterSuppression();
@@ -318,7 +425,7 @@ public class InventoryUIManager : MonoBehaviour
             panelConfirmation.SetActive(false);
     }
 
-    private void OnAnnulerSuppression()
+    public void OnAnnulerSuppression()
     {
         _confirmationPending = null;
         if (panelConfirmation != null)
@@ -326,281 +433,29 @@ public class InventoryUIManager : MonoBehaviour
     }
 
     // -----------------------------------------------
-    // CRÉATION DYNAMIQUE DU CANVAS
+    // CANVAS
     // -----------------------------------------------
 
-    /// <summary>
-    /// Si aucun Canvas n'est assigné dans l'Inspector, en crée un complet avec la hiérarchie UI de base.
-    /// Appelé dans Awake() — le Canvas créé est DDOL via son parent (ce GO).
-    /// </summary>
     private void CreateCanvasIfNeeded()
     {
-        if (inventoryCanvas != null) return;
+        if (inventoryCanvas == null)
+        {
+            Debug.LogWarning("[InventoryUIManager] Aucun Canvas assigné dans l'Inspector. " +
+                             "Créer le Canvas manuellement comme enfant de ce GameObject " +
+                             "et assigner toutes les références dans l'Inspector.");
+            return;
+        }
 
-        // Canvas racine — enfant de ce GO pour hériter du DDOL
-        GameObject canvasGO = new GameObject("InventoryCanvas");
-        canvasGO.transform.SetParent(this.transform);
+        // Canvas présent — s'assurer qu'il démarre fermé
+        inventoryCanvas.gameObject.SetActive(false);
 
-        Canvas canvas = canvasGO.AddComponent<Canvas>();
-        canvas.renderMode   = RenderMode.ScreenSpaceOverlay;
-        canvas.sortingOrder = 100;
-
-        CanvasScaler scaler = canvasGO.AddComponent<CanvasScaler>();
-        scaler.uiScaleMode         = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(640f, 360f);
-        scaler.matchWidthOrHeight  = 0.5f;
-
-        canvasGO.AddComponent<GraphicRaycaster>();
-        inventoryCanvas = canvas;
-
-        // Désactivé par défaut — Open() l'activera
-        canvasGO.SetActive(false);
-
-        ConstruireHierarchie(canvasGO.transform);
-        ConstruireIconeFlottante(canvasGO.transform);
-        ConstruirePanelConfirmation(canvasGO.transform);
-
-        Debug.Log("[InventoryUIManager] Canvas créé dynamiquement.");
-    }
-
-    // -----------------------------------------------
-    // CONSTRUCTION DE LA HIÉRARCHIE
-    // -----------------------------------------------
-
-    private void ConstruireHierarchie(Transform canvasTransform)
-    {
-        // ── PanelEquipement (gauche) ──────────────────────────────────
-
-        GameObject goEquip = CreerPanel("PanelEquipement", canvasTransform,
-                                        new Color(0.08f, 0.08f, 0.12f, 0.92f));
-        panelEquipement = goEquip.GetComponent<RectTransform>();
-        ConfigurerAncrePleinHauteur(panelEquipement, anchorMinX: 0f, anchorMaxX: 0.45f,
-                                    offsetGauche: 8f, offsetDroite: -4f);
-
-        VerticalLayoutGroup vlgEquip = goEquip.AddComponent<VerticalLayoutGroup>();
-        vlgEquip.spacing            = 8f;
-        vlgEquip.padding            = new RectOffset(8, 8, 8, 8);
-        vlgEquip.childForceExpandWidth  = true;
-        vlgEquip.childForceExpandHeight = false;
-
-        CreerTexte("TextHeader", goEquip.transform, "Equipement equipe");
-
-        // Legs slot — un seul emplacement (jambes)
-        GameObject goLegs = CreerPanel("LegsSlot", goEquip.transform,
-                                       new Color(0.12f, 0.12f, 0.18f, 1f));
-        legsSlot = goLegs.GetComponent<RectTransform>();
-        VerticalLayoutGroup vlgLegs = goLegs.AddComponent<VerticalLayoutGroup>();
-        vlgLegs.spacing = 4f;
-        vlgLegs.padding = new RectOffset(4, 4, 4, 4);
-        vlgLegs.childForceExpandWidth  = true;
-        vlgLegs.childForceExpandHeight = false;
-        ContentSizeFitter csfLegs = goLegs.AddComponent<ContentSizeFitter>();
-        csfLegs.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-        // La DropZone et son contenu seront créés dynamiquement par RafraichirSlotEquipement()
-
-        // Arms container — 2-4 slots bras selon CharacterData.maxEquippedArms
-        GameObject goArms = CreerPanel("ArmsContainer", goEquip.transform,
-                                       new Color(0f, 0f, 0f, 0f));
-        armsContainer = goArms.GetComponent<RectTransform>();
-        GridLayoutGroup glgArms = goArms.AddComponent<GridLayoutGroup>();
-        glgArms.cellSize    = new Vector2(80f, 80f);
-        glgArms.spacing     = new Vector2(4f, 4f);
-        glgArms.startCorner = GridLayoutGroup.Corner.UpperLeft;
-        LayoutElement leArms = goArms.AddComponent<LayoutElement>();
-        leArms.preferredHeight = 172f;  // 2 lignes × 80 + spacing + padding
-
-        // ── PanelInventaire (droite) ──────────────────────────────────
-
-        GameObject goInv = CreerPanel("PanelInventaire", canvasTransform,
-                                      new Color(0.08f, 0.08f, 0.12f, 0.92f));
-        panelInventaire = goInv.GetComponent<RectTransform>();
-        ConfigurerAncrePleinHauteur(panelInventaire, anchorMinX: 0.45f, anchorMaxX: 1f,
-                                    offsetGauche: 4f, offsetDroite: -8f);
-
-        VerticalLayoutGroup vlgInv = goInv.AddComponent<VerticalLayoutGroup>();
-        vlgInv.spacing            = 8f;
-        vlgInv.padding            = new RectOffset(8, 8, 8, 8);
-        vlgInv.childForceExpandWidth  = true;
-        vlgInv.childForceExpandHeight = false;
-
-        // Sous-panel équipements en inventaire
-        GameObject goEqInv = CreerPanel("PanelEquipmentInventory", goInv.transform,
-                                        new Color(0.12f, 0.12f, 0.18f, 1f));
-        panelEquipmentInventory = goEqInv.GetComponent<RectTransform>();
-        GridLayoutGroup glgEqInv = goEqInv.AddComponent<GridLayoutGroup>();
-        glgEqInv.cellSize    = new Vector2(64f, 64f);
-        glgEqInv.spacing     = new Vector2(4f, 4f);
-        glgEqInv.startCorner = GridLayoutGroup.Corner.UpperLeft;
-        LayoutElement leEqInv = goEqInv.AddComponent<LayoutElement>();
-        leEqInv.preferredHeight = 140f;
-        InventoryDropZone eqInvZone = goEqInv.AddComponent<InventoryDropZone>();
-        eqInvZone.zoneType = InventoryDropZone.ZoneType.InventaireEquipements;
-
-        // Sous-panel skills en inventaire
-        GameObject goSkInv = CreerPanel("PanelSkillInventory", goInv.transform,
-                                        new Color(0.12f, 0.12f, 0.18f, 1f));
-        panelSkillInventory = goSkInv.GetComponent<RectTransform>();
-        GridLayoutGroup glgSkInv = goSkInv.AddComponent<GridLayoutGroup>();
-        glgSkInv.cellSize    = new Vector2(48f, 48f);
-        glgSkInv.spacing     = new Vector2(4f, 4f);
-        glgSkInv.startCorner = GridLayoutGroup.Corner.UpperLeft;
-        LayoutElement leSkInv = goSkInv.AddComponent<LayoutElement>();
-        leSkInv.preferredHeight = 200f;
-        InventoryDropZone skInvZone = goSkInv.AddComponent<InventoryDropZone>();
-        skInvZone.zoneType = InventoryDropZone.ZoneType.InventaireSkills;
-
-        // ── PanelPoubelle (coin bas-droit) ────────────────────────────
-
-        GameObject goPoub = CreerPanel("PanelPoubelle", canvasTransform,
-                                       new Color(0.6f, 0.1f, 0.1f, 0.85f));
-        panelPoubelle = goPoub.GetComponent<RectTransform>();
-        ConfigurerAncrePoint(panelPoubelle,
-                             anchorX: 1f, anchorY: 0f,
-                             pivotX: 1f, pivotY: 0f,
-                             sizeDelta: new Vector2(60f, 60f),
-                             position: new Vector2(-12f, 12f));
-        CreerTexte("TextPoubelle", goPoub.transform, "X");
-        InventoryDropZone poubelleZone = goPoub.AddComponent<InventoryDropZone>();
-        poubelleZone.zoneType = InventoryDropZone.ZoneType.Poubelle;
+        // Initialiser le drag'n'drop si les ressources sont déjà assignées
+        if (dragFloatingIcon != null)
+            InventoryDragDropController.InitialiserPartages(dragFloatingIcon, inventoryCanvas);
     }
 
     // -----------------------------------------------
     // HELPERS DE CRÉATION UI
     // -----------------------------------------------
 
-    private GameObject CreerPanel(string nom, Transform parent, Color couleur)
-    {
-        GameObject go = new GameObject(nom);
-        RectTransform rt = go.AddComponent<RectTransform>();
-        rt.SetParent(parent, false);
-        Image img = go.AddComponent<Image>();
-        img.color = couleur;
-        return go;
-    }
-
-    private void CreerTexte(string nom, Transform parent, string contenu)
-    {
-        GameObject go = new GameObject(nom);
-        RectTransform rt = go.AddComponent<RectTransform>();
-        rt.SetParent(parent, false);
-        TextMeshProUGUI tmp = go.AddComponent<TextMeshProUGUI>();
-        tmp.text      = contenu;
-        tmp.fontSize  = 14f;
-        tmp.alignment = TextAlignmentOptions.Center;
-    }
-
-    // Étire le panel sur toute la hauteur du canvas entre deux bornes X.
-    private void ConfigurerAncrePleinHauteur(RectTransform rt,
-                                             float anchorMinX, float anchorMaxX,
-                                             float offsetGauche, float offsetDroite)
-    {
-        rt.anchorMin = new Vector2(anchorMinX, 0f);
-        rt.anchorMax = new Vector2(anchorMaxX, 1f);
-        rt.offsetMin = new Vector2(offsetGauche,  8f);
-        rt.offsetMax = new Vector2(offsetDroite, -8f);
-    }
-
-    // Place un panneau de taille fixe ancré à un coin.
-    private void ConfigurerAncrePoint(RectTransform rt,
-                                      float anchorX, float anchorY,
-                                      float pivotX,  float pivotY,
-                                      Vector2 sizeDelta, Vector2 position)
-    {
-        rt.anchorMin        = new Vector2(anchorX, anchorY);
-        rt.anchorMax        = new Vector2(anchorX, anchorY);
-        rt.pivot            = new Vector2(pivotX, pivotY);
-        rt.sizeDelta        = sizeDelta;
-        rt.anchoredPosition = position;
-    }
-
-    // -----------------------------------------------
-    // HELPERS DRAG'N'DROP
-    // -----------------------------------------------
-
-    private void ConstruireIconeFlottante(Transform canvasTransform)
-    {
-        GameObject go = new GameObject("DragFloatingIcon");
-        RectTransform rt = go.AddComponent<RectTransform>();
-        rt.SetParent(canvasTransform, false);
-        rt.sizeDelta = new Vector2(48f, 48f);
-
-        dragFloatingIcon = go.AddComponent<Image>();
-        dragFloatingIcon.raycastTarget = false;  // ne bloque pas les raycasts de dépôt
-        go.SetActive(false);
-
-        InventoryDragDropController.InitialiserPartages(dragFloatingIcon, inventoryCanvas);
-    }
-
-    private void ConstruirePanelConfirmation(Transform canvasTransform)
-    {
-        // Overlay plein écran semi-transparent — bloque les interactions pendant la confirmation
-        GameObject goOverlay = new GameObject("PanelConfirmation");
-        RectTransform rtOverlay = goOverlay.AddComponent<RectTransform>();
-        rtOverlay.SetParent(canvasTransform, false);
-        rtOverlay.anchorMin = Vector2.zero;
-        rtOverlay.anchorMax = Vector2.one;
-        rtOverlay.offsetMin = Vector2.zero;
-        rtOverlay.offsetMax = Vector2.zero;
-        Image imgOverlay = goOverlay.AddComponent<Image>();
-        imgOverlay.color = new Color(0f, 0f, 0f, 0.6f);
-        panelConfirmation = goOverlay;
-
-        // Boîte de dialogue centrée
-        GameObject goDialog = new GameObject("DialogBox");
-        RectTransform rtDialog = goDialog.AddComponent<RectTransform>();
-        rtDialog.SetParent(goOverlay.transform, false);
-        rtDialog.sizeDelta        = new Vector2(200f, 100f);
-        rtDialog.anchoredPosition = Vector2.zero;
-        Image imgDialog = goDialog.AddComponent<Image>();
-        imgDialog.color = new Color(0.15f, 0.15f, 0.2f, 1f);
-
-        // Texte de la question (centré en haut de la dialog)
-        GameObject goTxt = new GameObject("TextQuestion");
-        RectTransform rtTxt = goTxt.AddComponent<RectTransform>();
-        rtTxt.SetParent(goDialog.transform, false);
-        rtTxt.anchorMin        = new Vector2(0f, 0.5f);
-        rtTxt.anchorMax        = new Vector2(1f, 1f);
-        rtTxt.offsetMin        = new Vector2(8f, 0f);
-        rtTxt.offsetMax        = new Vector2(-8f, -4f);
-        TextMeshProUGUI tmp = goTxt.AddComponent<TextMeshProUGUI>();
-        tmp.text      = "Supprimer cet objet ?";
-        tmp.fontSize  = 12f;
-        tmp.alignment = TextAlignmentOptions.Center;
-
-        // Conteneur des boutons (bas de la dialog)
-        GameObject goBtns = new GameObject("BoutonsContainer");
-        RectTransform rtBtns = goBtns.AddComponent<RectTransform>();
-        rtBtns.SetParent(goDialog.transform, false);
-        rtBtns.anchorMin        = new Vector2(0f, 0f);
-        rtBtns.anchorMax        = new Vector2(1f, 0.5f);
-        rtBtns.offsetMin        = new Vector2(8f, 8f);
-        rtBtns.offsetMax        = new Vector2(-8f, -4f);
-        HorizontalLayoutGroup hlg = goBtns.AddComponent<HorizontalLayoutGroup>();
-        hlg.spacing               = 8f;
-        hlg.childForceExpandWidth  = true;
-        hlg.childForceExpandHeight = true;
-
-        Button btnOui = CreerBouton("BoutonOui", goBtns.transform, "Oui",
-                                    new Color(0.7f, 0.2f, 0.2f, 1f));
-        btnOui.onClick.AddListener(OnConfirmerSuppression);
-
-        Button btnNon = CreerBouton("BoutonNon", goBtns.transform, "Non",
-                                    new Color(0.2f, 0.4f, 0.2f, 1f));
-        btnNon.onClick.AddListener(OnAnnulerSuppression);
-
-        // Désactivé par défaut — DemanderConfirmationSuppression() l'activera
-        goOverlay.SetActive(false);
-    }
-
-    private Button CreerBouton(string nom, Transform parent, string texte, Color couleur)
-    {
-        GameObject go = new GameObject(nom);
-        RectTransform rt = go.AddComponent<RectTransform>();
-        rt.SetParent(parent, false);
-        Image img = go.AddComponent<Image>();
-        img.color = couleur;
-        Button btn = go.AddComponent<Button>();
-        CreerTexte("Label", go.transform, texte);
-        return btn;
-    }
 }

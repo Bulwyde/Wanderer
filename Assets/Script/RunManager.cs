@@ -157,11 +157,11 @@ public class RunManager : MonoBehaviour
     // -----------------------------------------------
 
     [Header("Inventaires")]
-    public int maxInventoryEquipments = 5;
-    public int maxInventorySkills = 10;
+    public int maxInventoryEquipments = 8;
+    public int maxInventorySkills = 16;
 
-    private List<EquipmentData> inventoryEquipments = new List<EquipmentData>();
-    private List<SkillData> inventorySkills = new List<SkillData>();
+    private List<EquipmentData> inventoryEquipments;
+    private List<SkillData> inventorySkills;
 
     /// <summary>
     /// Crée un clone runtime indépendant d'un équipement looté.
@@ -170,27 +170,22 @@ public class RunManager : MonoBehaviour
     /// </summary>
     public EquipmentData CloneEquipmentForLoot(EquipmentData original)
     {
-        if (original == null)
-        {
-            Debug.LogWarning("[RunManager] CloneEquipmentForLoot — original null.");
-            return null;
-        }
+        if (original == null) return null;
 
         EquipmentData clone = Instantiate(original);
 
-        // Deep copy des skillSlots — chaque clone a ses propres objets SkillSlot,
-        // indépendants de ceux de l'original et des autres clones.
+        // Deep copy des skillSlots — chaque clone a sa propre liste indépendante
         clone.skillSlots = new List<SkillSlot>();
-        foreach (SkillSlot s in original.skillSlots)
+        foreach (SkillSlot slot in original.skillSlots)
         {
-            clone.skillSlots.Add(new SkillSlot
+            SkillSlot newSlot = new SkillSlot
             {
-                state         = s.state,
-                equippedSkill = s.equippedSkill
-            });
+                state         = slot.state,
+                equippedSkill = slot.equippedSkill  // L'asset SkillData lui-même n'est pas cloné (immutable)
+            };
+            clone.skillSlots.Add(newSlot);
         }
 
-        Debug.Log($"[RunManager] Équipement cloné : '{original.equipmentName}'.");
         return clone;
     }
 
@@ -202,29 +197,52 @@ public class RunManager : MonoBehaviour
     {
         if (equipment == null) return false;
 
-        if (inventoryEquipments.Count >= maxInventoryEquipments)
+        // Ajouter au premier slot vide
+        for (int i = 0; i < inventoryEquipments.Count; i++)
         {
-            Debug.LogWarning($"[RunManager] Inventaire équipements plein ({inventoryEquipments.Count}/{maxInventoryEquipments})" +
-                             $" — '{equipment.equipmentName}' non ajouté.");
-            return false;
+            if (inventoryEquipments[i] == null)
+            {
+                inventoryEquipments[i] = equipment;
+                Debug.Log($"[RunManager] Inventaire — équipement ajouté : '{equipment.equipmentName}' (slot {i}).");
+                return true;
+            }
         }
 
-        inventoryEquipments.Add(equipment);
-        Debug.Log($"[RunManager] Inventaire — équipement ajouté : '{equipment.equipmentName}'" +
-                  $" ({inventoryEquipments.Count}/{maxInventoryEquipments}).");
+        Debug.LogWarning($"[RunManager] Inventaire équipements plein — '{equipment.equipmentName}' non ajouté.");
+        return false;  // Aucun slot vide
+    }
+
+    /// <summary>
+    /// Place un équipement à un index spécifique de l'inventaire.
+    /// </summary>
+    public bool SetEquipmentToInventorySlot(int slotIndex, EquipmentData equipment)
+    {
+        if (slotIndex < 0 || slotIndex >= inventoryEquipments.Count) return false;
+
+        // Refuser de placer sur un slot occupé (à moins qu'on place null pour vider)
+        if (equipment != null && inventoryEquipments[slotIndex] != null)
+            return false;
+
+        inventoryEquipments[slotIndex] = equipment;
         return true;
     }
 
     /// <summary>
-    /// Retire un équipement de l'inventaire.
+    /// Retire un équipement de l'inventaire (set à null).
     /// Retourne true si l'équipement était présent et a été retiré, false sinon.
     /// </summary>
     public bool RemoveEquipmentFromInventory(EquipmentData equipment)
     {
-        bool retiré = inventoryEquipments.Remove(equipment);
-        if (retiré)
-            Debug.Log($"[RunManager] Inventaire — équipement retiré : '{equipment?.equipmentName}'.");
-        return retiré;
+        for (int i = 0; i < inventoryEquipments.Count; i++)
+        {
+            if (inventoryEquipments[i] == equipment)
+            {
+                inventoryEquipments[i] = null;
+                Debug.Log($"[RunManager] Inventaire — équipement retiré : '{equipment?.equipmentName}'.");
+                return true;
+            }
+        }
+        return false;
     }
 
     /// <summary>
@@ -235,29 +253,52 @@ public class RunManager : MonoBehaviour
     {
         if (skill == null) return false;
 
-        if (inventorySkills.Count >= maxInventorySkills)
+        // Ajouter au premier slot vide
+        for (int i = 0; i < inventorySkills.Count; i++)
         {
-            Debug.LogWarning($"[RunManager] Inventaire skills plein ({inventorySkills.Count}/{maxInventorySkills})" +
-                             $" — '{skill.skillName}' non ajouté.");
-            return false;
+            if (inventorySkills[i] == null)
+            {
+                inventorySkills[i] = skill;
+                Debug.Log($"[RunManager] Inventaire — skill ajouté : '{skill.skillName}' (slot {i}).");
+                return true;
+            }
         }
 
-        inventorySkills.Add(skill);
-        Debug.Log($"[RunManager] Inventaire — skill ajouté : '{skill.skillName}'" +
-                  $" ({inventorySkills.Count}/{maxInventorySkills}).");
+        Debug.LogWarning($"[RunManager] Inventaire skills plein — '{skill.skillName}' non ajouté.");
+        return false;  // Aucun slot vide
+    }
+
+    /// <summary>
+    /// Place un skill à un index spécifique de l'inventaire.
+    /// </summary>
+    public bool SetSkillToInventorySlot(int slotIndex, SkillData skill)
+    {
+        if (slotIndex < 0 || slotIndex >= inventorySkills.Count) return false;
+
+        // Refuser de placer sur un slot occupé (à moins qu'on place null pour vider)
+        if (skill != null && inventorySkills[slotIndex] != null)
+            return false;
+
+        inventorySkills[slotIndex] = skill;
         return true;
     }
 
     /// <summary>
-    /// Retire un skill de l'inventaire.
+    /// Retire un skill de l'inventaire (set à null).
     /// Retourne true si le skill était présent et a été retiré, false sinon.
     /// </summary>
     public bool RemoveSkillFromInventory(SkillData skill)
     {
-        bool retiré = inventorySkills.Remove(skill);
-        if (retiré)
-            Debug.Log($"[RunManager] Inventaire — skill retiré : '{skill?.skillName}'.");
-        return retiré;
+        for (int i = 0; i < inventorySkills.Count; i++)
+        {
+            if (inventorySkills[i] == skill)
+            {
+                inventorySkills[i] = null;
+                Debug.Log($"[RunManager] Inventaire — skill retiré : '{skill?.skillName}'.");
+                return true;
+            }
+        }
+        return false;
     }
 
     /// <summary>
@@ -266,9 +307,50 @@ public class RunManager : MonoBehaviour
     /// Si l'inventaire est plein et le slot occupé, l'opération est annulée (retourne false).
     /// Si la nouvelle pièce vient de l'inventaire, elle en est retirée automatiquement.
     /// </summary>
+    /// <summary>
+    /// Retourne true si le type d'équipement est compatible avec le slot cible.
+    /// Head/Torso/Legs → un seul slot correspondant.
+    /// Arm → Arm1 ou Arm2.
+    /// </summary>
+    public static bool IsSlotCompatible(EquipmentSlot slot, EquipmentType type)
+    {
+        return type switch
+        {
+            EquipmentType.Head  => slot == EquipmentSlot.Head,
+            EquipmentType.Torso => slot == EquipmentSlot.Torso,
+            EquipmentType.Legs  => slot == EquipmentSlot.Legs,
+            EquipmentType.Arm   => slot == EquipmentSlot.Arm1 || slot == EquipmentSlot.Arm2 ||
+                                   slot == EquipmentSlot.Arm3 || slot == EquipmentSlot.Arm4,
+            _                   => false
+        };
+    }
+
     public bool TryEquipEquipment(EquipmentSlot slot, EquipmentData equipment)
     {
         if (equipment == null) return false;
+
+        if (!IsSlotCompatible(slot, equipment.equipmentType))
+        {
+            Debug.LogWarning($"[RunManager] TryEquipEquipment — incompatible : " +
+                             $"'{equipment.equipmentName}' ({equipment.equipmentType}) ne peut pas" +
+                             $" aller dans le slot {slot}.");
+            return false;
+        }
+
+        // Vérifier que le slot Arm est autorisé par le personnage actuel
+        if (selectedCharacter != null)
+        {
+            if (slot == EquipmentSlot.Arm3 && selectedCharacter.maxEquippedArms < 3)
+            {
+                Debug.LogWarning($"[RunManager] Slot Arm3 non disponible — maxEquippedArms = {selectedCharacter.maxEquippedArms}");
+                return false;
+            }
+            if (slot == EquipmentSlot.Arm4 && selectedCharacter.maxEquippedArms < 4)
+            {
+                Debug.LogWarning($"[RunManager] Slot Arm4 non disponible — maxEquippedArms = {selectedCharacter.maxEquippedArms}");
+                return false;
+            }
+        }
 
         // Si le slot est occupé, tenter de déplacer l'ancienne pièce en inventaire
         EquipmentData ancienne = GetEquipped(slot);
@@ -297,6 +379,8 @@ public class RunManager : MonoBehaviour
     /// Vide un slot d'équipement sans interaction avec l'inventaire.
     /// Utilisé lors d'un déplacement slot → slot pour libérer l'origine
     /// avant d'équiper dans la destination.
+    /// Les skills équipés sur la pièce ne sont PAS récupérés — utiliser
+    /// UnequipEquipmentAndMoveSkillsToInventory() quand on veut les conserver.
     /// </summary>
     public void ClearEquipmentSlot(EquipmentSlot slot)
     {
@@ -305,6 +389,41 @@ public class RunManager : MonoBehaviour
         equippedItems.Remove(slot);
         RecalculerMaxHP();
         Debug.Log($"[RunManager] ClearEquipmentSlot — {slot} vidé ('{nom}').");
+    }
+
+    /// <summary>
+    /// Déséquipe un équipement et rapatrie ses skills vers l'inventaire avant de libérer le slot.
+    /// À utiliser à la place de ClearEquipmentSlot() quand l'équipement est retiré définitivement
+    /// (suppression via poubelle, déséquipement manuel) et que les skills ne doivent pas être perdus.
+    /// </summary>
+    public void UnequipEquipmentAndMoveSkillsToInventory(EquipmentSlot slot)
+    {
+        if (!equippedItems.ContainsKey(slot)) return;
+
+        EquipmentData equip = equippedItems[slot];
+
+        // Rapatrier les skills équipés en inventaire avant de vider le slot
+        if (equip != null && equip.skillSlots != null)
+        {
+            foreach (SkillSlot skillSlot in equip.skillSlots)
+            {
+                if ((skillSlot.state == SkillSlot.SlotState.Used ||
+                     skillSlot.state == SkillSlot.SlotState.LockedInUse) &&
+                    skillSlot.equippedSkill != null)
+                {
+                    if (!AddSkillToInventory(skillSlot.equippedSkill))
+                        Debug.LogWarning($"[RunManager] Inventaire skills plein — '{skillSlot.equippedSkill.skillName}' perdu !");
+
+                    // Nettoyer le slot après avoir retiré le skill
+                    skillSlot.equippedSkill = null;
+                    skillSlot.state         = SkillSlot.SlotState.Available;
+                }
+            }
+        }
+
+        equippedItems.Remove(slot);
+        RecalculerMaxHP();
+        Debug.Log($"[RunManager] UnequipEquipmentAndMoveSkillsToInventory — {slot} vidé ('{equip?.equipmentName ?? "aucun"}').");
     }
 
     /// <summary>
@@ -927,8 +1046,14 @@ public class RunManager : MonoBehaviour
 
         hasActiveRun = true;
 
-        inventoryEquipments.Clear();
-        inventorySkills.Clear();
+        // Initialiser les inventaires à la taille max avec nulls (slots vides)
+        inventoryEquipments = new List<EquipmentData>(maxInventoryEquipments);
+        for (int i = 0; i < maxInventoryEquipments; i++)
+            inventoryEquipments.Add(null);
+
+        inventorySkills = new List<SkillData>(maxInventorySkills);
+        for (int i = 0; i < maxInventorySkills; i++)
+            inventorySkills.Add(null);
 
         // Seed l'équipement, le module et les consommables de départ
         // dès le lancement du run, pour que la Navigation les affiche immédiatement.
@@ -1224,6 +1349,10 @@ public class RunManager : MonoBehaviour
         SeedSlotSiVide(EquipmentSlot.Legs,  character.startingLegs);
         SeedSlotSiVide(EquipmentSlot.Arm1,  character.startingArm1);
         SeedSlotSiVide(EquipmentSlot.Arm2,  character.startingArm2);
+        if (character.maxEquippedArms >= 3)
+            SeedSlotSiVide(EquipmentSlot.Arm3, character.startingArm3);
+        if (character.maxEquippedArms >= 4)
+            SeedSlotSiVide(EquipmentSlot.Arm4, character.startingArm4);
 
         // Module de départ
         if (character.startingModule != null && !HasModule(character.startingModule))
@@ -1272,10 +1401,16 @@ public class RunManager : MonoBehaviour
         Debug.Log($"[RunManager] Stats initialisées — HP : {currentHP}/{maxHP}");
     }
 
-    private void SeedSlotSiVide(EquipmentSlot slot, EquipmentData starting)
+    private void SeedSlotSiVide(EquipmentSlot slot, EquipmentData equipment)
     {
-        if (starting != null && IsSlotFree(slot))
-            EquipItem(slot, starting);
+        if (equipment == null || equippedItems.ContainsKey(slot)) return;
+
+        // Cloner l'équipement de départ pour éviter de modifier l'asset ScriptableObject.
+        // Crucial si plusieurs slots utilisent le même équipement de base.
+        EquipmentData clone = CloneEquipmentForLoot(equipment);
+
+        if (TryEquipEquipment(slot, clone))
+            Debug.Log($"[RunManager] Équipé au démarrage : {clone.equipmentName}");
     }
 
     // -----------------------------------------------

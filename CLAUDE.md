@@ -184,24 +184,41 @@ Pour les détails complets : voir **INVENTAIRE.md**.
 
 ---
 
-## Inventaire et Skills équipés
+## Système d'inventaire et drag'n'drop
 
-> **Voir INVENTAIRE.md pour l'architecture complète, les phases d'implémentation et les pièges spécifiques.**
+> **Voir INVENTAIRE.md pour l'architecture complète, les bugs corrigés et les pièges spécifiques.**
 
-Implémenté. Se référer à INVENTAIRE.md pour l'architecture complète.
+### Structures clés
+- **SkillSlot** : `enum SlotState` (Available/Used/Unavailable/LockedInUse) + `SkillData equippedSkill`
+- **EquipmentData.skillSlots** : `List<SkillSlot>` configurables par équipement
+- **EquipmentSlot** : Head, Torso, Legs, Arm1, Arm2, Arm3, Arm4 (`maxEquippedArms` détermine l'accès Arm3/4)
+- **EquipmentType** : Head, Torso, Legs, Arm (validation via `IsSlotCompatible()`)
 
-**Éléments clés** :
-- **SkillSlot** : emplacements pour équiper des skills (libre/utilisé/non-disponible/bloqué)
-- **Clonage** : chaque équipement loot est une instance indépendante du SO asset
-- **Tags hérités** : un skill équipé hérite des tags de son équipement (appliqués/retirés immédiatement)
-- **InventoryUIManager** : DDOL overlay (Canvas persiste entre les scènes)
-- **Drag'n'drop** : activé/désactivé selon le contexte (désactivé en combat)
+### Inventaires indexés
+- `inventoryEquipments` / `inventorySkills` : `List<T>` de taille fixe (`maxInventoryEquipments` / `maxInventorySkills`), remplies de nulls
+- `AddEquipmentToInventory(equipment)` : place au premier slot null
+- `SetEquipmentToInventorySlot(index, equipment)` : place à un index spécifique (refuse si occupé, sauf null pour vider)
+- `RemoveEquipmentFromInventory(equipment)` : trouve et set à null
+- Symétrique pour les skills
 
-**Conventions spécifiques** :
-- RunManager gère les inventaires : `List<EquipmentData> inventoryEquipments` + `List<SkillData> inventorySkills`
-- Tous les clones passent par `RunManager.CloneEquipmentForLoot()`
-- Équipement/déséquipement via `EquipSkill()` / `UnequipSkill()` / `SwapSkill()`
-- Tags hérités stockés dans `SkillData.inheritedTags` (runtime, caché dans l'inspector)
+### Clonage et indépendance
+- `CloneEquipmentForLoot(original)` : `Instantiate` + deep copy des `skillSlots`
+- Tous les équipements loots/achetés/de départ passent par ce clone
+- Chaque clone a une `List<SkillSlot>` indépendante → modifier un clone n'affecte pas les autres
+
+### Drag'n'drop et validation
+- **InventoryDragDropController** : `IBeginDragHandler`/`IDragHandler`/`IEndDragHandler`, `Setup*` méthodes trackent l'origine (`_originEquipmentSlot`, `_originInventoryEquipmentSlotIndex`, etc.)
+- **InventoryDropZone** : marque les zones de drop (`targetSlotIndex`, `targetEquipment`, `targetEquipmentSlot`, `zoneType`)
+- **TraiterDrop** : essaie le placement AVANT de modifier l'état (atomicité — si placement échoue, origine inchangée)
+- **Validation** : `IsSlotCompatible()` + `isNavigationSkill` check (nav→Legs, combat→Arms) + `maxEquippedArms` check
+
+### InventoryUIManager — Container-per-slot
+- `[SerializeField] RectTransform legsContainer`, `arm1Container`… (icône équipement)
+- `[SerializeField] RectTransform legsSkillGrid`, `arm1SkillGrid`… (grille skills)
+- `RafraichirContenuSlot()` : peuple le container existant, ne crée pas la hiérarchie
+- `RafraichirEquipementsPortes()` : masque arm3/4 containers si `maxEquippedArms < 3/4`
+- `RafraichirInventaire*` : n'ajoute PAS de `DragDropController` au panel parent
+- `[SerializeField] Image modalBlocker` : panel transparent bloquant les raycasts arrière-plan (activé à `Open()`, désactivé à `Close()`)
 
 ---
 
@@ -254,3 +271,7 @@ Implémenté. Se référer à INVENTAIRE.md pour l'architecture complète.
 45. **`InventoryUIManager` — setup scène** : ajouter un GameObject vide avec le composant `InventoryUIManager` dans la première scène chargée. Il se place en DDOL seul. Pas besoin de Canvas dans la scène.
 46. **`armsContainer` — GridLayoutGroup fixe** : les panneaux bras ont `cellSize = 80×80`. Si un équipement a beaucoup de skill slots, le contenu peut être clippé visuellement. Ajuster `cellSize` ou `preferredHeight` selon les assets.
 47. **`SkillData.inheritedTags`** : liste runtime uniquement (`[HideInInspector]`). Ne jamais la pré-remplir dans l'Inspector. Remplie par `EquipSkill()`, vidée par `UnequipSkill()`.
+48. **Parent panels sans DragDropController** : `panelSkillInventory` et `panelEquipmentInventory` NE DOIVENT PAS avoir de `InventoryDragDropController` — sinon le parent entier devient draggable. Seuls les slots individuels (enfants créés par `RafraichirInventaire*`) ont leur propre contrôleur.
+49. **Slots vides → DropZone détectable** : les slots vides n'ont pas de `DragDropController` mais ont une `InventoryDropZone` → les drops sur slots vides fonctionnent. Le raycast traverse l'`Image` du slot vide jusqu'à la `DropZone`.
+50. **Unequip ≠ suppression** : `UnequipSkill()` renvoie le skill en inventaire. Pour supprimer, appeler `RemoveSkillFromInventory()` après. `ExecuterSuppression()` gère la séquence complète.
+51. **Floating icon taille** : 32×32 pour skills, 64×64 pour équipements. Défini dans `OnBeginDrag()` via `floatingRT.sizeDelta`.

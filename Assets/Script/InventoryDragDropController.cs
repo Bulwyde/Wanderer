@@ -50,6 +50,10 @@ public class InventoryDragDropController : MonoBehaviour,
 
     private bool _isDragging = false;
 
+    // Origine : si vient d'un slot d'inventaire au lieu d'un slot équipé
+    private int _originInventoryEquipmentSlotIndex = -1;
+    private int _originInventorySkillSlotIndex     = -1;
+
     // -----------------------------------------------
     // INITIALISATION
     // -----------------------------------------------
@@ -68,13 +72,14 @@ public class InventoryDragDropController : MonoBehaviour,
     /// Configure ce contrôleur pour un skill.
     /// originEquipment null et slotIndex -1 = skill depuis l'inventaire libre.
     /// </summary>
-    public void SetupSkill(SkillData skill, EquipmentData originEquipment = null, int slotIndex = -1)
+    public void SetupSkill(SkillData skill, EquipmentData originEquipment = null, int slotIndex = -1, int originInventorySlotIndex = -1)
     {
-        _dragType          = DragItemType.Skill;
-        _dragSkillData     = skill;
-        _dragEquipmentData = null;
-        _originEquipment   = originEquipment;
-        _originSlotIndex   = slotIndex;
+        _dragType                      = DragItemType.Skill;
+        _dragSkillData                 = skill;
+        _dragEquipmentData             = null;
+        _originEquipment               = originEquipment;
+        _originSlotIndex               = slotIndex;
+        _originInventorySkillSlotIndex = originInventorySlotIndex;
 
         if (dragIcon != null && skill != null)
             dragIcon.sprite = skill.icon;
@@ -85,14 +90,15 @@ public class InventoryDragDropController : MonoBehaviour,
     /// originSlot non-null = équipement venant d'un slot équipé (panneau gauche).
     /// originSlot null     = équipement venant de l'inventaire libre (panneau droit).
     /// </summary>
-    public void SetupEquipment(EquipmentData equipment, EquipmentSlot? originSlot = null)
+    public void SetupEquipment(EquipmentData equipment, EquipmentSlot? originSlot = null, int originInventorySlotIndex = -1)
     {
-        _dragType            = DragItemType.Equipment;
-        _dragEquipmentData   = equipment;
-        _dragSkillData       = null;
-        _originEquipment     = null;
-        _originSlotIndex     = -1;
-        _originEquipmentSlot = originSlot;
+        _dragType                          = DragItemType.Equipment;
+        _dragEquipmentData                 = equipment;
+        _dragSkillData                     = null;
+        _originEquipment                   = null;
+        _originSlotIndex                   = -1;
+        _originEquipmentSlot               = originSlot;
+        _originInventoryEquipmentSlotIndex = originInventorySlotIndex;
 
         if (dragIcon != null && equipment != null)
             dragIcon.sprite = equipment.icon;
@@ -129,6 +135,17 @@ public class InventoryDragDropController : MonoBehaviour,
         {
             _floatingIcon.sprite = dragIcon.sprite;
             _floatingIcon.color  = Color.white;
+
+            // Ajuster la taille de l'icône fantôme selon le type d'objet dragué
+            RectTransform floatingRT = _floatingIcon.GetComponent<RectTransform>();
+            if (floatingRT != null)
+            {
+                if (_dragType == DragItemType.Skill)
+                    floatingRT.sizeDelta = new Vector2(32f, 32f);
+                else if (_dragType == DragItemType.Equipment)
+                    floatingRT.sizeDelta = new Vector2(64f, 64f);
+            }
+
             _floatingIcon.gameObject.SetActive(true);
         }
     }
@@ -199,20 +216,81 @@ public class InventoryDragDropController : MonoBehaviour,
                 break;
 
             case InventoryDropZone.ZoneType.InventaireSkills:
-                // Déséquiper si le skill venait d'un slot → retour inventaire
-                if (_dragType == DragItemType.Skill && _originEquipment != null && _originSlotIndex >= 0)
-                    run.UnequipSkill(_originEquipment, _originSlotIndex);
+                if (_dragType == DragItemType.Skill && _dragSkillData != null)
+                {
+                    // Essayer de placer AVANT toute modification (sans appeler UnequipSkill qui ajoute à l'inventaire)
+                    if (run.SetSkillToInventorySlot(cible.targetSlotIndex, _dragSkillData))
+                    {
+                        // Placement réussi → maintenant on peut modifier l'état
+
+                        // Si vient d'un slot équipé, nettoyer manuellement (sans passer par UnequipSkill)
+                        if (_originEquipment != null && _originSlotIndex >= 0)
+                        {
+                            SkillSlot originSlot = _originEquipment.skillSlots[_originSlotIndex];
+
+                            // Retirer les tags hérités de l'équipement
+                            if (_dragSkillData.inheritedTags != null && _dragSkillData.inheritedTags.Count > 0)
+                            {
+                                foreach (TagData tag in _dragSkillData.inheritedTags)
+                                    _dragSkillData.tags.Remove(tag);
+                                _dragSkillData.inheritedTags.Clear();
+                            }
+
+                            originSlot.equippedSkill = null;
+                            originSlot.state         = SkillSlot.SlotState.Available;
+                        }
+
+                        // Si vient d'un slot d'inventaire, vider l'origine
+                        if (_originInventorySkillSlotIndex >= 0)
+                            run.SetSkillToInventorySlot(_originInventorySkillSlotIndex, null);
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"[InventoryDragDrop] Impossible de placer '{_dragSkillData.skillName}' à l'index {cible.targetSlotIndex} (slot occupé ?).");
+                    }
+                }
                 break;
 
             case InventoryDropZone.ZoneType.InventaireEquipements:
-                // Si l'équipement vient d'un slot équipé → le déséquiper vers l'inventaire
-                if (_dragType == DragItemType.Equipment &&
-                    _originEquipmentSlot.HasValue &&
-                    _dragEquipmentData != null)
+                if (_dragType == DragItemType.Equipment && _dragEquipmentData != null)
                 {
-                    run.ClearEquipmentSlot(_originEquipmentSlot.Value);
-                    if (!run.AddEquipmentToInventory(_dragEquipmentData))
-                        Debug.LogWarning($"[InventoryDragDrop] Inventaire plein — '{_dragEquipmentData.equipmentName}' non ajouté.");
+                    // Essayer de placer AVANT toute modification
+                    if (run.SetEquipmentToInventorySlot(cible.targetSlotIndex, _dragEquipmentData))
+                    {
+                        // Placement réussi → maintenant on peut modifier l'état
+
+                        // Si vient d'un slot équipé, déplacer les skills à l'inventaire puis vider le slot
+                        if (_originEquipmentSlot.HasValue)
+                        {
+                            EquipmentData equippedData = run.GetEquipped(_originEquipmentSlot.Value);
+                            if (equippedData != null && equippedData.skillSlots != null)
+                            {
+                                foreach (SkillSlot skillSlot in equippedData.skillSlots)
+                                {
+                                    if ((skillSlot.state == SkillSlot.SlotState.Used ||
+                                         skillSlot.state == SkillSlot.SlotState.LockedInUse) &&
+                                        skillSlot.equippedSkill != null)
+                                    {
+                                        if (!run.AddSkillToInventory(skillSlot.equippedSkill))
+                                            Debug.LogWarning($"[InventoryDragDrop] Inventaire skills plein — '{skillSlot.equippedSkill.skillName}' perdu !");
+
+                                        skillSlot.equippedSkill = null;
+                                        skillSlot.state         = SkillSlot.SlotState.Available;
+                                    }
+                                }
+                            }
+
+                            run.ClearEquipmentSlot(_originEquipmentSlot.Value);
+                        }
+
+                        // Si vient d'un slot d'inventaire, vider l'origine
+                        if (_originInventoryEquipmentSlotIndex >= 0)
+                            run.SetEquipmentToInventorySlot(_originInventoryEquipmentSlotIndex, null);
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"[InventoryDragDrop] Impossible de placer '{_dragEquipmentData.equipmentName}' à l'index {cible.targetSlotIndex} (slot occupé ?).");
+                    }
                 }
                 break;
         }
@@ -226,6 +304,24 @@ public class InventoryDragDropController : MonoBehaviour,
         if (_dragType != DragItemType.Skill || _dragSkillData == null) return;
         if (cible.targetEquipment == null) return;
 
+        // Validation : Navigation skills vont sur Legs, autres sur Arms
+        if (_dragSkillData.isNavigationSkill)
+        {
+            if (cible.targetEquipment.equipmentType != EquipmentType.Legs)
+            {
+                Debug.LogWarning($"[InventoryDragDrop] '{_dragSkillData.skillName}' est un skill de navigation — il ne peut aller que sur des Legs.");
+                return;
+            }
+        }
+        else
+        {
+            if (cible.targetEquipment.equipmentType != EquipmentType.Arm)
+            {
+                Debug.LogWarning($"[InventoryDragDrop] '{_dragSkillData.skillName}' ne peut aller que sur des Arms.");
+                return;
+            }
+        }
+
         int idx = cible.targetSlotIndex;
         List<SkillSlot> slots = cible.targetEquipment.skillSlots;
         if (idx < 0 || idx >= slots.Count) return;
@@ -234,6 +330,12 @@ public class InventoryDragDropController : MonoBehaviour,
 
         if (slot.state == SkillSlot.SlotState.Available)
         {
+            // Si le skill vient d'un slot équipé, le déséquiper d'abord
+            // (même si c'est sur le même équipement, on passe par l'inventaire)
+            if (_originEquipment != null && _originSlotIndex >= 0)
+                run.UnequipSkill(_originEquipment, _originSlotIndex);
+
+            // Puis l'équiper dans le nouveau slot
             run.EquipSkill(cible.targetEquipment, idx, _dragSkillData);
         }
         else if (slot.state == SkillSlot.SlotState.Used)
@@ -244,7 +346,7 @@ public class InventoryDragDropController : MonoBehaviour,
         }
         else
         {
-            Debug.LogWarning($"[InventoryDragDrop] Slot {idx} inaccessible (etat : {slot.state}).");
+            Debug.LogWarning($"[InventoryDragDrop] Slot {idx} inaccessible (état : {slot.state}).");
         }
     }
 
@@ -252,7 +354,15 @@ public class InventoryDragDropController : MonoBehaviour,
     {
         if (_dragType != DragItemType.Equipment || _dragEquipmentData == null) return;
 
-        // Si l'équipement vient d'un slot équipé
+        // Vérifier la compatibilité type/slot AVANT de modifier quoi que ce soit
+        if (!RunManager.IsSlotCompatible(cible.targetEquipmentSlot, _dragEquipmentData.equipmentType))
+        {
+            Debug.LogWarning($"[InventoryDragDrop] Type incompatible : {_dragEquipmentData.equipmentType}" +
+                             $" ne peut pas aller dans {cible.targetEquipmentSlot}.");
+            return;  // Annuler complètement — le slot d'origine n'est pas touché
+        }
+
+        // Maintenant qu'on sait que c'est compatible, on peut toucher à l'état
         if (_originEquipmentSlot.HasValue)
         {
             // Drop sur le même slot → rien à faire
@@ -283,17 +393,25 @@ public class InventoryDragDropController : MonoBehaviour,
 
         if (_dragType == DragItemType.Skill && _dragSkillData != null)
         {
+            // Skill : si équipé, le déséquiper d'abord (retire les tags hérités, etc.)
             if (_originEquipment != null && _originSlotIndex >= 0)
                 run.UnequipSkill(_originEquipment, _originSlotIndex);
-            else
-                run.RemoveSkillFromInventory(_dragSkillData);
 
-            Debug.Log($"[InventoryDragDrop] Skill '{_dragSkillData.skillName}' supprime.");
+            // Puis le supprimer complètement de l'inventaire
+            run.RemoveSkillFromInventory(_dragSkillData);
+            Debug.Log($"[InventoryDragDrop] Skill '{_dragSkillData.skillName}' supprimé.");
         }
         else if (_dragType == DragItemType.Equipment && _dragEquipmentData != null)
         {
-            run.RemoveEquipmentFromInventory(_dragEquipmentData);
-            Debug.Log($"[InventoryDragDrop] Equipement '{_dragEquipmentData.equipmentName}' supprime.");
+            // Équipement : si équipé, libérer le slot et rapatrier les skills en inventaire
+            if (_originEquipmentSlot.HasValue)
+                run.UnequipEquipmentAndMoveSkillsToInventory(_originEquipmentSlot.Value);
+
+            // Puis le supprimer de l'inventaire
+            if (!run.RemoveEquipmentFromInventory(_dragEquipmentData))
+                Debug.LogWarning($"[InventoryDragDrop] '{_dragEquipmentData.equipmentName}' pas en inventaire (peut-être équipé ?).");
+
+            Debug.Log($"[InventoryDragDrop] Équipement '{_dragEquipmentData.equipmentName}' supprimé.");
         }
 
         if (InventoryUIManager.Instance != null)
@@ -330,34 +448,4 @@ public class InventoryDragDropController : MonoBehaviour,
         if (_floatingIcon != null)
             _floatingIcon.gameObject.SetActive(false);
     }
-}
-
-// -----------------------------------------------
-// ZONE DE DÉPÔT
-// -----------------------------------------------
-
-/// <summary>
-/// Marqueur léger attaché aux zones de dépôt de l'inventaire.
-/// Identifie le type de zone et les données associées (slot, équipement cible...).
-/// Ajouté par InventoryUIManager lors de la construction de la hiérarchie UI.
-/// </summary>
-public class InventoryDropZone : MonoBehaviour
-{
-    public enum ZoneType
-    {
-        SkillSlot,              // Slot d'un équipement — reçoit un skill
-        EquipmentSlot,          // Slot du joueur — reçoit un équipement
-        Poubelle,               // Zone de suppression (confirmation requise)
-        InventaireSkills,       // Zone inventaire skills — déséquipe → retour inventaire
-        InventaireEquipements,  // Zone inventaire équipements
-    }
-
-    public ZoneType zoneType;
-
-    // Rempli si zoneType == SkillSlot
-    public EquipmentData targetEquipment;
-    public int           targetSlotIndex = -1;
-
-    // Rempli si zoneType == EquipmentSlot
-    public EquipmentSlot targetEquipmentSlot;
 }

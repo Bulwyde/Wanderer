@@ -83,5 +83,7 @@ public enum EquipmentSlot
     Torso,  // Torse
     Legs,   // Jambes
     Arm1,   // Bras gauche
-    Arm2    // Bras droit
+    Arm2,   // Bras droit
+    Arm3,   // Bras 3
+    Arm4    // Bras 4
 }

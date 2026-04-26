@@ -78,6 +78,9 @@ public class CharacterData : ScriptableObject
     public EquipmentData startingLegs;
     public EquipmentData startingArm1;
     public EquipmentData startingArm2;
+    // Arm3 et Arm4 ignorés si maxEquippedArms < 3 ou < 4 respectivement
+    public EquipmentData startingArm3;
+    public EquipmentData startingArm4;
 
     [Header("Consommables de départ")]
     // Consommables donnés au joueur au début de chaque run avec ce personnage.

@@ -27,11 +27,21 @@ public class MapCameraController : MonoBehaviour
     private bool   isDragging      = false;
     private Vector2 lastMousePosition;
 
+    // Activation des inputs — désactivé quand l'inventaire est ouvert
+    private bool _inputEnabled = true;
+
+    public void SetInputEnabled(bool enabled)
+    {
+        _inputEnabled = enabled;
+    }
+
     // Échelle actuelle du conteneur
     public float CurrentZoom { get; private set; } = 1.0f;
 
     void Update()
     {
+        if (!_inputEnabled) return;
+
         HandleZoom();
         HandleDrag();
     }

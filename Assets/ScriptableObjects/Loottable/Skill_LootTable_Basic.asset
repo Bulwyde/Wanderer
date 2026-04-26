@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c4a07cea6b51fe147919fd638c808632, type: 3}
+  m_Name: Skill_LootTable_Basic
+  m_EditorClassIdentifier: Assembly-CSharp::SkillLootTable
+  skills:
+  - {fileID: 11400000, guid: 18dbf0fbd3d56da4cb736fe301e2f88c, type: 2}
+  - {fileID: 11400000, guid: 66575d25b8d9dce44b516322c5dfdae9, type: 2}
+  - {fileID: 11400000, guid: 9de6836a04603bf499a97c1a54e2453e, type: 2}
+  - {fileID: 11400000, guid: f77538bbcb40ec5428470b863f721111, type: 2}
+  - {fileID: 11400000, guid: de765b1ff576ac44489754d49a75f148, type: 2}
+  - {fileID: 11400000, guid: b0a6ad06ea7b97a469da7ed7a353be5e, type: 2}
+  - {fileID: 11400000, guid: 78e77d56eedde5543a2432d1098947b4, type: 2}
+  - {fileID: 11400000, guid: 8a838b7f076feea4a98507067eb21226, type: 2}
+  - {fileID: 11400000, guid: 9c9666361562e55498dc31655fa61747, type: 2}
+  - {fileID: 11400000, guid: 11f05c6619663f2438210d9349320125, type: 2}
+  - {fileID: 11400000, guid: 75bfa1dbea09fc0428f19808f0b4ca87, type: 2}
+  - {fileID: 11400000, guid: a7036231f1e2a0d4a9b1d335a6766655, type: 2}
+  - {fileID: 11400000, guid: 0e07e9cc610635c48a6438503244746f, type: 2}

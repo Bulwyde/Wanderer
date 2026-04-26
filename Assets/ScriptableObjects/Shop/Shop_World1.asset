@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Shop_World1
   m_EditorClassIdentifier: Assembly-CSharp::ShopData
   equipmentLootTable: {fileID: 11400000, guid: 303aefd091e676f45a030aa28e3a8418, type: 2}
-  equipmentCount: 6
+  equipmentCount: 2
   equipmentPriceRange: {x: 50, y: 150}
   moduleLootTable: {fileID: 11400000, guid: aaeb4f2ba6abd3b4d87c6981f4d93660, type: 2}
   moduleCount: 3
@@ -21,3 +21,6 @@ MonoBehaviour:
   consumableLootTable: {fileID: 11400000, guid: b2b48e17bcd141f40a3bedbbe9b6c154, type: 2}
   consumableCount: 3
   consumablePriceRange: {x: 20, y: 60}
+  skillLootTable: {fileID: 11400000, guid: 8fa9222b3bd66d549af3579d919b8720, type: 2}
+  skillCount: 6
+  skillPriceRange: {x: 30, y: 80}

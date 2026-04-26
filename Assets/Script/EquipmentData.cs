@@ -23,7 +23,7 @@ public class EquipmentData : ScriptableObject
     // Décrit la nature de la pièce (tête, torse, bras...).
     // Pour les bras, le choix du slot gauche/droit se fait au moment de l'équipement —
     // la pièce elle-même n'a pas de main assignée.
-    public EquipmentType equipmentType;
+    public EquipmentType equipmentType = EquipmentType.Arm;
 
     [Header("Niveau")]
     // Niveau actuel de l'équipement — influence les stats et compétences disponibles

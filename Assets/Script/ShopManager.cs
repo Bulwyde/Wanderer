@@ -56,8 +56,18 @@ public class ShopManager : MonoBehaviour
     public Transform consommableShopContainer;
     public Transform skillShopContainer;
 
-    // Espacement vertical entre les items dans chaque colonne d'équipement
-    public float equipementColonneSpacing = 4f;
+    [Header("UI — Disposition des articles")]
+    // Nombre d'articles par ligne avant de passer à la ligne suivante
+    public int equipmentParLigne    = 3;
+    public int moduleParLigne       = 3;
+    public int consommableParLigne  = 3;
+    public int skillParLigne        = 3;
+
+    // Espacement entre les articles dans une même rangée
+    public float equipmentSpacingColumns   = 4f;
+    public float moduleSpacingColumns      = 4f;
+    public float consommableSpacingColumns = 4f;
+    public float skillSpacingColumns       = 4f;
 
     // -----------------------------------------------
     // RÉFÉRENCES UI — CONSOMMABLES DU JOUEUR
@@ -206,54 +216,89 @@ public class ShopManager : MonoBehaviour
         GenererArticlesSkills();
     }
 
+    /// <summary>
+    /// Configure (ou ajoute) le VerticalLayoutGroup + ContentSizeFitter du container
+    /// pour que les rangées s'ancrent en haut et s'empilent vers le bas.
+    /// Sans ça, le childAlignment par défaut (MiddleCenter) recentre tout le contenu
+    /// à chaque ajout de rangée, décalant la première ligne vers le haut.
+    /// Le spacing entre rangées est intentionnellement laissé à la valeur de l'Inspector.
+    /// </summary>
+    private void ConfigurerContainerVertical(Transform container)
+    {
+        if (container == null) return;
+
+        // Pivot à (0.5, 1) : le container grandit vers le bas uniquement.
+        // Avec le pivot par défaut (0.5, 0.5), ContentSizeFitter agrandit dans les deux sens
+        // et remonte la première rangée quand le spacing ou le nombre de lignes augmente.
+        RectTransform rt = container.GetComponent<RectTransform>();
+        if (rt != null) rt.pivot = new Vector2(0.5f, 1f);
+
+        VerticalLayoutGroup vlg = container.GetComponent<VerticalLayoutGroup>();
+        if (vlg == null) vlg = container.gameObject.AddComponent<VerticalLayoutGroup>();
+
+        vlg.childAlignment         = TextAnchor.UpperCenter;
+        vlg.childControlWidth      = false;
+        vlg.childControlHeight     = false;
+        vlg.childForceExpandWidth  = false;
+        vlg.childForceExpandHeight = false;
+        // spacing : géré dans l'Inspector, on ne l'écrase pas
+
+        ContentSizeFitter csf = container.GetComponent<ContentSizeFitter>();
+        if (csf == null) csf = container.gameObject.AddComponent<ContentSizeFitter>();
+        csf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+    }
+
+    /// <summary>
+    /// Crée une nouvelle rangée horizontale enfant du container donné.
+    /// </summary>
+    private Transform CreerRangee(Transform container, float spacing)
+    {
+        GameObject rangeeGO = new GameObject("Rangee");
+        rangeeGO.transform.SetParent(container, false);
+
+        RectTransform rt = rangeeGO.AddComponent<RectTransform>();
+        rt.sizeDelta = Vector2.zero;
+
+        HorizontalLayoutGroup hlg = rangeeGO.AddComponent<HorizontalLayoutGroup>();
+        hlg.childControlWidth      = false;
+        hlg.childControlHeight     = false;
+        hlg.childForceExpandWidth  = false;
+        hlg.childForceExpandHeight = false;
+        hlg.spacing = spacing;
+
+        ContentSizeFitter csf = rangeeGO.AddComponent<ContentSizeFitter>();
+        csf.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+        csf.verticalFit   = ContentSizeFitter.FitMode.PreferredSize;
+
+        return rangeeGO.transform;
+    }
+
     private void GenererArticlesEquipement()
     {
         if (equipementContainer == null || shopItemPrefab == null) return;
         ViderContainer(equipementContainer);
+        ConfigurerContainerVertical(equipementContainer);
         _boutonsEquipement.Clear();
 
-        // Les équipements s'affichent en colonnes de MAX_PAR_COLONNE items.
-        // EquipementContainer doit avoir un HorizontalLayoutGroup.
-        // Chaque colonne est un GO enfant avec un VerticalLayoutGroup.
-        const int MAX_PAR_COLONNE = 3;
-        Transform colonneActuelle = null;
-        int indexDansColonne = 0;
+        int maxParLigne      = Mathf.Max(1, equipmentParLigne);
+        Transform rangeeActuelle = null;
+        int indexDansRangee  = 0;
 
         foreach (ShopItemEquipment item in shopState.equipements)
         {
             if (item?.data == null) continue;
 
-            // Nouvelle colonne si première itération ou colonne pleine
-            if (colonneActuelle == null || indexDansColonne >= MAX_PAR_COLONNE)
+            if (rangeeActuelle == null || indexDansRangee >= maxParLigne)
             {
-                GameObject colGO = new GameObject("ColonneEquipement");
-                colGO.transform.SetParent(equipementContainer, false);
-
-                RectTransform rt = colGO.AddComponent<RectTransform>();
-                rt.sizeDelta = Vector2.zero;
-
-                VerticalLayoutGroup vlg = colGO.AddComponent<VerticalLayoutGroup>();
-                vlg.childControlWidth      = false; // le prefab a une largeur fixe
-                vlg.childControlHeight     = false;
-                vlg.childForceExpandWidth  = false;
-                vlg.childForceExpandHeight = false;
-                vlg.spacing = equipementColonneSpacing;
-
-                // Seul le fit vertical est nécessaire : la hauteur de la colonne
-                // s'adapte au nombre d'items. La largeur est fixée par le prefab.
-                ContentSizeFitter csf = colGO.AddComponent<ContentSizeFitter>();
-                csf.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
-                csf.verticalFit   = ContentSizeFitter.FitMode.PreferredSize;
-
-                colonneActuelle  = colGO.transform;
-                indexDansColonne = 0;
+                rangeeActuelle  = CreerRangee(equipementContainer, equipmentSpacingColumns);
+                indexDansRangee = 0;
             }
 
             ShopItemEquipment itemRef = item;
             bool achetable = !item.achete && RunManager.Instance.HasEnoughCredits(item.prix);
             string label   = item.achete ? "Acheté" : null;
 
-            GameObject go = Instantiate(shopItemPrefab, colonneActuelle);
+            GameObject go = Instantiate(shopItemPrefab, rangeeActuelle);
             ShopItemButton btn = go.GetComponent<ShopItemButton>();
             if (btn == null) continue;
 
@@ -261,7 +306,7 @@ public class ShopManager : MonoBehaviour
                 () => AcheterEquipement(itemRef), label);
 
             _boutonsEquipement.Add((btn, item));
-            indexDansColonne++;
+            indexDansRangee++;
         }
     }
 
@@ -269,24 +314,32 @@ public class ShopManager : MonoBehaviour
     {
         if (moduleContainer == null || shopItemPrefab == null) return;
         ViderContainer(moduleContainer);
+        ConfigurerContainerVertical(moduleContainer);
         _boutonsModules.Clear();
+
+        int maxParLigne      = Mathf.Max(1, moduleParLigne);
+        Transform rangeeActuelle = null;
+        int indexDansRangee  = 0;
 
         foreach (ShopItemModule item in shopState.modules)
         {
             if (item?.data == null) continue;
+
+            if (rangeeActuelle == null || indexDansRangee >= maxParLigne)
+            {
+                rangeeActuelle  = CreerRangee(moduleContainer, moduleSpacingColumns);
+                indexDansRangee = 0;
+            }
+
             ShopItemModule itemRef = item;
+            bool dejaPosse         = RunManager.Instance.HasModule(item.data);
+            bool achetable         = !item.achete && !dejaPosse &&
+                                     RunManager.Instance.HasEnoughCredits(item.prix);
+            string label           = item.achete ? "Acheté"
+                                   : dejaPosse   ? "Déjà possédé"
+                                   : null;
 
-            // Un module déjà possédé ne devrait pas apparaître (filtré à la génération),
-            // mais on double-vérifie ici par sécurité.
-            bool dejaPosse = RunManager.Instance.HasModule(item.data);
-            bool achetable = !item.achete && !dejaPosse &&
-                             RunManager.Instance.HasEnoughCredits(item.prix);
-
-            string label = item.achete    ? "Acheté"
-                         : dejaPosse      ? "Déjà possédé"
-                         : null;
-
-            GameObject go = Instantiate(shopItemPrefab, moduleContainer);
+            GameObject go = Instantiate(shopItemPrefab, rangeeActuelle);
             ShopItemButton btn = go.GetComponent<ShopItemButton>();
             if (btn == null) continue;
 
@@ -294,6 +347,7 @@ public class ShopManager : MonoBehaviour
                 () => AcheterModule(itemRef), label);
 
             _boutonsModules.Add((btn, item));
+            indexDansRangee++;
         }
     }
 
@@ -301,19 +355,29 @@ public class ShopManager : MonoBehaviour
     {
         if (consommableShopContainer == null || shopItemPrefab == null) return;
         ViderContainer(consommableShopContainer);
+        ConfigurerContainerVertical(consommableShopContainer);
         _boutonsConsommables.Clear();
+
+        int maxParLigne      = Mathf.Max(1, consommableParLigne);
+        Transform rangeeActuelle = null;
+        int indexDansRangee  = 0;
 
         foreach (ShopItemConsomable item in shopState.consommables)
         {
             if (item?.data == null) continue;
-            ShopItemConsomable itemRef = item;
 
+            if (rangeeActuelle == null || indexDansRangee >= maxParLigne)
+            {
+                rangeeActuelle  = CreerRangee(consommableShopContainer, consommableSpacingColumns);
+                indexDansRangee = 0;
+            }
+
+            ShopItemConsomable itemRef = item;
             bool achetable = !item.achete &&
                              RunManager.Instance.HasEnoughCredits(item.prix);
+            string label   = item.achete ? "Acheté" : null;
 
-            string label = item.achete ? "Acheté" : null;
-
-            GameObject go = Instantiate(shopItemPrefab, consommableShopContainer);
+            GameObject go = Instantiate(shopItemPrefab, rangeeActuelle);
             ShopItemButton btn = go.GetComponent<ShopItemButton>();
             if (btn == null) continue;
 
@@ -321,6 +385,7 @@ public class ShopManager : MonoBehaviour
                 () => AcheterConsommable(itemRef), label);
 
             _boutonsConsommables.Add((btn, item));
+            indexDansRangee++;
         }
     }
 
@@ -328,19 +393,29 @@ public class ShopManager : MonoBehaviour
     {
         if (skillShopContainer == null || shopItemPrefab == null) return;
         ViderContainer(skillShopContainer);
+        ConfigurerContainerVertical(skillShopContainer);
         _boutonsSkills.Clear();
+
+        int maxParLigne      = Mathf.Max(1, skillParLigne);
+        Transform rangeeActuelle = null;
+        int indexDansRangee  = 0;
 
         foreach (ShopItemSkill item in shopState.skills)
         {
             if (item?.data == null) continue;
-            ShopItemSkill itemRef = item;
 
+            if (rangeeActuelle == null || indexDansRangee >= maxParLigne)
+            {
+                rangeeActuelle  = CreerRangee(skillShopContainer, skillSpacingColumns);
+                indexDansRangee = 0;
+            }
+
+            ShopItemSkill itemRef = item;
             bool achetable = !item.achete &&
                              RunManager.Instance.HasEnoughCredits(item.prix);
+            string label   = item.achete ? "Acheté" : null;
 
-            string label = item.achete ? "Acheté" : null;
-
-            GameObject go = Instantiate(shopItemPrefab, skillShopContainer);
+            GameObject go = Instantiate(shopItemPrefab, rangeeActuelle);
             ShopItemButton btn = go.GetComponent<ShopItemButton>();
             if (btn == null) continue;
 
@@ -348,6 +423,7 @@ public class ShopManager : MonoBehaviour
                 () => AcheterSkill(itemRef), label);
 
             _boutonsSkills.Add((btn, item));
+            indexDansRangee++;
         }
     }
 

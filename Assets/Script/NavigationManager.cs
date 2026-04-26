@@ -50,6 +50,14 @@ public class NavigationManager : MonoBehaviour
     // MODE SÉLECTION DE ZONE (RevealZoneChoice)
     // -----------------------------------------------
 
+    // Activation des inputs — désactivé quand l'inventaire est ouvert
+    private bool _inputEnabled = true;
+
+    public void SetInputEnabled(bool enabled)
+    {
+        _inputEnabled = enabled;
+    }
+
     // Activé quand un effet RevealZoneChoice est en attente du clic du joueur.
     // Les déplacements clavier sont bloqués pendant ce mode.
     private bool modeSelectionZone = false;
@@ -125,6 +133,8 @@ public class NavigationManager : MonoBehaviour
 
     void Update()
     {
+        if (!_inputEnabled) return;
+
         // En mode sélection de zone : bloquer navigation clavier, attendre un clic
         if (modeSelectionZone)
         {

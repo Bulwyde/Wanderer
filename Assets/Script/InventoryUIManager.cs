@@ -107,6 +107,15 @@ public class InventoryUIManager : MonoBehaviour
         if (modalBlocker != null)
             modalBlocker.gameObject.SetActive(true);
 
+        // Désactiver les inputs de navigation pendant que l'inventaire est ouvert
+        MapCameraController cameraCtrl = FindFirstObjectByType<MapCameraController>();
+        if (cameraCtrl != null)
+            cameraCtrl.SetInputEnabled(false);
+
+        NavigationManager navManager = FindFirstObjectByType<NavigationManager>();
+        if (navManager != null)
+            navManager.SetInputEnabled(false);
+
         RefreshUI();
         Debug.Log("[InventoryUIManager] Ouvert.");
     }
@@ -128,6 +137,15 @@ public class InventoryUIManager : MonoBehaviour
         // Cacher le blocker
         if (modalBlocker != null)
             modalBlocker.gameObject.SetActive(false);
+
+        // Réactiver les inputs de navigation
+        MapCameraController cameraCtrl = FindFirstObjectByType<MapCameraController>();
+        if (cameraCtrl != null)
+            cameraCtrl.SetInputEnabled(true);
+
+        NavigationManager navManager = FindFirstObjectByType<NavigationManager>();
+        if (navManager != null)
+            navManager.SetInputEnabled(true);
 
         Debug.Log("[InventoryUIManager] Fermé.");
     }

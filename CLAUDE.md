@@ -51,6 +51,7 @@ Pour les détails complets : voir **INVENTAIRE.md**.
 - `Open()` / `Close()` / `Toggle()` : gestion de l'interface. Raccourci : touche `I`, Escape ferme.
 - `RefreshUI()` : rebuild complet du panneau gauche (équipements portés + skill slots) ET du panneau droit (inventaires).
 - `SetDragDropEnabled(bool)` : désactivé en combat (`InitializeCombat`), réactivé au loot (`ShowLootPanel`).
+- `Open()` / `Close()` appellent `MapCameraController.SetInputEnabled(bool)` et `NavigationManager.SetInputEnabled(bool)` pour bloquer tous les inputs de navigation quand l'inventaire est ouvert.
 - **Panneau gauche** : Legs + Arm1/Arm2 (selon `selectedCharacter.maxEquippedArms`). Chaque équipement affiché avec ses skill slots. Slots `Unavailable` masqués.
 - **Panneau droit** : GridLayout équipements (64×64) + GridLayout skills (48×48).
 
@@ -96,6 +97,7 @@ Pour les détails complets : voir **INVENTAIRE.md**.
 ### Shop / Event
 
 **`ShopManager.cs`** — Résout `ShopData` (`cell.shopData` > `currentMapData.defaultShopData`). `RafraichirArticles()` = destroy+recreate. `MettreAJourDisponibilite()` = in-place (évite flash interactable).
+- Disposition configurable dans l'Inspector : `equipmentParLigne`, `moduleParLigne`, `consommableParLigne`, `skillParLigne` (défaut 3) + spacings correspondants (`equipmentSpacingColumns`, etc.). Les 4 catégories utilisent des rangées horizontales via `CreerRangee()`. Espacement entre rangées géré dans l'Inspector (VLG spacing — non écrasé par le code).
 
 **`EventManager.cs`** — Système d'effets propre (`EventEffect`/`EventEffectType`), indépendant de `EffectData`.
 - `TriggerNavEffect` : `IncrementCounter` → directement via `RunManager.IncrementCounter()` (disponible dans toutes les scènes, pas besoin de NavigationManager). Autres NavEffects : si NavigationManager absent → `RunManager.navEffectsEnAttente` (pas warning + abandon).
@@ -169,7 +171,7 @@ Pour les détails complets : voir **INVENTAIRE.md**.
 - **Events** : tous EventEffectType, pool anti-doublon, offres équipement interactives, consommables utilisables en event.
 - **Shop** : ShopData, persistance par case, deux modes UI (destroy+recreate / in-place). Modules, consommables, crédits.
 - **Divers** : Seeding au StartNewRun, boss (EndRun+MainMenu), icônes par type de case, zoom vers la souris, EnemyPool mixte, tags (TagData, filtrage catégorie dans 9 editors), cooldowns nav (5 types), scaling EffectData catégories A/B/C, MapEditorWindow (section événements pour Event/Ferrailleur/Radar/Coffre).
-- **Inventaire** : inventaire équipements (5 slots) + skills (10 slots), drag'n'drop complet, clonage automatique des équipements, tags hérités, InventoryUIManager DDOL overlay, désactivation drag'n'drop en combat, skills à vendre dans le shop.
+- **Inventaire** : 8 slots équipements + 24 slots skills, drag'n'drop complet avec placement indexé, clonage automatique (loot + départ via `SeedSlotSiVide`), deep copy des skillSlots, tags hérités, validation isNavigationSkill (nav→Legs / combat→Arms), maxEquippedArms pour Arm3/4, modal blocker inputs navigation, InventoryUIManager DDOL overlay, désactivation drag'n'drop en combat, skills à vendre dans le shop.
 
 ### À faire 🔧
 - Scène de sélection de personnage (`MainMenuManager.defaultCharacter` = placeholder)
@@ -275,3 +277,7 @@ Pour les détails complets : voir **INVENTAIRE.md**.
 49. **Slots vides → DropZone détectable** : les slots vides n'ont pas de `DragDropController` mais ont une `InventoryDropZone` → les drops sur slots vides fonctionnent. Le raycast traverse l'`Image` du slot vide jusqu'à la `DropZone`.
 50. **Unequip ≠ suppression** : `UnequipSkill()` renvoie le skill en inventaire. Pour supprimer, appeler `RemoveSkillFromInventory()` après. `ExecuterSuppression()` gère la séquence complète.
 51. **Floating icon taille** : 32×32 pour skills, 64×64 pour équipements. Défini dans `OnBeginDrag()` via `floatingRT.sizeDelta`.
+52. **`EquipmentData` — type par défaut `Arm`** : tout nouvel asset EquipmentData est créé avec `equipmentType = Arm`. Changer si Head/Torso/Legs.
+53. **`CloneEquipmentForLoot` — auto-correction slot state** : si un skill est assigné à un slot mais que son état est `Available`, il est automatiquement passé à `Used` au clonage (log warning). Corriger l'asset source pour éviter le warning.
+54. **`SeedSlotSiVide` — clone obligatoire** : les équipements de départ (`startingArm1`, `startingLegs`, etc.) sont clonés via `CloneEquipmentForLoot()` avant équipement. Si 2 slots pointent le même asset, ils deviennent 2 clones indépendants.
+55. **`MapCameraController` / `NavigationManager` — `SetInputEnabled(bool)`** : appelé par `InventoryUIManager.Open()` / `Close()`. Si une autre feature doit bloquer les inputs navigation, utiliser la même méthode pour cohérence.

@@ -2685,7 +2685,7 @@ MonoBehaviour:
       valeurCible: 0
   - x: 10
     y: 6
-    cellType: 0
+    cellType: 6
     eventCellMode: 0
     eventList: []
     eventPool: {fileID: 0}
@@ -13013,8 +13013,9 @@ MonoBehaviour:
   normalEnemyPool: {fileID: 11400000, guid: a7d330d756befed408314ec8b05e7826, type: 2}
   eliteEnemyPool: {fileID: 11400000, guid: 19b250d3bbe2ca24b8d4ed44270f3fd6, type: 2}
   bossEnemyPool: {fileID: 11400000, guid: c5f02f9e1de474749b3a86b6ed571364, type: 2}
-  defaultCombatLootTable: {fileID: 0}
+  defaultCombatLootTable: {fileID: 11400000, guid: 303aefd091e676f45a030aa28e3a8418, type: 2}
   defaultLootOfferCount: 2
+  defaultCombatSkillLootTable: {fileID: 11400000, guid: 8fa9222b3bd66d549af3579d919b8720, type: 2}
   aleatoirePool: {fileID: 11400000, guid: 5c1a480f1dd421b4883904e6a7ef9a81, type: 2}
   maximumsParType:
   - type: 2

@@ -183,6 +183,15 @@ public class RunManager : MonoBehaviour
                 state         = slot.state,
                 equippedSkill = slot.equippedSkill  // L'asset SkillData lui-même n'est pas cloné (immutable)
             };
+
+            // Sécurité : si un skill est assigné mais le slot est Available, le passer à Used
+            // (c'est un oubli probable du designer)
+            if (newSlot.equippedSkill != null && newSlot.state == SkillSlot.SlotState.Available)
+            {
+                Debug.LogWarning($"[RunManager] Correction auto: slot avec skill '{newSlot.equippedSkill.skillName}' passé à Used.");
+                newSlot.state = SkillSlot.SlotState.Used;
+            }
+
             clone.skillSlots.Add(newSlot);
         }
 

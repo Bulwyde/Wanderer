@@ -20,6 +20,13 @@ public class EquipmentDataEditor : Editor
             enterChildren = false;
             if (iterator.propertyPath == "m_Script") continue;
             if (iterator.propertyPath == "tags")     continue;
+
+            if (iterator.propertyPath == "passiveEffects")
+                EditorGUILayout.HelpBox("ZONE 1 - Passifs globaux : effets declenches par des evenements de combat (trigger). Independants du skill source.", MessageType.None);
+
+            if (iterator.propertyPath == "skillModifiers")
+                EditorGUILayout.HelpBox("ZONE 2 - Modificateurs de skill : s'appliquent aux skills equipes sur CET objet a l'execution. conditionTag pour filtrer par tag.", MessageType.None);
+
             EditorGUILayout.PropertyField(iterator, true);
         }
 

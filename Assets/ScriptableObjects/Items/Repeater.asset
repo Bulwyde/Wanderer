@@ -15,8 +15,8 @@ MonoBehaviour:
   equipmentID: repeater
   equipmentName: Repeater
   icon: {fileID: -1731964075387253349, guid: 4d90db7f47befc7439548adfce096646, type: 3}
-  description: "R\xE9duit les d\xE9g\xE2ts de vos comp\xE9tences \"Damage\" de 50%.
-    Mais elles frappent 2 fois"
+  description: "R\xE9duit les d\xE9g\xE2ts de base vos comp\xE9tences \"Damage\"
+    de 50%. Mais elles frappent 2 fois"
   keywords: []
   equipmentType: 3
   level: 1

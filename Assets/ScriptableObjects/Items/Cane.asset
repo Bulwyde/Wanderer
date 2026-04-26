@@ -15,7 +15,7 @@ MonoBehaviour:
   equipmentID: cane
   equipmentName: Cane
   icon: {fileID: -7958758083988527375, guid: f685c4705fc652743842154a715a2d14, type: 3}
-  description: "Vous appliquez un stack suppl\xE9mentaire de status."
+  description: "Les comp\xE9tences \xE9quip\xE9es appliquent un stack de status suppl\xE9mentaire."
   keywords: []
   equipmentType: 3
   level: 1

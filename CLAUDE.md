@@ -116,7 +116,7 @@ Pour les détails complets : voir **INVENTAIRE.md**.
 | `SkillData` | Skills combat + nav (`isNavigationSkill`, `navEffects`, `navCooldownType/Count/Tag`, `skillID`) | `skillID` vide = cooldown ignoré silencieusement |
 | `EffectData` | Effet universel — A (conditionTag), B (DonnerItems filtrés par tag), C (scalingSource/comptageTag) | Tout nouveau champ → aussi dans `EffectDataEditor.cs` sinon invisible |
 | `StatusData` | Statut (behavior, perTurnAction, decayPerTurn, decayTiming, maxStacks) | |
-| `EquipmentData` | Slot, bonus stats, `skillSlots (List<SkillSlot>)`, passiveEffects | `isUnique` remplacé par tag `Tag_Unique` |
+| `EquipmentData` | Slot, bonus stats, skillSlots (List<SkillSlot>), passiveEffects (Zone 1), skillModifiers (Zone 2) | isUnique remplace par Tag_Unique |
 | `ModuleData` | moduleID, `List<EffectData> effects` (chaque effet porte son propre trigger) | |
 | `ConsumableData` | effects, `usableInCombat/OnMap/InEvents` (false par défaut) | |
 | `EventData` | eventID, title, choices avec `List<EventEffect>` | |
@@ -160,12 +160,20 @@ Pour les détails complets : voir **INVENTAIRE.md**.
 
 **Cooldowns nav :** `NavCooldownType` : `None | ShopDecouvert | CombatsTermines | EventsTermines | MondeTermine | CombatEnnemisAvecTag`. Points de tick : `CombatManager.EndCombat` (→ `TickCooldownsAvecTag`) · `OnLootContinueClicked` (→ `TickCooldownsDe(CombatsTermines/MondeTermine)` + `combatsTermines++`) · `EventManager.OnContinueClicked` (→ `TickCooldownsDe(EventsTermines)` + `eventsTermines++`) · `NavigationManager.OnRoomEntered Shop` si première visite. ⚠️ `skillID` vide = ignoré silencieusement.
 
+**Systeme SkillModifier (Zone 2 des equipements) :**
+- Zone 1 `passiveEffects` : `EffectData` declenchees par des evenements globaux (trigger). Comportement inchange.
+- Zone 2 `skillModifiers` : `List<SkillModifier>` embarquee dans `EquipmentData` (class `[Serializable]`, pas un SO). Modifie le comportement des skills equipes sur CET equipement au moment de l'execution.
+- Types disponibles : `ForceAoE`, `BaseDamageMultiplier`, `DamageMultiplier`, `CritChanceBonus`, `RepeatExecution`, `EnergyCostModifier`, `BonusStatusStacks`.
+- `conditionTag` sur chaque SkillModifier : filtre par `skill.tags` (comparaison `tagName`). Null = s'applique a tous les skills de l'equipement.
+- Pipeline : `UseSkill` appelle `ObtenirEquipementDuSkill` → `ObtenirContexteExecution` → `ExecuterEffetsSkill` (1 + repetitions fois). Le contexte (`ContexteExecutionSkill`) est passe jusqu'a `AppliquerDegatsEnnemi`.
+- `TriggerSkillUsed` se declenche une seule fois apres toutes les repetitions (les modules ne se declenchent pas N fois).
+
 ---
 
 ## État du développement
 
 ### Fonctionnel ✅
-- **Combat** : tours, énergie, armure StS, cooldowns, statuts (decay, stacks, perTurn), crits, regen, lifesteal, IA circulaire. Multi-ennemis (1–4) : ciblage flèche, tour séquentiel, mort fade CanvasGroup, spawnEffects/deathEffects, stats symétrique joueur, icônes statuts par ennemi.
+- **Combat** : tours, énergie, armure StS, cooldowns, statuts (decay, stacks, perTurn), crits, regen, lifesteal, IA circulaire. Multi-ennemis (1–4) : ciblage flèche, tour séquentiel, mort fade CanvasGroup, spawnEffects/deathEffects, stats symétrique joueur, icônes statuts par ennemi. SkillModifier Zone 2 (ForceAoE, BaseDamageMultiplier, DamageMultiplier, CritChanceBonus, RepeatExecution, EnergyCostModifier, BonusStatusStacks).
 - **Navigation** : brouillard de guerre, clavier, sauvegarde position, NavEffects complets, BloqueurLD conditionnel, cases Aléatoires (CellAleaPool, maxOccurrences, Fisher-Yates), maximums par type, GetEffectiveCellType source de vérité, postVisitTypes automatiques. OnRoomEntered couvre tous les types (PointInteret/Teleporteur→specificEvent/defaultTeleportEvent, Radar/Coffre/Ferrailleur→ChoisirEventAleatoire, FerailleurUtilise/TeleporteurUtilise→log). NavEffects différés (navEffectsEnAttente).
 - **Équipement** : stats effectives, skills, passifs, loot post-combat, EquipmentOfferController partagé 3 scènes.
 - **Events** : tous EventEffectType, pool anti-doublon, offres équipement interactives, consommables utilisables en event.
@@ -281,3 +289,5 @@ Pour les détails complets : voir **INVENTAIRE.md**.
 53. **`CloneEquipmentForLoot` — auto-correction slot state** : si un skill est assigné à un slot mais que son état est `Available`, il est automatiquement passé à `Used` au clonage (log warning). Corriger l'asset source pour éviter le warning.
 54. **`SeedSlotSiVide` — clone obligatoire** : les équipements de départ (`startingArm1`, `startingLegs`, etc.) sont clonés via `CloneEquipmentForLoot()` avant équipement. Si 2 slots pointent le même asset, ils deviennent 2 clones indépendants.
 55. **`MapCameraController` / `NavigationManager` — `SetInputEnabled(bool)`** : appelé par `InventoryUIManager.Open()` / `Close()`. Si une autre feature doit bloquer les inputs navigation, utiliser la même méthode pour cohérence.
+56. **`SkillModifier.conditionTag`** : compare `skill.tags` par `tagName`, pas par reference objet. N'inclut pas `inheritedTags` — seulement les tags propres du skill.
+57. **`RepeatExecution + combatEnded`** : la boucle de repetition est gardee par `&& !combatEnded`. Ne pas retirer cette garde — si le premier cast tue tous les ennemis, le deuxieme cast ne doit pas s'executer.

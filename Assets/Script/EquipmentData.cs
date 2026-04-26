@@ -40,9 +40,21 @@ public class EquipmentData : ScriptableObject
     [Range(0f, 1f)] public float bonusLifeSteal;
 
     [Header("Effets passifs")]
+    [Tooltip("ZONE 1 - Passifs globaux.\n" +
+             "Effets declenches par des evenements de combat (trigger sur chaque EffectData).\n" +
+             "Independants du skill source : ils reagissent a l'evenement global.")]
     // Effets toujours actifs tant que l'équipement est porté
     // Maximum 3 effets passifs (tous emplacements)
     public List<EffectData> passiveEffects;
+
+    [Header("Modificateurs de skill (Zone 2)")]
+    [Tooltip("ZONE 2 - Modificateurs de skill.\n" +
+             "Modifient le comportement des skills equipes sur CET objet a l'execution.\n" +
+             "conditionTag vide = s'applique a tous les skills de l'objet.\n" +
+             "conditionTag = Tag_X = seulement les skills ayant ce tag.\n" +
+             "Types : ForceAoE, BaseDamageMultiplier, DamageMultiplier,\n" +
+             "CritChanceBonus, RepeatExecution, EnergyCostModifier, BonusStatusStacks.")]
+    public List<SkillModifier> skillModifiers = new List<SkillModifier>();
 
     [Header("Compétences actives")]
     // Emplacements configurables pour équiper des skills (états : Available / Used / Unavailable / LockedInUse).

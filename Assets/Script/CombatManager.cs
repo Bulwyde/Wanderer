@@ -152,8 +152,33 @@ public class CombatManager : MonoBehaviour
     // Canvas racine — mis en cache pour la conversion pixels écran → unités canvas (flèche ciblage)
     private Canvas _rootCanvas;
 
+    // Contexte d'execution du skill en attente (mode selection de cible)
+    private struct ContexteExecutionSkill
+    {
+        public float         multiplicateurDegatsBase;   // applique a skill.value avant CalculerDegatsJoueur
+        public float         multiplicateurDegatsFinal;  // delta applique aux degats finaux
+        public float         bonusCrit;                  // ajout flat a la crit chance
+        public EffectTarget? overrideTarget;             // si non-null, force ce target sur les DealDamage
+        public int           repetitions;                // nb total d'executions (1 = pas de repetition)
+        public int           bonusStacksStatut;          // stacks supplementaires sur tout ApplyStatus
+        public int           coutEnergieSupplementaire;  // s'ajoute a skill.energyCost
+
+        public static ContexteExecutionSkill Default => new ContexteExecutionSkill
+        {
+            multiplicateurDegatsBase  = 0f,
+            multiplicateurDegatsFinal = 0f,
+            bonusCrit                 = 0f,
+            overrideTarget            = null,
+            repetitions               = 1,
+            bonusStacksStatut         = 0,
+            coutEnergieSupplementaire = 0,
+        };
+    }
+
     // Compétence en attente d'une cible (mode sélection de cible)
     private SkillData   pendingSkill;
+    private ContexteExecutionSkill _pendingCtx;
+    private int         _pendingCoutEffectif;
     private bool        isSelectingTarget;
 
     // Vrai si EndCombat a déjà été appelé ce combat (protection multi-appel)
@@ -701,6 +726,108 @@ public class CombatManager : MonoBehaviour
     // ACTIONS DU JOUEUR
     // -----------------------------------------------
 
+    /// <summary>
+    /// Retourne l'EquipmentData portant ce skill dans ses skillSlots (etat Used ou LockedInUse).
+    /// Retourne null si introuvable ou RunManager indisponible.
+    /// </summary>
+    private EquipmentData ObtenirEquipementDuSkill(SkillData skill)
+    {
+        if (skill == null || RunManager.Instance == null) return null;
+
+        foreach (EquipmentSlot slot in System.Enum.GetValues(typeof(EquipmentSlot)))
+        {
+            EquipmentData equip = RunManager.Instance.GetEquipped(slot);
+            if (equip == null || equip.skillSlots == null) continue;
+
+            foreach (SkillSlot skillSlot in equip.skillSlots)
+            {
+                if (skillSlot == null) continue;
+                if (skillSlot.state != SkillSlot.SlotState.Used &&
+                    skillSlot.state != SkillSlot.SlotState.LockedInUse) continue;
+                if (skillSlot.equippedSkill == skill)
+                    return equip;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Construit le ContexteExecutionSkill depuis les skillModifiers de l'equipement source.
+    /// Retourne Default si equip est null ou sans modificateurs.
+    /// </summary>
+    private ContexteExecutionSkill ObtenirContexteExecution(SkillData skill, EquipmentData equip)
+    {
+        ContexteExecutionSkill ctx = ContexteExecutionSkill.Default;
+
+        if (equip == null || equip.skillModifiers == null || equip.skillModifiers.Count == 0)
+            return ctx;
+
+        foreach (SkillModifier m in equip.skillModifiers)
+        {
+            if (m == null) continue;
+
+            // Verifie la condition tag si elle existe
+            if (m.conditionTag != null)
+            {
+                bool hasTag = false;
+                if (skill != null && skill.tags != null)
+                {
+                    foreach (TagData tag in skill.tags)
+                    {
+                        if (tag != null && tag.tagName == m.conditionTag.tagName)
+                        {
+                            hasTag = true;
+                            break;
+                        }
+                    }
+                }
+                if (!hasTag) continue;
+            }
+
+            // Applique selon le type
+            switch (m.type)
+            {
+                case SkillModifierType.BaseDamageMultiplier:
+                    ctx.multiplicateurDegatsBase += m.value;
+                    break;
+                case SkillModifierType.DamageMultiplier:
+                    ctx.multiplicateurDegatsFinal += m.value;
+                    break;
+                case SkillModifierType.CritChanceBonus:
+                    ctx.bonusCrit += m.value;
+                    break;
+                case SkillModifierType.ForceAoE:
+                    ctx.overrideTarget = EffectTarget.AllEnemies;
+                    break;
+                case SkillModifierType.RepeatExecution:
+                    ctx.repetitions += Mathf.RoundToInt(m.value);
+                    break;
+                case SkillModifierType.EnergyCostModifier:
+                    ctx.coutEnergieSupplementaire += Mathf.RoundToInt(m.value);
+                    break;
+                case SkillModifierType.BonusStatusStacks:
+                    ctx.bonusStacksStatut += Mathf.RoundToInt(m.value);
+                    break;
+            }
+        }
+
+        ctx.repetitions = Mathf.Max(1, ctx.repetitions);
+        return ctx;
+    }
+
+    /// <summary>
+    /// Execute tous les effets du skill avec le contexte donne.
+    /// explicitTarget : ennemi selectionne manuellement, null pour resolution automatique.
+    /// </summary>
+    private void ExecuterEffetsSkill(SkillData skill, EnemyInstance explicitTarget,
+                                      ContexteExecutionSkill ctx)
+    {
+        if (skill?.effects == null) return;
+        foreach (EffectData eff in skill.effects)
+            if (eff != null) ApplyEffect(eff, skill.skillName, explicitTarget, skill, ctx);
+    }
+
     private void OnEndTurn()
     {
         if (battleState != BattleState.PlayerTurn) return;
@@ -725,18 +852,24 @@ public class CombatManager : MonoBehaviour
             return;
         }
 
-        if (currentEnergy < skill.energyCost)
+        // Obtient l'equipement et construit le contexte d'execution
+        EquipmentData equipSource    = ObtenirEquipementDuSkill(skill);
+        ContexteExecutionSkill ctx   = ObtenirContexteExecution(skill, equipSource);
+        int coutEffectif             = skill.energyCost + ctx.coutEnergieSupplementaire;
+
+        if (currentEnergy < coutEffectif)
         {
-            Log($"Pas assez d'énergie pour {skill.skillName} (coût : {skill.energyCost}).");
+            Log($"Pas assez d'énergie pour {skill.skillName} (coût : {coutEffectif}).");
             return;
         }
 
         // Si le skill nécessite un ciblage explicite et qu'il y a plusieurs ennemis vivants
-        if (RequiertCiblage(skill))
+        if (!ctx.overrideTarget.HasValue && RequiertCiblage(skill))
         {
-            pendingSkill = skill;
-            // On déduit l'énergie et le cooldown maintenant (avant la sélection)
-            currentEnergy -= skill.energyCost;
+            _pendingCtx          = ctx;
+            _pendingCoutEffectif = coutEffectif;
+            pendingSkill         = skill;
+            currentEnergy       -= coutEffectif;
             if (skill.cooldown > 0) skillCooldowns[skill] = skill.cooldown;
             UpdateSkillButtons();
             UpdatePlayerUI();
@@ -744,15 +877,13 @@ public class CombatManager : MonoBehaviour
             return;
         }
 
-        // Exécution directe (AllEnemies, RandomEnemy, Self, ou seul ennemi vivant)
-        currentEnergy -= skill.energyCost;
+        // Execution directe (AllEnemies, RandomEnemy, Self, ou seul ennemi vivant)
+        currentEnergy -= coutEffectif;
         if (skill.cooldown > 0) skillCooldowns[skill] = skill.cooldown;
 
-        if (skill.effects != null && skill.effects.Count > 0)
-            foreach (EffectData eff in skill.effects)
-                if (eff != null) ApplyEffect(eff, skill.skillName, null, skill);
-        else
-            Log($"{GetPlayerName()} utilise {skill.skillName} — (aucun effet défini)");
+        ExecuterEffetsSkill(skill, null, ctx);
+        for (int i = 1; i < ctx.repetitions && !combatEnded; i++)
+            ExecuterEffetsSkill(skill, null, ctx);
 
         GameEvents.TriggerSkillUsed(skill);
         UpdatePlayerUI();
@@ -823,7 +954,7 @@ public class CombatManager : MonoBehaviour
         // Rembourse l'énergie et remet le cooldown à 0
         if (pendingSkill != null)
         {
-            currentEnergy += pendingSkill.energyCost;
+            currentEnergy += _pendingCoutEffectif;
             skillCooldowns[pendingSkill] = 0;
             pendingSkill = null;
         }
@@ -859,13 +990,16 @@ public class CombatManager : MonoBehaviour
 
         if (turnText != null) turnText.text = "Tour du joueur";
 
+        ContexteExecutionSkill ctx = _pendingCtx;
         SkillData skill = pendingSkill;
         pendingSkill = null;
 
-        if (skill != null && skill.effects != null)
+        ExecuterEffetsSkill(skill, cible, ctx);
+        for (int i = 1; i < ctx.repetitions && !combatEnded; i++)
         {
-            foreach (EffectData eff in skill.effects)
-                if (eff != null) ApplyEffect(eff, skill.skillName, cible, skill);
+            // SingleEnemy : meme cible. Random/AoE/Self : null (resolution auto dans ApplyEffect).
+            EnemyInstance cibleRepeat = (skill.targetType == SkillTargetType.SingleEnemy) ? cible : null;
+            ExecuterEffetsSkill(skill, cibleRepeat, ctx);
         }
 
         if (skill != null) GameEvents.TriggerSkillUsed(skill);
@@ -900,12 +1034,21 @@ public class CombatManager : MonoBehaviour
     // -----------------------------------------------
 
     /// <summary>
-    /// Applique un EffectData du joueur.
+    /// Applique un EffectData du joueur (surcharge courte).
+    /// Appelée depuis les modules, consommables, effets ennemis.
+    /// Injecte automatiquement ContexteExecutionSkill.Default.
+    /// </summary>
+    private void ApplyEffect(EffectData effect, string sourceName, EnemyInstance explicitTarget, SkillData sourceSkill = null)
+        => ApplyEffect(effect, sourceName, explicitTarget, sourceSkill, ContexteExecutionSkill.Default);
+
+    /// <summary>
+    /// Applique un EffectData du joueur (surcharge complète).
     /// explicitTarget : ennemi sélectionné explicitement (null = résolution automatique).
     /// sourceSkill    : skill à l'origine de l'appel — utilisé pour résoudre les bonus
     ///                  stacks des modules (SkillUtilise). null = pas de bonus stacks.
+    /// ctx            : contexte d'execution du skill (modificateurs, repetitions, etc).
     /// </summary>
-    private void ApplyEffect(EffectData effect, string sourceName, EnemyInstance explicitTarget, SkillData sourceSkill = null)
+    private void ApplyEffect(EffectData effect, string sourceName, EnemyInstance explicitTarget, SkillData sourceSkill, ContexteExecutionSkill ctx)
     {
         switch (effect.action)
         {
@@ -915,10 +1058,12 @@ public class CombatManager : MonoBehaviour
                 if (effect.conditionCible == ConditionCible.CarteActuelle)
                     Debug.Log("[CombatManager] ConditionCible.CarteActuelle non encore implémenté");
 
-                float critChance = GetCurrentCritChance();
+                EffectTarget targetEffectif = ctx.overrideTarget ?? effect.target;
+
+                float critChance = Mathf.Clamp01(GetCurrentCritChance() + ctx.bonusCrit);
                 bool  isCrit     = critChance > 0f && Random.value < critChance;
 
-                foreach (EnemyInstance cible in GetEffectTargets(effect.target, explicitTarget))
+                foreach (EnemyInstance cible in GetEffectTargets(targetEffectif, explicitTarget))
                 {
                     float multiplicateur = 1f;
                     int   bonusFlat      = 0;
@@ -939,7 +1084,7 @@ public class CombatManager : MonoBehaviour
                         }
                     }
 
-                    AppliquerDegatsEnnemi(cible, effect, sourceName, isCrit, multiplicateur, bonusFlat);
+                    AppliquerDegatsEnnemi(cible, effect, sourceName, isCrit, multiplicateur, bonusFlat, ctx);
                     CheckEnemyDeath(cible);
                     if (combatEnded) return;
                 }
@@ -966,9 +1111,10 @@ public class CombatManager : MonoBehaviour
             {
                 if (effect.statusToApply == null) break;
                 int stacks = Mathf.RoundToInt(effect.value);
-                int bonusStacks = ObtenirBonusStacksModules(effect.statusToApply, sourceSkill);
+                int bonusStacks = ObtenirBonusStacksModules(effect.statusToApply, sourceSkill)
+                                + ctx.bonusStacksStatut;
                 if (bonusStacks > 0)
-                    Log($"Bonus stacks module : +{bonusStacks} {effect.statusToApply.statusName} (source : '{sourceSkill?.skillName}')");
+                    Log($"Bonus stacks : +{bonusStacks} {effect.statusToApply.statusName}");
                 stacks += bonusStacks;
                 if (effect.target == EffectTarget.Self)
                 {
@@ -1166,10 +1312,13 @@ public class CombatManager : MonoBehaviour
     /// <summary>
     /// Applique des dégâts du joueur sur un ennemi spécifique (helpers pour ApplyEffect).
     /// </summary>
-    private void AppliquerDegatsEnnemi(EnemyInstance ennemi, EffectData effect, string sourceName, bool isCrit, float multiplicateur = 1f, int bonusFlat = 0)
+    private void AppliquerDegatsEnnemi(EnemyInstance ennemi, EffectData effect, string sourceName, bool isCrit, float multiplicateur = 1f, int bonusFlat = 0, ContexteExecutionSkill? ctx = null)
     {
+        ContexteExecutionSkill contextEffectif = ctx ?? ContexteExecutionSkill.Default;
+
         int enemyDef  = ennemi.data != null ? ennemi.data.defense : 0;
-        int rawDamage = Mathf.Max(1, CalculerDegatsJoueur(effect.value) - enemyDef);
+        float baseValue = effect.value * (1f + contextEffectif.multiplicateurDegatsBase);
+        int rawDamage = Mathf.Max(1, CalculerDegatsJoueur(baseValue) - enemyDef);
 
         // Mise à l'échelle par stacks (scalingStatus sur l'ennemi)
         string stackInfo = "";
@@ -1193,6 +1342,8 @@ public class CombatManager : MonoBehaviour
             rawDamage = Mathf.Max(1, rawDamage + bonusFlat);
 
         if (isCrit) rawDamage = Mathf.RoundToInt(rawDamage * GetCurrentCritMultiplier());
+        if (contextEffectif.multiplicateurDegatsFinal != 0f)
+            rawDamage = Mathf.Max(1, Mathf.RoundToInt(rawDamage * (1f + contextEffectif.multiplicateurDegatsFinal)));
         rawDamage = Mathf.Clamp(rawDamage, 0, 9999);
 
         int armorAbsorbed  = Mathf.Min(ennemi.currentArmor, rawDamage);

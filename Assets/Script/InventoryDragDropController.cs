@@ -229,12 +229,9 @@ public class InventoryDragDropController : MonoBehaviour,
                             SkillSlot originSlot = _originEquipment.skillSlots[_originSlotIndex];
 
                             // Retirer les tags hérités de l'équipement
+                            // Note : inheritedTags sont dans skill.inheritedTags, PAS dans skill.tags → Clear() direct
                             if (_dragSkillData.inheritedTags != null && _dragSkillData.inheritedTags.Count > 0)
-                            {
-                                foreach (TagData tag in _dragSkillData.inheritedTags)
-                                    _dragSkillData.tags.Remove(tag);
                                 _dragSkillData.inheritedTags.Clear();
-                            }
 
                             originSlot.equippedSkill = null;
                             originSlot.state         = SkillSlot.SlotState.Available;
@@ -271,11 +268,13 @@ public class InventoryDragDropController : MonoBehaviour,
                                          skillSlot.state == SkillSlot.SlotState.LockedInUse) &&
                                         skillSlot.equippedSkill != null)
                                     {
-                                        if (!run.AddSkillToInventory(skillSlot.equippedSkill))
-                                            Debug.LogWarning($"[InventoryDragDrop] Inventaire skills plein — '{skillSlot.equippedSkill.skillName}' perdu !");
-
-                                        skillSlot.equippedSkill = null;
-                                        skillSlot.state         = SkillSlot.SlotState.Available;
+                                        if (run.AddSkillToInventory(skillSlot.equippedSkill))
+                                        {
+                                            skillSlot.equippedSkill = null;
+                                            skillSlot.state         = SkillSlot.SlotState.Available;
+                                        }
+                                        else
+                                            Debug.LogWarning($"[InventoryDragDrop] Inventaire skills plein — '{skillSlot.equippedSkill.skillName}' conservé sur son slot (non perdu).");
                                     }
                                 }
                             }
@@ -374,8 +373,14 @@ public class InventoryDragDropController : MonoBehaviour,
         }
 
         if (!run.TryEquipEquipment(cible.targetEquipmentSlot, _dragEquipmentData))
-            Debug.LogWarning($"[InventoryDragDrop] Impossible d'equiper '{_dragEquipmentData.equipmentName}'" +
-                             $" dans {cible.targetEquipmentSlot} (inventaire plein ?).");
+        {
+            // TryEquipEquipment a échoué (cible occupée + inventaire plein ?) :
+            // restaurer le slot d'origine si on l'avait vidé pour éviter toute perte.
+            if (_originEquipmentSlot.HasValue)
+                run.EquipItem(_originEquipmentSlot.Value, _dragEquipmentData);
+            Debug.LogWarning($"[InventoryDragDrop] Impossible d'équiper '{_dragEquipmentData.equipmentName}'" +
+                             $" dans {cible.targetEquipmentSlot} — slot d'origine restauré.");
+        }
     }
 
     // -----------------------------------------------

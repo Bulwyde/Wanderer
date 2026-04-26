@@ -411,12 +411,14 @@ public class RunManager : MonoBehaviour
                      skillSlot.state == SkillSlot.SlotState.LockedInUse) &&
                     skillSlot.equippedSkill != null)
                 {
-                    if (!AddSkillToInventory(skillSlot.equippedSkill))
-                        Debug.LogWarning($"[RunManager] Inventaire skills plein — '{skillSlot.equippedSkill.skillName}' perdu !");
-
-                    // Nettoyer le slot après avoir retiré le skill
-                    skillSlot.equippedSkill = null;
-                    skillSlot.state         = SkillSlot.SlotState.Available;
+                    if (AddSkillToInventory(skillSlot.equippedSkill))
+                    {
+                        // Nettoyer le slot seulement si le rapatriation a réussi
+                        skillSlot.equippedSkill = null;
+                        skillSlot.state         = SkillSlot.SlotState.Available;
+                    }
+                    else
+                        Debug.LogWarning($"[RunManager] Inventaire skills plein — '{skillSlot.equippedSkill.skillName}' conservé sur son slot (non perdu).");
                 }
             }
         }

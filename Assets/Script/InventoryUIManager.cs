@@ -117,6 +117,12 @@ public class InventoryUIManager : MonoBehaviour
     public void Close()
     {
         if (inventoryCanvas == null) return;
+
+        // Annuler toute confirmation de suppression en attente avant de fermer
+        // (évite une référence pendante vers un contrôleur détruit au prochain RefreshUI)
+        if (_confirmationPending != null)
+            OnAnnulerSuppression();
+
         inventoryCanvas.gameObject.SetActive(false);
 
         // Cacher le blocker
@@ -185,6 +191,9 @@ public class InventoryUIManager : MonoBehaviour
     private void RafraichirContenuSlot(RectTransform container, RectTransform skillGridContainer, EquipmentSlot slot)
     {
         if (container == null) return;
+        // Réactiver le container au cas où il avait été masqué lors d'un refresh précédent
+        // (ex : maxEquippedArms était < 3/4 et a augmenté entre deux ouvertures)
+        container.gameObject.SetActive(true);
         ViderPanel(container);
 
         // S'assurer que la DropZone est présente sur le container (une seule fois)

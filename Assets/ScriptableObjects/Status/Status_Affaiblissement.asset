@@ -12,8 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7e42231eca85dd24eac4c3b5a2342760, type: 3}
   m_Name: Status_Affaiblissement
   m_EditorClassIdentifier: Assembly-CSharp::StatusData
-  statusID: 
-  statusName: 
+  statusID: affaiblissement
+  statusName: Affaiblissement
   description: 
   icon: {fileID: -5953095983196202022, guid: 146226683fa30004db32190f431bf738, type: 3}
   behavior: 2

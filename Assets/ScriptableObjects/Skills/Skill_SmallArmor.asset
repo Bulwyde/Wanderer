@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a78710460ccc06149a964161e638fc8a, type: 3}
+  m_Name: Skill_SmallArmor
+  m_EditorClassIdentifier: Assembly-CSharp::SkillData
+  skillID: smallarmor
+  skillName: Small Armor
+  icon: {fileID: 2714453574471835212, guid: ffaa6ebcc8b491441a609a57a3fac76f, type: 3}
+  description: 
+  keywords: []
+  energyCost: 1
+  cooldown: 0
+  effects:
+  - {fileID: 11400000, guid: 9a70eb1bcc66c744a8089fe55038be76, type: 2}
+  targetType: 0
+  tags: []
+  inheritedTags: []
+  isNavigationSkill: 0
+  navEffects: []
+  navCooldownType: 0
+  navCooldownCount: 1
+  navCooldownTag: {fileID: 0}

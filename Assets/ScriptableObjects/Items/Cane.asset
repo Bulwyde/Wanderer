@@ -1,0 +1,38 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b76755a0a8a0b0741b5d7badea9590bb, type: 3}
+  m_Name: Cane
+  m_EditorClassIdentifier: Assembly-CSharp::EquipmentData
+  equipmentID: cane
+  equipmentName: Cane
+  icon: {fileID: -7958758083988527375, guid: f685c4705fc652743842154a715a2d14, type: 3}
+  description: "Vous appliquez un stack suppl\xE9mentaire de status."
+  keywords: []
+  equipmentType: 3
+  level: 1
+  bonusHP: 0
+  bonusAttack: 0
+  bonusDefense: 0
+  bonusCriticalChance: 0
+  bonusCriticalMultiplier: 0
+  bonusRegeneration: 0
+  bonusLifeSteal: 0
+  passiveEffects: []
+  skillSlots:
+  - state: 0
+    equippedSkill: {fileID: 0}
+  - state: 0
+    equippedSkill: {fileID: 0}
+  - state: 0
+    equippedSkill: {fileID: 0}
+  tags: []
+  setID: 

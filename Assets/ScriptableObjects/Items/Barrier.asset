@@ -27,7 +27,9 @@ MonoBehaviour:
   bonusCriticalMultiplier: 0
   bonusRegeneration: 0
   bonusLifeSteal: 0
-  passiveEffects: []
+  passiveEffects:
+  - {fileID: 0}
+  skillModifiers: []
   skillSlots:
   - state: 0
     equippedSkill: {fileID: 0}

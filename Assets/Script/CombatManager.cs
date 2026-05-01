@@ -158,10 +158,11 @@ public class CombatManager : MonoBehaviour
         public float         multiplicateurDegatsBase;   // applique a skill.value avant CalculerDegatsJoueur
         public float         multiplicateurDegatsFinal;  // delta applique aux degats finaux
         public float         bonusCrit;                  // ajout flat a la crit chance
-        public EffectTarget? overrideTarget;             // si non-null, force ce target sur les DealDamage
+        public EffectTarget? overrideTarget;             // si non-null, force ce target sur les DealDamage et ApplyStatus
         public int           repetitions;                // nb total d'executions (1 = pas de repetition)
         public int           bonusStacksStatut;          // stacks supplementaires sur tout ApplyStatus
         public int           coutEnergieSupplementaire;  // s'ajoute a skill.energyCost
+        public EquipmentData sourceEquipment;            // equipement source du skill (pour SkillEquipeSurCetObjet)
 
         public static ContexteExecutionSkill Default => new ContexteExecutionSkill
         {
@@ -172,6 +173,7 @@ public class CombatManager : MonoBehaviour
             repetitions               = 1,
             bonusStacksStatut         = 0,
             coutEnergieSupplementaire = 0,
+            sourceEquipment           = null,
         };
     }
 
@@ -792,6 +794,7 @@ public class CombatManager : MonoBehaviour
     private ContexteExecutionSkill ObtenirContexteExecution(SkillData skill, EquipmentData equip)
     {
         ContexteExecutionSkill ctx = ContexteExecutionSkill.Default;
+        ctx.sourceEquipment = equip;
 
         if (equip == null || equip.skillModifiers == null || equip.skillModifiers.Count == 0)
             return ctx;
@@ -1126,15 +1129,18 @@ public class CombatManager : MonoBehaviour
 
             case EffectAction.Heal:
             {
-                int healed = Mathf.Min(Mathf.RoundToInt(effect.value), GetPlayerMaxHP() - currentPlayerHP);
-                currentPlayerHP += healed;
+                var (healFlat, healPct) = GetPlayerStatModifiers(StatType.HealGainMultiplier);
+                int healed = Mathf.RoundToInt(effect.value * (1f + healPct) + healFlat);
+                healed = Mathf.Min(healed, GetPlayerMaxHP() - currentPlayerHP);
+                if (healed > 0) { currentPlayerHP += healed; }
                 Log($"{GetPlayerName()} utilise {sourceName} — Soin de {healed} HP → {currentPlayerHP}/{GetPlayerMaxHP()}");
                 break;
             }
 
             case EffectAction.AddArmor:
             {
-                int armor = Mathf.RoundToInt(effect.value);
+                var (armorFlat, armorPct) = GetPlayerStatModifiers(StatType.ArmorGainMultiplier);
+                int armor = Mathf.Max(0, Mathf.RoundToInt(effect.value * (1f + armorPct) + armorFlat));
                 currentPlayerArmor += armor;
                 Log($"{GetPlayerName()} utilise {sourceName} — +{armor} armure → {currentPlayerArmor} armure totale");
                 break;
@@ -1166,6 +1172,8 @@ public class CombatManager : MonoBehaviour
                 float val = effect.value;
                 if (effect.scalingSource == EffectScalingSource.EquipementEquipe && effect.comptageTag != null)
                     val = effect.value * CompterEquipementsAvecTag(effect.comptageTag);
+                else if (effect.scalingSource == EffectScalingSource.SkillEquipeSurCetObjet && effect.comptageTag != null)
+                    val = effect.value * CompterSkillsAvecTagSurEquipement(ctx.sourceEquipment, effect.comptageTag);
                 if (!combatStatModifiers.ContainsKey(effect.statToModify))
                     combatStatModifiers[effect.statToModify] = 0f;
                 combatStatModifiers[effect.statToModify] += val;
@@ -1326,6 +1334,15 @@ public class CombatManager : MonoBehaviour
         return total;
     }
 
+    private int CompterSkillsAvecTagSurEquipement(EquipmentData equip, TagData tag)
+    {
+        if (equip == null || tag == null || equip.skillSlots == null) return 0;
+        return equip.skillSlots.Count(s =>
+            s != null && s.state != SkillSlot.SlotState.Available &&
+            s.equippedSkill != null && s.equippedSkill.tags != null &&
+            s.equippedSkill.tags.Any(t => t != null && t.tagName == tag.tagName));
+    }
+
     /// <summary>
     /// Résout le tag de filtre à utiliser pour la distribution d'un item.
     /// Si <c>filtreParTagHero</c> est activé et que le héros a au moins un tag, retourne <c>tags[0]</c>.
@@ -1375,6 +1392,9 @@ public class CombatManager : MonoBehaviour
             rawDamage = Mathf.Max(1, rawDamage + bonusFlat);
 
         if (isCrit) rawDamage = Mathf.RoundToInt(rawDamage * GetCurrentCritMultiplier());
+        var (dmgFlat, dmgPct) = GetPlayerStatModifiers(StatType.DamageGainMultiplier);
+        if (dmgPct != 0f || dmgFlat != 0f)
+            rawDamage = Mathf.Max(1, Mathf.RoundToInt(rawDamage * (1f + dmgPct) + dmgFlat));
         if (contextEffectif.multiplicateurDegatsFinal != 0f)
             rawDamage = Mathf.Max(1, Mathf.RoundToInt(rawDamage * (1f + contextEffectif.multiplicateurDegatsFinal)));
         rawDamage = Mathf.Clamp(rawDamage, 0, 9999);
@@ -1634,7 +1654,7 @@ public class CombatManager : MonoBehaviour
     /// Applique l'effet d'un module passif ou déclenché.
     /// DealDamage cible l'ennemi par défaut (premier vivant).
     /// </summary>
-    public void ApplyModuleEffect(EffectData effect, string moduleName)
+    public void ApplyModuleEffect(EffectData effect, string moduleName, EquipmentData sourceEquipment = null)
     {
         if (effect == null) return;
 
@@ -1666,7 +1686,9 @@ public class CombatManager : MonoBehaviour
             {
                 if (targetsSelf)
                 {
-                    int healed = Mathf.Min(Mathf.RoundToInt(effect.value), GetPlayerMaxHP() - currentPlayerHP);
+                    var (healFlat, healPct) = GetPlayerStatModifiers(StatType.HealGainMultiplier);
+                    int healed = Mathf.RoundToInt(effect.value * (1f + healPct) + healFlat);
+                    healed = Mathf.Min(healed, GetPlayerMaxHP() - currentPlayerHP);
                     if (healed > 0) { currentPlayerHP += healed; Log($"{source} — +{healed} HP joueur"); }
                 }
                 else
@@ -1683,10 +1705,16 @@ public class CombatManager : MonoBehaviour
 
             case EffectAction.AddArmor:
             {
-                int armor = Mathf.RoundToInt(effect.value);
-                if (targetsSelf) { currentPlayerArmor += armor; Log($"{source} — +{armor} armure joueur"); }
+                if (targetsSelf)
+                {
+                    var (armorFlat, armorPct) = GetPlayerStatModifiers(StatType.ArmorGainMultiplier);
+                    int armor = Mathf.Max(0, Mathf.RoundToInt(effect.value * (1f + armorPct) + armorFlat));
+                    currentPlayerArmor += armor;
+                    Log($"{source} — +{armor} armure joueur");
+                }
                 else
                 {
+                    int armor = Mathf.RoundToInt(effect.value);
                     EnemyInstance cible = GetDefaultTarget();
                     if (cible != null) { cible.currentArmor += armor; Log($"{source} — +{armor} armure {cible.GetName()}"); UpdateEnemyUI(cible); }
                 }
@@ -1721,6 +1749,8 @@ public class CombatManager : MonoBehaviour
                 float val = effect.value;
                 if (effect.scalingSource == EffectScalingSource.EquipementEquipe && effect.comptageTag != null)
                     val = effect.value * CompterEquipementsAvecTag(effect.comptageTag);
+                else if (effect.scalingSource == EffectScalingSource.SkillEquipeSurCetObjet && effect.comptageTag != null)
+                    val = effect.value * CompterSkillsAvecTagSurEquipement(sourceEquipment, effect.comptageTag);
 
                 if (RunManager.Instance != null)
                 {
@@ -1734,6 +1764,11 @@ public class CombatManager : MonoBehaviour
                         case StatType.CriticalMultiplier: effectiveCriticalMultiplier += val; break;
                         case StatType.LifeSteal:          effectiveLifeSteal          = Mathf.Clamp01(effectiveLifeSteal + val); break;
                         case StatType.MaxEnergy:          effectiveMaxEnergy          += Mathf.RoundToInt(val); break;
+                        case StatType.ArmorGainMultiplier:
+                        case StatType.HealGainMultiplier:
+                        case StatType.DamageGainMultiplier:
+                            // Pas de champ effective* — lues dynamiquement via GetPlayerStatModifiers
+                            break;
                     }
                     Log($"{source} — {effect.statToModify} {(val >= 0 ? "+" : "")}{val:F1} (permanent run)");
                 }

@@ -146,7 +146,7 @@ public class ModuleManager : MonoBehaviour
                     Debug.Log($"[Équipement passif] '{nom}' déclenché ({trigger})");
 
                     if (combat != null)
-                        combat.ApplyModuleEffect(effet, nom);
+                        combat.ApplyModuleEffect(effet, nom, equip);
                     else
                         ApplyEffectOutOfCombat(effet, nom);
                 }
@@ -226,7 +226,7 @@ public class ModuleManager : MonoBehaviour
                     string nom = $"{equip.equipmentName} — {(string.IsNullOrEmpty(effet.displayName) ? effet.effectID : effet.displayName)}";
                     Debug.Log($"[Équipement passif] '{nom}' déclenché (OnSkillUsed — {skillUtilisé?.skillName})");
                     if (combat != null)
-                        combat.ApplyModuleEffect(effet, nom);
+                        combat.ApplyModuleEffect(effet, nom, equip);
                     else
                         ApplyEffectOutOfCombat(effet, nom);
                 }

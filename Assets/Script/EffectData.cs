@@ -220,7 +220,6 @@ public enum ConditionCible
 {
     Aucune       = 0,       // Pas de condition — l'effet s'applique toujours
     EnnemiCible,            // L'ennemi ciblé doit avoir le conditionTag
-    CarteActuelle,          // La carte courante doit avoir le conditionTag (réservé — non implémenté)
 }
 
 /// <summary>

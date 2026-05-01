@@ -1090,10 +1090,6 @@ public class CombatManager : MonoBehaviour
         {
             case EffectAction.DealDamage:
             {
-                // Condition CarteActuelle non implémentée dans ce chantier
-                if (effect.conditionCible == ConditionCible.CarteActuelle)
-                    Debug.Log("[CombatManager] ConditionCible.CarteActuelle non encore implémenté");
-
                 EffectTarget targetEffectif = ctx.overrideTarget ?? effect.target;
 
                 float critChance = Mathf.Clamp01(GetCurrentCritChance() + ctx.bonusCrit);

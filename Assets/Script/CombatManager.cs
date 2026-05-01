@@ -1155,7 +1155,7 @@ public class CombatManager : MonoBehaviour
                 }
                 else
                 {
-                    foreach (EnemyInstance cible in GetEffectTargets(effect.target, explicitTarget))
+                    foreach (EnemyInstance cible in GetEffectTargets(ctx.overrideTarget ?? effect.target, explicitTarget))
                         ApplyStatusAEnnemi(cible, effect.statusToApply, stacks);
                 }
                 break;

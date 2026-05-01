@@ -198,6 +198,7 @@ public class CombatManager : MonoBehaviour
     private float effectiveLifeSteal;
 
     private List<SkillData>        availableSkills          = new List<SkillData>();
+    private List<EquipmentData>    _availableSkillSources   = new List<EquipmentData>();
     private List<SkillButton>      spawnedSkillButtons      = new List<SkillButton>();
     private List<ConsumableButton> spawnedConsumableButtons = new List<ConsumableButton>();
     private Dictionary<SkillData, int> skillCooldowns       = new Dictionary<SkillData, int>();
@@ -464,15 +465,33 @@ public class CombatManager : MonoBehaviour
         effectiveLifeSteal          = characterData.lifeSteal;
 
         availableSkills.Clear();
+        _availableSkillSources.Clear();
 
-        List<EquipmentData> equipped = new List<EquipmentData>
+        List<EquipmentData> equipped = new List<EquipmentData>();
+
+        if (RunManager.Instance != null)
         {
-            RunManager.Instance?.GetEquipped(EquipmentSlot.Head)  ?? characterData.startingHead,
-            RunManager.Instance?.GetEquipped(EquipmentSlot.Torso) ?? characterData.startingTorso,
-            RunManager.Instance?.GetEquipped(EquipmentSlot.Legs)  ?? characterData.startingLegs,
-            RunManager.Instance?.GetEquipped(EquipmentSlot.Arm1)  ?? characterData.startingArm1,
-            RunManager.Instance?.GetEquipped(EquipmentSlot.Arm2)  ?? characterData.startingArm2,
-        };
+            // Run normale : tous les slots via l'enum — couvre Head, Torso, Legs, Arm1..Arm4.
+            // Slot vide = null → ignoré. Pas de fallback SO (évite les skills fantômes mutés).
+            foreach (EquipmentSlot slot in System.Enum.GetValues(typeof(EquipmentSlot)))
+            {
+                EquipmentData equip = RunManager.Instance.GetEquipped(slot);
+                if (equip != null) equipped.Add(equip);
+            }
+        }
+        else
+        {
+            // Test direct de scène sans RunManager : fallback sur les SO de départ.
+            if (characterData.startingHead  != null) equipped.Add(characterData.startingHead);
+            if (characterData.startingTorso != null) equipped.Add(characterData.startingTorso);
+            if (characterData.startingLegs  != null) equipped.Add(characterData.startingLegs);
+            if (characterData.startingArm1  != null) equipped.Add(characterData.startingArm1);
+            if (characterData.startingArm2  != null) equipped.Add(characterData.startingArm2);
+            if (characterData.maxEquippedArms >= 3 && characterData.startingArm3 != null)
+                equipped.Add(characterData.startingArm3);
+            if (characterData.maxEquippedArms >= 4 && characterData.startingArm4 != null)
+                equipped.Add(characterData.startingArm4);
+        }
 
         foreach (EquipmentData equip in equipped)
         {
@@ -489,18 +508,16 @@ public class CombatManager : MonoBehaviour
                 if (slot == null) continue;
                 if (slot.state != SkillSlot.SlotState.Used &&
                     slot.state != SkillSlot.SlotState.LockedInUse) continue;
-                if (slot.equippedSkill != null) availableSkills.Add(slot.equippedSkill);
+                if (slot.equippedSkill != null)
+                {
+                    availableSkills.Add(slot.equippedSkill);
+                    _availableSkillSources.Add(equip);
+                }
             }
         }
 
         if (RunManager.Instance != null)
         {
-            SeedSlotIfFree(EquipmentSlot.Head,  characterData.startingHead);
-            SeedSlotIfFree(EquipmentSlot.Torso, characterData.startingTorso);
-            SeedSlotIfFree(EquipmentSlot.Legs,  characterData.startingLegs);
-            SeedSlotIfFree(EquipmentSlot.Arm1,  characterData.startingArm1);
-            SeedSlotIfFree(EquipmentSlot.Arm2,  characterData.startingArm2);
-
             if (characterData.startingModule != null
                 && !RunManager.Instance.HasModule(characterData.startingModule))
                 RunManager.Instance.AddModule(characterData.startingModule);
@@ -532,12 +549,6 @@ public class CombatManager : MonoBehaviour
                   $"Crit: {effectiveCriticalChance:P0}, Skills: {availableSkills.Count}");
     }
 
-    private void SeedSlotIfFree(EquipmentSlot slot, EquipmentData starting)
-    {
-        if (starting != null && RunManager.Instance.IsSlotFree(slot))
-            RunManager.Instance.EquipItem(slot, starting);
-    }
-
     // -----------------------------------------------
     // GÉNÉRATION DES BOUTONS DE COMPÉTENCES
     // -----------------------------------------------
@@ -546,13 +557,20 @@ public class CombatManager : MonoBehaviour
     {
         if (skillButtonPrefab == null || skillButtonContainer == null) return;
 
-        foreach (SkillData skill in availableSkills)
+        for (int i = 0; i < availableSkills.Count; i++)
         {
+            SkillData     skill = availableSkills[i];
+            EquipmentData equip = (i < _availableSkillSources.Count) ? _availableSkillSources[i] : null;
+
             if (skill == null || skill.isNavigationSkill) continue;
+
+            int effectiveCost = skill.energyCost
+                + ObtenirContexteExecution(skill, equip).coutEnergieSupplementaire;
+
             GameObject go = Instantiate(skillButtonPrefab, skillButtonContainer);
             SkillButton sb = go.GetComponent<SkillButton>();
             if (sb == null) continue;
-            sb.Setup(skill, UseSkill);
+            sb.Setup(skill, equip, effectiveCost, UseSkill);
             spawnedSkillButtons.Add(sb);
         }
 
@@ -561,10 +579,25 @@ public class CombatManager : MonoBehaviour
 
     private void SpawnPassifsBras()
     {
-        EquipmentData bras1 = RunManager.Instance?.GetEquipped(EquipmentSlot.Arm1) ?? characterData?.startingArm1;
-        EquipmentData bras2 = RunManager.Instance?.GetEquipped(EquipmentSlot.Arm2) ?? characterData?.startingArm2;
-        SpawnPassifsEquipement(bras1);
-        SpawnPassifsEquipement(bras2);
+        if (RunManager.Instance != null)
+        {
+            // Run normale : tous les slots arm via l'enum.
+            // Slot vide = null → SpawnPassifsEquipement gère le null gracieusement.
+            SpawnPassifsEquipement(RunManager.Instance.GetEquipped(EquipmentSlot.Arm1));
+            SpawnPassifsEquipement(RunManager.Instance.GetEquipped(EquipmentSlot.Arm2));
+            SpawnPassifsEquipement(RunManager.Instance.GetEquipped(EquipmentSlot.Arm3));
+            SpawnPassifsEquipement(RunManager.Instance.GetEquipped(EquipmentSlot.Arm4));
+        }
+        else
+        {
+            // Test direct de scène sans RunManager.
+            SpawnPassifsEquipement(characterData?.startingArm1);
+            SpawnPassifsEquipement(characterData?.startingArm2);
+            if (characterData != null && characterData.maxEquippedArms >= 3)
+                SpawnPassifsEquipement(characterData.startingArm3);
+            if (characterData != null && characterData.maxEquippedArms >= 4)
+                SpawnPassifsEquipement(characterData.startingArm4);
+        }
     }
 
     private void SpawnPassifsEquipement(EquipmentData equip)
@@ -841,7 +874,7 @@ public class CombatManager : MonoBehaviour
         StartEnemyTurn();
     }
 
-    private void UseSkill(SkillData skill)
+    private void UseSkill(SkillData skill, EquipmentData equipSource)
     {
         if (battleState != BattleState.PlayerTurn) return;
         if (skill == null) return;
@@ -852,8 +885,7 @@ public class CombatManager : MonoBehaviour
             return;
         }
 
-        // Obtient l'equipement et construit le contexte d'execution
-        EquipmentData equipSource    = ObtenirEquipementDuSkill(skill);
+        // Construit le contexte d'execution depuis l'equipement source transmis par le bouton
         ContexteExecutionSkill ctx   = ObtenirContexteExecution(skill, equipSource);
         int coutEffectif             = skill.energyCost + ctx.coutEnergieSupplementaire;
 
@@ -997,6 +1029,7 @@ public class CombatManager : MonoBehaviour
         ExecuterEffetsSkill(skill, cible, ctx);
         for (int i = 1; i < ctx.repetitions && !combatEnded; i++)
         {
+            if (skill.targetType == SkillTargetType.SingleEnemy && !cible.IsAlive) break;
             // SingleEnemy : meme cible. Random/AoE/Self : null (resolution auto dans ApplyEffect).
             EnemyInstance cibleRepeat = (skill.targetType == SkillTargetType.SingleEnemy) ? cible : null;
             ExecuterEffetsSkill(skill, cibleRepeat, ctx);
@@ -2481,7 +2514,7 @@ public class CombatManager : MonoBehaviour
             bool canUse = battleState == BattleState.PlayerTurn
                        && !isSelectingTarget
                        && cd == 0
-                       && currentEnergy >= sb.Skill.energyCost;
+                       && currentEnergy >= sb.EffectiveCost;
             sb.SetInteractable(canUse);
         }
     }

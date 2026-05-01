@@ -1,6 +1,6 @@
 # INVENTAIRE.md — Système d'inventaire et skills équipés
 
-**Dernière mise à jour** : 2026-04-26  
+**Dernière mise à jour** : 2026-04-30  
 **État** : ✅ Implémenté et testé — tous les bugs corrigés
 
 ---
@@ -282,6 +282,30 @@ Le code ne peuple que l'intérieur de ces containers, laissant la disposition au
 ### Container DropZone — Image transparente requise
 **Bug :** Un `RectTransform` sans `Image` est invisible aux raycasts UI → la `DropZone` n'était jamais détectée.
 **Fix :** `RafraichirContenuSlot()` ajoute une `Image` transparente (`color alpha=0`, `raycastTarget=true`) sur chaque container si absente.
+
+---
+
+### Bugs corrigés — Session 2 (2026-04-30)
+
+#### RepeatExecution — mort de la cible SingleEnemy
+**Bug :** Si `RepeatExecution` était actif et que le premier cast tuait un ennemi `SingleEnemy`, les répétitions suivantes continuaient sur une cible morte → null reference ou effets appliqués à tort.  
+**Fix :** `OnEnemyCibleClique` : la boucle de répétition vérifie `!cible.IsAlive` avant chaque itération (break immédiat pour `SingleEnemy`). Garde `!combatEnded` maintenue en parallèle.
+
+#### Drag/drop slot Used — duplication d'équipement
+**Bug :** Faire glisser un skill vers un slot `Used` d'un équipement différent appelait `SwapSkill` sans libérer le slot d'origine → le skill apparaissait dans les deux slots simultanément.  
+**Fix :** `TraiterDropSkillSlot()` appelle `run.UnequipSkill(_originEquipment, _originSlotIndex)` avant `run.SwapSkill(...)` quand l'origine est un slot équipé.
+
+#### EffectiveCost — affichage et remboursement incorrects
+**Bug :** `UpdateSkillButtons` et `CancelTargetSelection` utilisaient `skill.energyCost` brut — les `EnergyCostModifier` de l'équipement étaient ignorés. L'UI affichait le mauvais coût et le remboursement sur annulation était erroné.  
+**Fix :** `SpawnSkillButtons` calcule le coût effectif (base + `EnergyCostModifier`) et le stocke dans `SkillButton._effectiveCost`. `UpdateSkillButtons` et `CancelTargetSelection` lisent `sb.EffectiveCost`.
+
+#### Source équipement incorrecte au clic (SkillModifier)
+**Bug :** `UseSkill` cherchait l'équipement source par comparaison de référence `SkillData` au moment du clic. Si deux équipements partageaient le même asset skill, le mauvais équipement était identifié → `skillModifiers` du mauvais équipement appliqués.  
+**Fix :** `SpawnSkillButtons` maintient `_availableSkillSources` (liste parallèle à `availableSkills`). Source trackée à la création des boutons, transmise via callback `Action<SkillData, EquipmentData>`. `UseSkill` reçoit directement l'équipement — aucune recherche au clic.
+
+#### SeedSlotIfFree — duplication d'équipement au combat
+**Bug :** `CombatManager` appelait `SeedSlotIfFree` dans `InitialiserEquipementEtSkills`, qui écrivait les SO assets directement en slot. Au second combat, les équipements de départ étaient dupliqués — le SO était muté entre sessions.  
+**Fix :** `SeedSlotIfFree` entièrement supprimé de `CombatManager`. Le seeding se fait uniquement dans `RunManager.StartNewRun()` → `SeedDonneesDepart()` → `SeedSlotSiVide()` (utilise `CloneEquipmentForLoot`).
 
 ---
 

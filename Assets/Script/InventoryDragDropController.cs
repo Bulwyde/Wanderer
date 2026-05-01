@@ -341,6 +341,9 @@ public class InventoryDragDropController : MonoBehaviour,
         {
             // Drop sur le même slot → annuler
             if (_originEquipment == cible.targetEquipment && _originSlotIndex == idx) return;
+            // Liberer le slot d'origine si le skill vient d'un slot equipe
+            if (_originEquipment != null && _originSlotIndex >= 0)
+                run.UnequipSkill(_originEquipment, _originSlotIndex);
             run.SwapSkill(cible.targetEquipment, idx, _dragSkillData);
         }
         else

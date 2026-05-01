@@ -10,21 +10,22 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a78710460ccc06149a964161e638fc8a, type: 3}
-  m_Name: Skill_SmallAttack
+  m_Name: Skill_Test_Damage
   m_EditorClassIdentifier: Assembly-CSharp::SkillData
-  skillID: smallattack
-  skillName: SmallAttack
-  icon: {fileID: -5099292496197868168, guid: 68673b1d555e0fc418d9d0338a198501, type: 3}
+  skillID: skill_test_damage
+  skillName: Skill_Test_Damage
+  icon: {fileID: -5223879580551219335, guid: 0eb07f869368dc64785bc7669dce788e, type: 3}
   description: 
   keywords: []
   energyCost: 1
   cooldown: 0
   effects:
-  - {fileID: 11400000, guid: 5b1078ae73e813341882628a75f5a447, type: 2}
+  - {fileID: 11400000, guid: 8add793cffc3c2d40bf17630b7380e85, type: 2}
   targetType: 0
   tags:
   - {fileID: 11400000, guid: f8ab5f2693f5f624d92cfaa17382bafc, type: 2}
-  inheritedTags: []
+  inheritedTags:
+  - {fileID: 11400000, guid: 4db12cb1a42a42e4bb00db64de81f645, type: 2}
   isNavigationSkill: 0
   navEffects: []
   navCooldownType: 0

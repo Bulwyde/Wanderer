@@ -10,11 +10,11 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b76755a0a8a0b0741b5d7badea9590bb, type: 3}
-  m_Name: Start_Blade
+  m_Name: Arm_Test
   m_EditorClassIdentifier: Assembly-CSharp::EquipmentData
-  equipmentID: start_blade
-  equipmentName: Start_Blade
-  icon: {fileID: -2578031526789040135, guid: 700ae0db825ff80488958e69cc95f8c9, type: 3}
+  equipmentID: arm_test
+  equipmentName: arm_test
+  icon: {fileID: 3539517282536894737, guid: 3e4457d85a88eb742a52753791a27c97, type: 3}
   description: 
   keywords: []
   equipmentType: 3
@@ -27,16 +27,14 @@ MonoBehaviour:
   bonusRegeneration: 0
   bonusLifeSteal: 0
   passiveEffects: []
-  skillModifiers: []
+  skillModifiers:
+  - type: 5
+    value: 2
+    conditionTag: {fileID: 0}
   skillSlots:
   - state: 0
-    equippedSkill: {fileID: 11400000, guid: a7036231f1e2a0d4a9b1d335a6766655, type: 2}
+    equippedSkill: {fileID: 11400000, guid: 6970e4419490b564d91f87dc893f232d, type: 2}
   - state: 0
-    equippedSkill: {fileID: 11400000, guid: a7036231f1e2a0d4a9b1d335a6766655, type: 2}
-  - state: 0
-    equippedSkill: {fileID: 11400000, guid: a7036231f1e2a0d4a9b1d335a6766655, type: 2}
-  - state: 0
-    equippedSkill: {fileID: 11400000, guid: a7036231f1e2a0d4a9b1d335a6766655, type: 2}
-  tags:
-  - {fileID: 11400000, guid: 4db12cb1a42a42e4bb00db64de81f645, type: 2}
+    equippedSkill: {fileID: 11400000, guid: 24758057897658c4788fff9cfa8b2e7b, type: 2}
+  tags: []
   setID: 

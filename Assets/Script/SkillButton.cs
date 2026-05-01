@@ -19,32 +19,35 @@ public class SkillButton : MonoBehaviour
     public TextMeshProUGUI cooldownText;
 
     // La compétence associée à ce bouton (null pour les boutons passifs)
-    private SkillData skill;
+    private SkillData     skill;
+    private EquipmentData _sourceEquipment;
+    private int           _effectiveCost;
 
     // -----------------------------------------------
     // INITIALISATION
     // -----------------------------------------------
 
     /// <summary>
-    /// Configure le bouton avec une compétence et un callback.
-    /// Le callback est une Action<SkillData> : quand le joueur clique,
-    /// on appelle CombatManager.UseSkill(skill) sans que SkillButton
-    /// ait besoin de connaître CombatManager directement.
+    /// Configure le bouton avec une compétence, son equipement source, le cout effectif et un callback.
+    /// sourceEquipment : equipement portant ce skill (null si inconnu).
+    /// effectiveCost   : cout apres application des EnergyCostModifier de l'equipement.
+    /// Le callback est une Action<SkillData, EquipmentData> : transmet la source pour
+    /// que CombatManager evite de recalculer l'equipement par recherche reference.
     /// </summary>
-    public void Setup(SkillData skillData, Action<SkillData> onClickCallback)
+    public void Setup(SkillData skillData, EquipmentData sourceEquipment,
+                      int effectiveCost, Action<SkillData, EquipmentData> onClickCallback)
     {
-        skill = skillData;
+        skill            = skillData;
+        _sourceEquipment = sourceEquipment;
+        _effectiveCost   = Mathf.Max(0, effectiveCost);
 
-        if (skillNameText != null)
-            skillNameText.text = skill.skillName;
-
-        if (energyCostText != null)
-            energyCostText.text = $"{skill.energyCost}";
+        if (skillNameText  != null) skillNameText.text  = skill.skillName;
+        if (energyCostText != null) energyCostText.text = $"{_effectiveCost}";
 
         // Supprime les anciens listeners avant d'en ajouter un nouveau
         // (important si le bouton est réutilisé)
         button.onClick.RemoveAllListeners();
-        button.onClick.AddListener(() => onClickCallback?.Invoke(skill));
+        button.onClick.AddListener(() => onClickCallback?.Invoke(skill, _sourceEquipment));
 
         // Cooldown à 0 au départ — aucun texte de cooldown visible
         SetCooldown(0);
@@ -78,8 +81,10 @@ public class SkillButton : MonoBehaviour
             button.interactable = interactable;
     }
 
-    // Accesseur pour que CombatManager puisse retrouver la compétence liée
-    public SkillData Skill => skill;
+    // Accesseurs pour que CombatManager puisse retrouver la compétence et sa source
+    public SkillData     Skill           => skill;
+    public EquipmentData SourceEquipment => _sourceEquipment;
+    public int           EffectiveCost   => _effectiveCost;
 
     // -----------------------------------------------
     // BOUTON PASSIF (effet d'équipement)

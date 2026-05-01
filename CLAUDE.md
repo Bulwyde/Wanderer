@@ -89,6 +89,8 @@ Pour les détails complets : voir **INVENTAIRE.md**.
 - `MortEnnemiRoutine` : `animator.SetTrigger("Death")` → pause → fade `CanvasGroup.alpha`. **Pas `SetActive(false)`** — bloc reste dans HLG, positions survivants préservées.
 - `GetEnemyAttack(EnemyInstance)` — **toujours utiliser** à la place de `ennemi.data.attack` direct (ignore buffs runtime).
 - Loot : priorité `currentGroup.lootPool` > `enemies[0].data.lootPool` (solo) > `defaultCombatLootTable`. `DonnerEquipement` → file `equipementsLootDifféré`, proposé au loot panel post-combat.
+- `InitialiserEquipementEtSkills` : itère tous les `EquipmentSlot` via `Enum.GetValues(typeof(EquipmentSlot))` — couvre Arm1–Arm4 automatiquement. Chemin RunManager : `GetEquipped(slot)` uniquement (pas de fallback SO). Chemin sans RunManager (test scène isolée) : fallback `characterData.startingX`. Ne jamais mélanger les deux chemins — écrire sur un SO depuis ce chemin corrompt l'asset.
+- `SpawnPassifsBras` : même double chemin RunManager / fallback SO. Couvre Arm1–Arm4 selon `maxEquippedArms`.
 - Stats ennemi : `EnemyInstance.combatStatBonuses` + `GetEnemyStatModifiers(EnemyInstance, StatType)` — symétrique joueur.
 
 **`EquipmentOfferController.cs`** — Partagé Combat/Event/Shop. Se désactive dans `Awake()`.
@@ -165,7 +167,7 @@ Pour les détails complets : voir **INVENTAIRE.md**.
 - Zone 2 `skillModifiers` : `List<SkillModifier>` embarquee dans `EquipmentData` (class `[Serializable]`, pas un SO). Modifie le comportement des skills equipes sur CET equipement au moment de l'execution.
 - Types disponibles : `ForceAoE`, `BaseDamageMultiplier`, `DamageMultiplier`, `CritChanceBonus`, `RepeatExecution`, `EnergyCostModifier`, `BonusStatusStacks`.
 - `conditionTag` sur chaque SkillModifier : filtre par `skill.tags` (comparaison `tagName`). Null = s'applique a tous les skills de l'equipement.
-- Pipeline : `UseSkill` appelle `ObtenirEquipementDuSkill` → `ObtenirContexteExecution` → `ExecuterEffetsSkill` (1 + repetitions fois). Le contexte (`ContexteExecutionSkill`) est passe jusqu'a `AppliquerDegatsEnnemi`.
+- Pipeline : `UseSkill` reçoit `(SkillData, EquipmentData)` via le callback `Action<SkillData, EquipmentData>` du bouton → `ObtenirContexteExecution` → `ExecuterEffetsSkill` (1 + repetitions fois). L'équipement source est tracké à la création du bouton (liste parallèle `_availableSkillSources`), jamais recherché au clic. Le contexte (`ContexteExecutionSkill`) est passé jusqu'à `AppliquerDegatsEnnemi`. Boucle `RepeatExecution` : garde `!combatEnded` + break si cible morte (`SingleEnemy` uniquement).
 - `TriggerSkillUsed` se declenche une seule fois apres toutes les repetitions (les modules ne se declenchent pas N fois).
 
 ---
@@ -173,13 +175,13 @@ Pour les détails complets : voir **INVENTAIRE.md**.
 ## État du développement
 
 ### Fonctionnel ✅
-- **Combat** : tours, énergie, armure StS, cooldowns, statuts (decay, stacks, perTurn), crits, regen, lifesteal, IA circulaire. Multi-ennemis (1–4) : ciblage flèche, tour séquentiel, mort fade CanvasGroup, spawnEffects/deathEffects, stats symétrique joueur, icônes statuts par ennemi. SkillModifier Zone 2 (ForceAoE, BaseDamageMultiplier, DamageMultiplier, CritChanceBonus, RepeatExecution, EnergyCostModifier, BonusStatusStacks).
+- **Combat** : tours, énergie, armure StS, cooldowns, statuts (decay, stacks, perTurn), crits, regen, lifesteal, IA circulaire. Multi-ennemis (1–4) : ciblage flèche, tour séquentiel, mort fade CanvasGroup, spawnEffects/deathEffects, stats symétrique joueur, icônes statuts par ennemi. SkillModifier Zone 2 (ForceAoE, BaseDamageMultiplier, DamageMultiplier, CritChanceBonus, RepeatExecution, EnergyCostModifier, BonusStatusStacks). Multi-bras Arm1–Arm4 (InitialiserEquipementEtSkills + SpawnPassifsBras via enum auto-coverage).
 - **Navigation** : brouillard de guerre, clavier, sauvegarde position, NavEffects complets, BloqueurLD conditionnel, cases Aléatoires (CellAleaPool, maxOccurrences, Fisher-Yates), maximums par type, GetEffectiveCellType source de vérité, postVisitTypes automatiques. OnRoomEntered couvre tous les types (PointInteret/Teleporteur→specificEvent/defaultTeleportEvent, Radar/Coffre/Ferrailleur→ChoisirEventAleatoire, FerailleurUtilise/TeleporteurUtilise→log). NavEffects différés (navEffectsEnAttente).
 - **Équipement** : stats effectives, skills, passifs, loot post-combat, EquipmentOfferController partagé 3 scènes.
 - **Events** : tous EventEffectType, pool anti-doublon, offres équipement interactives, consommables utilisables en event.
 - **Shop** : ShopData, persistance par case, deux modes UI (destroy+recreate / in-place). Modules, consommables, crédits.
 - **Divers** : Seeding au StartNewRun, boss (EndRun+MainMenu), icônes par type de case, zoom vers la souris, EnemyPool mixte, tags (TagData, filtrage catégorie dans 9 editors), cooldowns nav (5 types), scaling EffectData catégories A/B/C, MapEditorWindow (section événements pour Event/Ferrailleur/Radar/Coffre).
-- **Inventaire** : 8 slots équipements + 24 slots skills, drag'n'drop complet avec placement indexé, clonage automatique (loot + départ via `SeedSlotSiVide`), deep copy des skillSlots, tags hérités, validation isNavigationSkill (nav→Legs / combat→Arms), maxEquippedArms pour Arm3/4, modal blocker inputs navigation, InventoryUIManager DDOL overlay, désactivation drag'n'drop en combat, skills à vendre dans le shop.
+- **Inventaire** : 8 slots équipements + 24 slots skills, drag'n'drop complet avec placement indexé, clonage automatique (loot + départ via `SeedSlotSiVide`), deep copy des skillSlots, tags hérités, validation isNavigationSkill (nav→Legs / combat→Arms), maxEquippedArms pour Arm3/4, modal blocker inputs navigation, InventoryUIManager DDOL overlay, désactivation drag'n'drop en combat, skills à vendre dans le shop. Fix drag/drop slot Used (UnequipSkill avant SwapSkill).
 
 ### À faire 🔧
 - Scène de sélection de personnage (`MainMenuManager.defaultCharacter` = placeholder)
@@ -244,7 +246,7 @@ Pour les détails complets : voir **INVENTAIRE.md**.
 8. **EquipmentOfferController** : se désactive dans `Awake()`. `LootContinueButton` = frère de `EquipmentOfferArea`, jamais enfant. `SkipButton`/`ArmSelectionPanel` = enfants. `lootContinueButton` masqué dans `Start()` du manager.
 9. **RevealZoneChoice + clics UI** : `Input.GetMouseButtonDown(0)` capte les clics UI → `EventSystem.current.IsPointerOverGameObject()` si conflits.
 10. **CharacterData/EnemyData fallback Inspector** : champs Inspector de `CombatManager` = tests isolés. En jeu normal, écrasés par RunManager.
-11. **Seeding no-op** : `CombatManager.ResolveEquipment()` ne seed rien en jeu normal — tout fait par `StartNewRun()`. Ne pas dupliquer.
+11. **Seeding no-op** : `CombatManager` ne seed rien — `SeedSlotIfFree` entièrement supprimé. Le seeding se fait uniquement dans `StartNewRun()` → `SeedDonneesDepart()` → `SeedSlotSiVide()`. Ne jamais rajouter de seeding dans `CombatManager`.
 12. **`EffectDataEditor`** : tout nouveau champ `EffectData` → ajouter dans `EffectDataEditor.cs` sinon invisible.
 13. **`StatType.MaxHP` via `AddStatBonus()`** : met à jour `maxHP`+`currentHP` ET stocke dans `runStatBonuses`. Préférer `ModifyStat` à l'ancien `ModifyMaxHP`.
 14. **ConsumableButton** : `rectTransform` peut être null si container inactif à l'Awake (guard null ajouté). `tailleNormale` lue dans `Awake()`.
@@ -291,3 +293,8 @@ Pour les détails complets : voir **INVENTAIRE.md**.
 55. **`MapCameraController` / `NavigationManager` — `SetInputEnabled(bool)`** : appelé par `InventoryUIManager.Open()` / `Close()`. Si une autre feature doit bloquer les inputs navigation, utiliser la même méthode pour cohérence.
 56. **`SkillModifier.conditionTag`** : compare `skill.tags` par `tagName`, pas par reference objet. N'inclut pas `inheritedTags` — seulement les tags propres du skill.
 57. **`RepeatExecution + combatEnded`** : la boucle de repetition est gardee par `&& !combatEnded`. Ne pas retirer cette garde — si le premier cast tue tous les ennemis, le deuxieme cast ne doit pas s'executer.
+58. **`SkillButton.EffectiveCost`** : calculé dans `SpawnSkillButtons` (base + `EnergyCostModifier`), stocké sur le bouton. `UpdateSkillButtons` et `CancelTargetSelection` (remboursement) lisent `sb.EffectiveCost` — jamais `skill.energyCost` directement.
+59. **`SeedSlotIfFree` supprimé** : méthode entièrement retirée de `CombatManager`. Le seeding se fait uniquement dans `StartNewRun()` → `SeedDonneesDepart()` → `SeedSlotSiVide()`. Ne jamais rajouter de seeding dans `CombatManager`.
+60. **Fallback SO interdit si RunManager présent** : ne jamais écrire `GetEquipped(slot) ?? characterData.startingX` quand RunManager est actif. Le SO asset serait modifié en runtime → mutations persistantes entre sessions. Deux chemins stricts : RunManager OU fallback SO (jamais mixés).
+61. **Arm3/Arm4 dans CombatManager** : `InitialiserEquipementEtSkills` et `SpawnPassifsBras` utilisent `Enum.GetValues(typeof(EquipmentSlot))` — couvre tous les slots présents et futurs automatiquement. Ne jamais hardcoder de liste de slots.
+62. **Source équipement via callback** : `SkillButton` stocke `_sourceEquipment` à la création (parallèle à `availableSkills` via `_availableSkillSources`), transmis par le callback `Action<SkillData, EquipmentData>`. Ne jamais chercher l'équipement par référence `SkillData` au clic — deux équipements peuvent partager le même asset skill.

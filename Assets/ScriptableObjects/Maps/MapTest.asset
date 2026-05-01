@@ -2264,11 +2264,11 @@ MonoBehaviour:
       valeurCible: 0
   - x: 10
     y: 5
-    cellType: 0
+    cellType: 3
     eventCellMode: 0
     eventList: []
     eventPool: {fileID: 0}
-    specificEnemy: {fileID: 0}
+    specificEnemy: {fileID: 11400000, guid: 68c13da0aa4d4074e8240a674d9b9b9e, type: 2}
     specificGroup: {fileID: 0}
     shopData: {fileID: 0}
     specificEvent: {fileID: 0}

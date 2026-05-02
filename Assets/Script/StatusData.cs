@@ -63,6 +63,10 @@ public class StatusData : ScriptableObject
     //                 le nombre de tours annoncé — ex. "Affaiblissement 3 tours" = 3 tours complets)
     public StatusDecayTiming decayTiming;
 
+    // Filtre optionnel pour OnSkillUse : ne décroît que si le skill utilisé possède ce tag.
+    // Null = décroît sur n'importe quel skill utilisé.
+    public TagData decayConditionTag;
+
     // Plafond de stacks accumulables sur une même entité (0 = illimité)
     public int maxStacks;
 
@@ -95,6 +99,18 @@ public enum StatusDecayTiming
     // À la fin du tour, après que l'entité a agi
     // Un Affaiblissement de 3 tours posé au tour T durera T, T+1, T+2 complets
     OnTurnEnd,
+
+    // Décroît quand le joueur utilise une compétence (optionnel : seulement si le skill a decayConditionTag)
+    OnSkillUse,
+
+    // Décroît quand l'entité affectée reçoit des dégâts HP
+    OnDamageTaken,
+
+    // Décroît quand le joueur gagne de l'armure
+    OnArmorGain,
+
+    // Décroît quand le joueur est soigné
+    OnHealing,
 }
 
 /// <summary>

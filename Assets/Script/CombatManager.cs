@@ -542,6 +542,20 @@ public class CombatManager : MonoBehaviour
             effectiveCriticalMultiplier += RunManager.Instance.GetStatBonus(StatType.CriticalMultiplier);
             effectiveLifeSteal          += RunManager.Instance.GetStatBonus(StatType.LifeSteal);
             effectiveMaxEnergy          += Mathf.RoundToInt(RunManager.Instance.GetStatBonus(StatType.MaxEnergy));
+
+            // Stats combat-temporaires sans champ effective* — seeding depuis RunManager si bonus permanent existant
+            foreach (StatType st in new[] {
+                StatType.ArmorGainMultiplier,
+                StatType.HealGainMultiplier,
+                StatType.DamageGainMultiplier })
+            {
+                float bonus = RunManager.Instance.GetStatBonus(st);
+                if (bonus != 0f)
+                {
+                    if (!combatStatModifiers.ContainsKey(st)) combatStatModifiers[st] = 0f;
+                    combatStatModifiers[st] += bonus;
+                }
+            }
         }
 
         effectiveCriticalChance = Mathf.Clamp01(effectiveCriticalChance);
@@ -1748,7 +1762,20 @@ public class CombatManager : MonoBehaviour
                 else if (effect.scalingSource == EffectScalingSource.SkillEquipeSurCetObjet && effect.comptageTag != null)
                     val = effect.value * CompterSkillsAvecTagSurEquipement(sourceEquipment, effect.comptageTag);
 
-                if (RunManager.Instance != null)
+                bool estStatCombatTemporaire =
+                    effect.statToModify == StatType.ArmorGainMultiplier ||
+                    effect.statToModify == StatType.HealGainMultiplier  ||
+                    effect.statToModify == StatType.DamageGainMultiplier;
+
+                if (estStatCombatTemporaire)
+                {
+                    // Jamais stockées dans RunManager — uniquement combat-temporaires
+                    if (!combatStatModifiers.ContainsKey(effect.statToModify))
+                        combatStatModifiers[effect.statToModify] = 0f;
+                    combatStatModifiers[effect.statToModify] += val;
+                    Log($"{source} — {effect.statToModify} {(val >= 0 ? "+" : "")}{val:F1} (ce combat)");
+                }
+                else if (RunManager.Instance != null)
                 {
                     RunManager.Instance.AddStatBonus(effect.statToModify, val);
                     switch (effect.statToModify)
@@ -1760,11 +1787,6 @@ public class CombatManager : MonoBehaviour
                         case StatType.CriticalMultiplier: effectiveCriticalMultiplier += val; break;
                         case StatType.LifeSteal:          effectiveLifeSteal          = Mathf.Clamp01(effectiveLifeSteal + val); break;
                         case StatType.MaxEnergy:          effectiveMaxEnergy          += Mathf.RoundToInt(val); break;
-                        case StatType.ArmorGainMultiplier:
-                        case StatType.HealGainMultiplier:
-                        case StatType.DamageGainMultiplier:
-                            // Pas de champ effective* — lues dynamiquement via GetPlayerStatModifiers
-                            break;
                     }
                     Log($"{source} — {effect.statToModify} {(val >= 0 ? "+" : "")}{val:F1} (permanent run)");
                 }

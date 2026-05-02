@@ -27,12 +27,14 @@ MonoBehaviour:
   bonusRegeneration: 0
   bonusLifeSteal: 0
   passiveEffects: []
+  skillModifiers:
+  - type: 6
+    value: 1
+    conditionTag: {fileID: 0}
   skillSlots:
   - state: 0
-    equippedSkill: {fileID: 0}
+    equippedSkill: {fileID: 11400000, guid: 18dbf0fbd3d56da4cb736fe301e2f88c, type: 2}
   - state: 0
-    equippedSkill: {fileID: 0}
-  - state: 0
-    equippedSkill: {fileID: 0}
+    equippedSkill: {fileID: 11400000, guid: 9c9666361562e55498dc31655fa61747, type: 2}
   tags: []
   setID: 

@@ -178,10 +178,11 @@ public class CombatManager : MonoBehaviour
     }
 
     // Compétence en attente d'une cible (mode sélection de cible)
-    private SkillData   pendingSkill;
+    private SkillData     pendingSkill;
+    private EquipmentData _pendingEquipSource;
     private ContexteExecutionSkill _pendingCtx;
-    private int         _pendingCoutEffectif;
-    private bool        isSelectingTarget;
+    private int           _pendingCoutEffectif;
+    private bool          isSelectingTarget;
 
     // Vrai si EndCombat a déjà été appelé ce combat (protection multi-appel)
     private bool combatEnded;
@@ -203,7 +204,12 @@ public class CombatManager : MonoBehaviour
     private List<EquipmentData>    _availableSkillSources   = new List<EquipmentData>();
     private List<SkillButton>      spawnedSkillButtons      = new List<SkillButton>();
     private List<ConsumableButton> spawnedConsumableButtons = new List<ConsumableButton>();
-    private Dictionary<SkillData, int> skillCooldowns       = new Dictionary<SkillData, int>();
+    private Dictionary<(EquipmentData equip, SkillData skill), int> skillCooldowns
+        = new Dictionary<(EquipmentData, SkillData), int>();
+
+    // Compteurs par modificateur AfterNSkillsUsed — clé = (équipement, modificateur)
+    private Dictionary<(EquipmentData, SkillModifier), int> _afterNSkillsCounters
+        = new Dictionary<(EquipmentData, SkillModifier), int>();
 
     private const float EnemyActionDelay = 1.0f;
 
@@ -322,8 +328,13 @@ public class CombatManager : MonoBehaviour
                 if (eff != null) ApplyEnemyEffect(eff, $"{instance.GetName()} (apparition)", instance);
         }
 
-        foreach (SkillData skill in availableSkills)
-            if (skill != null) skillCooldowns[skill] = 0;
+        for (int i = 0; i < availableSkills.Count; i++)
+        {
+            SkillData sk = availableSkills[i];
+            EquipmentData eq = (i < _availableSkillSources.Count) ? _availableSkillSources[i] : null;
+            if (sk != null) skillCooldowns[(eq, sk)] = 0;
+        }
+        _afterNSkillsCounters.Clear();
 
         SpawnSkillButtons();
         SpawnConsumableButtons();
@@ -896,7 +907,10 @@ public class CombatManager : MonoBehaviour
         if (battleState != BattleState.PlayerTurn) return;
         if (skill == null) return;
 
-        if (skillCooldowns.TryGetValue(skill, out int cd) && cd > 0)
+        // Si un ciblage est en cours, l'annuler proprement avant de traiter le nouveau skill
+        if (isSelectingTarget) CancelTargetSelection();
+
+        if (skillCooldowns.TryGetValue((equipSource, skill), out int cd) && cd > 0)
         {
             Log($"{skill.skillName} est en cooldown ({cd} tours restants).");
             return;
@@ -917,9 +931,10 @@ public class CombatManager : MonoBehaviour
         {
             _pendingCtx          = ctx;
             _pendingCoutEffectif = coutEffectif;
+            _pendingEquipSource  = equipSource;
             pendingSkill         = skill;
             currentEnergy       -= coutEffectif;
-            if (skill.cooldown > 0) skillCooldowns[skill] = skill.cooldown;
+            if (skill.cooldown > 0) skillCooldowns[(equipSource, skill)] = skill.cooldown;
             UpdateSkillButtons();
             UpdatePlayerUI();
             EnterTargetSelectionMode();
@@ -928,12 +943,14 @@ public class CombatManager : MonoBehaviour
 
         // Execution directe (AllEnemies, RandomEnemy, Self, ou seul ennemi vivant)
         currentEnergy -= coutEffectif;
-        if (skill.cooldown > 0) skillCooldowns[skill] = skill.cooldown;
+        if (skill.cooldown > 0) skillCooldowns[(equipSource, skill)] = skill.cooldown;
 
         ExecuterEffetsSkill(skill, null, ctx);
         for (int i = 1; i < ctx.repetitions && !combatEnded; i++)
             ExecuterEffetsSkill(skill, null, ctx);
 
+        VerifierAfterNSkillsUsed(skill, equipSource);
+        DecayPlayerStatuses(StatusDecayTiming.OnSkillUse, skill);
         GameEvents.TriggerSkillUsed(skill);
         UpdatePlayerUI();
         UpdateSkillButtons();
@@ -988,6 +1005,9 @@ public class CombatManager : MonoBehaviour
 
         if (turnText != null) turnText.text = "Choisir une cible...";
         Log($"{GetPlayerName()} vise avec {pendingSkill?.skillName} — cliquez sur un ennemi.");
+
+        // Désactive les boutons de skill maintenant que isSelectingTarget est true
+        UpdateSkillButtons();
     }
 
     /// <summary>
@@ -1004,7 +1024,8 @@ public class CombatManager : MonoBehaviour
         if (pendingSkill != null)
         {
             currentEnergy += _pendingCoutEffectif;
-            skillCooldowns[pendingSkill] = 0;
+            skillCooldowns[(_pendingEquipSource, pendingSkill)] = 0;
+            _pendingEquipSource = null;
             pendingSkill = null;
         }
 
@@ -1039,9 +1060,11 @@ public class CombatManager : MonoBehaviour
 
         if (turnText != null) turnText.text = "Tour du joueur";
 
-        ContexteExecutionSkill ctx = _pendingCtx;
-        SkillData skill = pendingSkill;
-        pendingSkill = null;
+        ContexteExecutionSkill ctx   = _pendingCtx;
+        SkillData     skill          = pendingSkill;
+        EquipmentData equipSource    = _pendingEquipSource;
+        pendingSkill        = null;
+        _pendingEquipSource = null;
 
         ExecuterEffetsSkill(skill, cible, ctx);
         for (int i = 1; i < ctx.repetitions && !combatEnded; i++)
@@ -1052,6 +1075,8 @@ public class CombatManager : MonoBehaviour
             ExecuterEffetsSkill(skill, cibleRepeat, ctx);
         }
 
+        VerifierAfterNSkillsUsed(skill, equipSource);
+        DecayPlayerStatuses(StatusDecayTiming.OnSkillUse, skill);
         if (skill != null) GameEvents.TriggerSkillUsed(skill);
         UpdatePlayerUI();
         UpdateSkillButtons();
@@ -1142,7 +1167,11 @@ public class CombatManager : MonoBehaviour
                 var (healFlat, healPct) = GetPlayerStatModifiers(StatType.HealGainMultiplier);
                 int healed = Mathf.RoundToInt(effect.value * (1f + healPct) + healFlat);
                 healed = Mathf.Min(healed, GetPlayerMaxHP() - currentPlayerHP);
-                if (healed > 0) { currentPlayerHP += healed; }
+                if (healed > 0)
+                {
+                    currentPlayerHP += healed;
+                    DecayPlayerStatuses(StatusDecayTiming.OnHealing);
+                }
                 Log($"{GetPlayerName()} utilise {sourceName} — Soin de {healed} HP → {currentPlayerHP}/{GetPlayerMaxHP()}");
                 break;
             }
@@ -1152,6 +1181,7 @@ public class CombatManager : MonoBehaviour
                 var (armorFlat, armorPct) = GetPlayerStatModifiers(StatType.ArmorGainMultiplier);
                 int armor = Mathf.Max(0, Mathf.RoundToInt(effect.value * (1f + armorPct) + armorFlat));
                 currentPlayerArmor += armor;
+                DecayPlayerStatuses(StatusDecayTiming.OnArmorGain);
                 Log($"{GetPlayerName()} utilise {sourceName} — +{armor} armure → {currentPlayerArmor} armure totale");
                 break;
             }
@@ -1354,6 +1384,44 @@ public class CombatManager : MonoBehaviour
     }
 
     /// <summary>
+    /// Vérifie et déclenche les modificateurs AfterNSkillsUsed de l'équipement source.
+    /// </summary>
+    private void VerifierAfterNSkillsUsed(SkillData skill, EquipmentData equip)
+    {
+        if (equip?.skillModifiers == null) return;
+
+        foreach (SkillModifier mod in equip.skillModifiers)
+        {
+            if (mod == null || mod.type != SkillModifierType.AfterNSkillsUsed) continue;
+            if (mod.effectToTrigger == null) continue;
+
+            int seuil = Mathf.Max(1, Mathf.RoundToInt(mod.value));
+
+            // Filtre par tag si conditionTag est renseigné
+            if (mod.conditionTag != null)
+            {
+                bool aLeTag = skill != null && skill.tags != null &&
+                              skill.tags.Any(t => t != null && t.tagName == mod.conditionTag.tagName);
+                if (!aLeTag) continue;
+            }
+
+            var key = (equip, mod);
+            if (!_afterNSkillsCounters.ContainsKey(key))
+                _afterNSkillsCounters[key] = 0;
+
+            _afterNSkillsCounters[key]++;
+
+            if (_afterNSkillsCounters[key] >= seuil)
+            {
+                _afterNSkillsCounters[key] = 0;
+                string source = $"{equip.equipmentName} (AfterNSkillsUsed ×{seuil})";
+                Log($"[AfterNSkillsUsed] {source} déclenché par {skill?.skillName}");
+                ApplyModuleEffect(mod.effectToTrigger, source, equip);
+            }
+        }
+    }
+
+    /// <summary>
     /// Résout le tag de filtre à utiliser pour la distribution d'un item.
     /// Si <c>filtreParTagHero</c> est activé et que le héros a au moins un tag, retourne <c>tags[0]</c>.
     /// Sinon retourne <c>effect.filtreTag</c> (peut être null — pas de filtre).
@@ -1422,6 +1490,7 @@ public class CombatManager : MonoBehaviour
 
         if (hpDamage > 0)
             GameEvents.TriggerPlayerDealtDamage(hpDamage);
+        if (hpDamage > 0) DecayEnemyStatuses(ennemi, StatusDecayTiming.OnDamageTaken);
 
         // Vol de vie
         float lifeSteal = GetCurrentLifeSteal();
@@ -1554,6 +1623,7 @@ public class CombatManager : MonoBehaviour
 
         if (hpDamage > 0)
             GameEvents.TriggerPlayerDamaged(hpDamage);
+        if (hpDamage > 0) DecayPlayerStatuses(StatusDecayTiming.OnDamageTaken);
     }
 
     // -----------------------------------------------
@@ -2023,7 +2093,7 @@ public class CombatManager : MonoBehaviour
         }
     }
 
-    private void DecayPlayerStatuses(StatusDecayTiming timing)
+    private void DecayPlayerStatuses(StatusDecayTiming timing, SkillData usedSkill = null)
     {
         if (playerStatuses.Count == 0) return;
         List<StatusData> keys = new List<StatusData>(playerStatuses.Keys);
@@ -2031,6 +2101,12 @@ public class CombatManager : MonoBehaviour
         {
             if (!playerStatuses.ContainsKey(status) || status.decayPerTurn <= 0) continue;
             if (status.decayTiming != timing) continue;
+            if (timing == StatusDecayTiming.OnSkillUse && status.decayConditionTag != null)
+            {
+                if (usedSkill == null || usedSkill.tags == null) continue;
+                bool hasTag = usedSkill.tags.Any(t => t != null && t.tagName == status.decayConditionTag.tagName);
+                if (!hasTag) continue;
+            }
             playerStatuses[status] = Mathf.Max(0, playerStatuses[status] - status.decayPerTurn);
             if (playerStatuses[status] == 0) Log($"{GetPlayerName()} n'a plus de {status.statusName}");
         }
@@ -2220,9 +2296,9 @@ public class CombatManager : MonoBehaviour
 
     private void DecrementCooldowns()
     {
-        List<SkillData> keys = new List<SkillData>(skillCooldowns.Keys);
-        foreach (SkillData skill in keys)
-            if (skillCooldowns[skill] > 0) skillCooldowns[skill]--;
+        var keys = new List<(EquipmentData, SkillData)>(skillCooldowns.Keys);
+        foreach (var key in keys)
+            if (skillCooldowns[key] > 0) skillCooldowns[key]--;
     }
 
     // -----------------------------------------------
@@ -2562,7 +2638,7 @@ public class CombatManager : MonoBehaviour
         foreach (SkillButton sb in spawnedSkillButtons)
         {
             if (sb.Skill == null) continue;
-            int cd = skillCooldowns.TryGetValue(sb.Skill, out int val) ? val : 0;
+            int cd = skillCooldowns.TryGetValue((sb.SourceEquipment, sb.Skill), out int val) ? val : 0;
             sb.SetCooldown(cd);
             bool canUse = battleState == BattleState.PlayerTurn
                        && !isSelectingTarget

@@ -17,12 +17,16 @@ public class SkillModifier
     //   EnergyCostModifier    : delta entier ajoute au cout en energie
     //   BonusStatusStacks     : stacks supplementaires sur tous les statuts appliques
     //   ForceAoE              : ignoree (effet binaire)
+    //   AfterNSkillsUsed      : seuil de declenchement (ex : 3 = apres 3 skills utilises)
     public float value;
 
     // Si non null : s'applique seulement aux skills de cet equipement qui ont
     // ce tag dans skill.tags (comparaison par tagName).
     // Null = s'applique a tous les skills de l'equipement.
     public TagData conditionTag;
+
+    // Effet declenche quand le compteur atteint value. Uniquement pour AfterNSkillsUsed.
+    public EffectData effectToTrigger;
 }
 
 public enum SkillModifierType
@@ -49,4 +53,9 @@ public enum SkillModifierType
 
     // Ajoute value (int) stacks a chaque statut applique par le skill
     BonusStatusStacks,
+
+    // Declenche effectToTrigger apres avoir utilise value skills de cet equipement.
+    // conditionTag (deja existant) = filtre optionnel sur le tag du skill utilise (null = tous).
+    // Le compteur s'accumule sur le combat et se remet a 0 apres chaque declenchement.
+    AfterNSkillsUsed,
 }

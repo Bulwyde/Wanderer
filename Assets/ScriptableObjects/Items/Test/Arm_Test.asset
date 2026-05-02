@@ -29,9 +29,11 @@ MonoBehaviour:
   passiveEffects: []
   skillModifiers: []
   skillSlots:
-  - state: 0
-    equippedSkill: {fileID: 11400000, guid: 6970e4419490b564d91f87dc893f232d, type: 2}
-  - state: 0
-    equippedSkill: {fileID: 11400000, guid: 75bfa1dbea09fc0428f19808f0b4ca87, type: 2}
+  - state: 1
+    equippedSkill: {fileID: 11400000, guid: f77538bbcb40ec5428470b863f721111, type: 2}
+  - state: 1
+    equippedSkill: {fileID: 11400000, guid: 9c9666361562e55498dc31655fa61747, type: 2}
+  - state: 1
+    equippedSkill: {fileID: 11400000, guid: 9de6836a04603bf499a97c1a54e2453e, type: 2}
   tags: []
   setID: 

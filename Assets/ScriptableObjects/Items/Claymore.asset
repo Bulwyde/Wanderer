@@ -32,8 +32,13 @@ MonoBehaviour:
   - type: 0
     value: 0
     conditionTag: {fileID: 0}
+  - type: 1
+    value: -0.25
+    conditionTag: {fileID: 11400000, guid: f8ab5f2693f5f624d92cfaa17382bafc, type: 2}
   skillSlots:
   - state: 1
     equippedSkill: {fileID: 11400000, guid: 9c9666361562e55498dc31655fa61747, type: 2}
+  - state: 1
+    equippedSkill: {fileID: 11400000, guid: f77538bbcb40ec5428470b863f721111, type: 2}
   tags: []
   setID: 

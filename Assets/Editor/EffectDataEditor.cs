@@ -157,7 +157,8 @@ public class EffectDataEditor : Editor
                     new GUIContent("Valeur (plate)"));
                 EditorGUILayout.HelpBox(
                     "Modules / passifs : bonus permanent sur le run.\n" +
-                    "Skills / consommables : bonus temporaire ce combat.",
+                    "Skills / consommables : bonus temporaire ce combat.\n" +
+                    "Exception : ArmorGainMultiplier, HealGainMultiplier, DamageGainMultiplier sont toujours temporaires (ce combat uniquement).",
                     MessageType.None);
                 break;
             }
@@ -287,6 +288,17 @@ public class EffectDataEditor : Editor
                 MessageType.None);
             EditorGUI.indentLevel--;
         }
+        else if (scalingSourceVal == EffectScalingSource.SkillEquipeSurCetObjet)
+        {
+            EditorGUI.indentLevel++;
+            EditorGUILayout.PropertyField(
+                serializedObject.FindProperty("comptageTag"),
+                new GUIContent("Tag a compter sur les skills"));
+            EditorGUILayout.HelpBox(
+                "ModifyStat : valeur effective = Valeur × nb de skills avec ce tag équipés sur l'équipement source.",
+                MessageType.None);
+            EditorGUI.indentLevel--;
+        }
 
         EditorGUILayout.Space();
 
@@ -299,8 +311,6 @@ public class EffectDataEditor : Editor
         SerializedProperty conditionCibleProp = serializedObject.FindProperty("conditionCible");
         EditorGUILayout.PropertyField(conditionCibleProp, new GUIContent("Cible de la condition"));
         EditorGUILayout.PropertyField(serializedObject.FindProperty("conditionTag"), new GUIContent("Tag requis"));
-
-        ConditionCible conditionCible = (ConditionCible)conditionCibleProp.enumValueIndex;
 
         // Bonus conditionnel — uniquement pour DealDamage quand un tag est assigné
         SerializedProperty conditionTagProp = serializedObject.FindProperty("conditionTag");

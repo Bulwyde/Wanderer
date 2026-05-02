@@ -22,7 +22,8 @@ MonoBehaviour:
   effects:
   - {fileID: 11400000, guid: dc95c9397d2297047a6eb27713f2b391, type: 2}
   targetType: 0
-  tags: []
+  tags:
+  - {fileID: 11400000, guid: f8ab5f2693f5f624d92cfaa17382bafc, type: 2}
   inheritedTags: []
   isNavigationSkill: 0
   navEffects: []

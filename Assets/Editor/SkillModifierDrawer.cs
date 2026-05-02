@@ -15,6 +15,10 @@ public class SkillModifierDrawer : PropertyDrawer
         if (type != SkillModifierType.ForceAoE)
             height += EditorGUIUtility.singleLineHeight + EditorGUIUtility.standardVerticalSpacing;
 
+        // Ajoute une ligne pour effectToTrigger si AfterNSkillsUsed
+        if (type == SkillModifierType.AfterNSkillsUsed)
+            height += EditorGUIUtility.singleLineHeight + EditorGUIUtility.standardVerticalSpacing;
+
         return height;
     }
 
@@ -48,6 +52,15 @@ public class SkillModifierDrawer : PropertyDrawer
         // Condition Tag
         Rect conditionTagRect = new Rect(position.x, y, position.width, lineHeight);
         EditorGUI.PropertyField(conditionTagRect, conditionTagProp);
+
+        // Effect To Trigger (AfterNSkillsUsed uniquement)
+        if (type == SkillModifierType.AfterNSkillsUsed)
+        {
+            y += lineHeight + spacing;
+            SerializedProperty effectProp = property.FindPropertyRelative("effectToTrigger");
+            Rect effectRect = new Rect(position.x, y, position.width, lineHeight);
+            EditorGUI.PropertyField(effectRect, effectProp);
+        }
 
         EditorGUI.EndProperty();
     }

@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7e42231eca85dd24eac4c3b5a2342760, type: 3}
+  m_Name: Status_Handgun
+  m_EditorClassIdentifier: Assembly-CSharp::StatusData
+  statusID: Status_Handgun
+  statusName: Status_Handgun
+  description: 
+  icon: {fileID: 4045322650220621105, guid: 9a108847d8e47a34097a5d949c23aee5, type: 3}
+  behavior: 0
+  perTurnAction: 0
+  effectPerStack: 0
+  decayPerTurn: 0
+  decayTiming: 2
+  decayConditionTag: {fileID: 11400000, guid: e084f6279b53cbd489ecc1948bbf0945, type: 2}
+  maxStacks: 0
+  passiveEffects: []
+  statToModify: 0
+  statModifierType: 0
+  valueScalesWithStacks: 0

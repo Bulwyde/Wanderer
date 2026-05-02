@@ -94,6 +94,21 @@ public class StatusDataEditor : Editor
                 new GUIContent("Valeur par stack"));
         }
 
+        EditorGUILayout.Space();
+
+        // -----------------------------------------------
+        // EFFETS PASSIFS
+        // -----------------------------------------------
+
+        EditorGUILayout.LabelField("Effets passifs", EditorStyles.boldLabel);
+        EditorGUILayout.HelpBox(
+            "Effets déclenchés automatiquement quand ce statut est actif (stacks > 0).\n" +
+            "Le champ trigger de chaque EffectData détermine le moment de déclenchement.\n" +
+            "Pour conditionner à un tag de skill (OnSkillUsed) : scalingSource = SkillUtilise + comptageTag.",
+            MessageType.None);
+        EditorGUILayout.PropertyField(
+            serializedObject.FindProperty("passiveEffects"), true);
+
         serializedObject.ApplyModifiedProperties();
     }
 }

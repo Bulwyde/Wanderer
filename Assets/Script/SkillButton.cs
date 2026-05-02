@@ -73,6 +73,15 @@ public class SkillButton : MonoBehaviour
     }
 
     /// <summary>
+    /// Met à jour le coût affiché (après réduction globale d'énergie).
+    /// </summary>
+    public void SetDisplayedCost(int cost)
+    {
+        if (energyCostText != null)
+            energyCostText.text = $"{cost}";
+    }
+
+    /// <summary>
     /// Active ou désactive le bouton (manque d'énergie, tour ennemi, cooldown...).
     /// </summary>
     public void SetInteractable(bool interactable)

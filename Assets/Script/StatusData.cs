@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -69,6 +70,16 @@ public class StatusData : ScriptableObject
 
     // Plafond de stacks accumulables sur une même entité (0 = illimité)
     public int maxStacks;
+
+    // -----------------------------------------------
+    // EFFETS PASSIFS (optionnel)
+    // -----------------------------------------------
+
+    [Header("Effets passifs (optionnel)")]
+    // Effets déclenchés automatiquement quand ce statut est actif (stacks > 0).
+    // Utilise le champ trigger de chaque EffectData pour savoir quand s'activer.
+    // Supporte scalingSource = SkillUtilise + comptageTag pour filtrer par tag de skill (OnSkillUsed).
+    public List<EffectData> passiveEffects;
 
     // -----------------------------------------------
     // MODIFICATION DE STAT (behavior == ModifyStat)

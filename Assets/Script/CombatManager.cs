@@ -558,7 +558,8 @@ public class CombatManager : MonoBehaviour
             foreach (StatType st in new[] {
                 StatType.ArmorGainMultiplier,
                 StatType.HealGainMultiplier,
-                StatType.DamageGainMultiplier })
+                StatType.DamageGainMultiplier,
+                StatType.EnergyCostReduction })
             {
                 float bonus = RunManager.Instance.GetStatBonus(st);
                 if (bonus != 0f)
@@ -683,9 +684,11 @@ public class CombatManager : MonoBehaviour
         {
             isFirstTurn = false;
             ModuleManager.Instance?.ApplyModulesWithTrigger(EffectTrigger.OnFightStart);
+            ApplyStatusPassivesForPlayer(EffectTrigger.OnFightStart);
         }
 
         ApplyPlayerPerTurnEffects();
+        ApplyStatusPassivesForPlayer(EffectTrigger.OnPlayerTurnStart);
         DecayPlayerStatuses(StatusDecayTiming.OnTurnStart);
 
         if (effectiveRegeneration > 0)
@@ -897,6 +900,7 @@ public class CombatManager : MonoBehaviour
         if (isSelectingTarget) CancelTargetSelection();
 
         Log($"{GetPlayerName()} termine son tour.");
+        ApplyStatusPassivesForPlayer(EffectTrigger.OnPlayerTurnEnd);
         DecayPlayerStatuses(StatusDecayTiming.OnTurnEnd);
         GameEvents.TriggerPlayerTurnEnded();
         StartEnemyTurn();
@@ -919,6 +923,7 @@ public class CombatManager : MonoBehaviour
         // Construit le contexte d'execution depuis l'equipement source transmis par le bouton
         ContexteExecutionSkill ctx   = ObtenirContexteExecution(skill, equipSource);
         int coutEffectif             = skill.energyCost + ctx.coutEnergieSupplementaire;
+        coutEffectif = Mathf.Max(0, coutEffectif - GetCurrentEnergyCostReduction());
 
         if (currentEnergy < coutEffectif)
         {
@@ -950,6 +955,7 @@ public class CombatManager : MonoBehaviour
             ExecuterEffetsSkill(skill, null, ctx);
 
         VerifierAfterNSkillsUsed(skill, equipSource);
+        ApplyStatusPassivesForPlayer(EffectTrigger.OnSkillUsed, skill);
         DecayPlayerStatuses(StatusDecayTiming.OnSkillUse, skill);
         GameEvents.TriggerSkillUsed(skill);
         UpdatePlayerUI();
@@ -1076,6 +1082,7 @@ public class CombatManager : MonoBehaviour
         }
 
         VerifierAfterNSkillsUsed(skill, equipSource);
+        ApplyStatusPassivesForPlayer(EffectTrigger.OnSkillUsed, skill);
         DecayPlayerStatuses(StatusDecayTiming.OnSkillUse, skill);
         if (skill != null) GameEvents.TriggerSkillUsed(skill);
         UpdatePlayerUI();
@@ -1623,6 +1630,7 @@ public class CombatManager : MonoBehaviour
 
         if (hpDamage > 0)
             GameEvents.TriggerPlayerDamaged(hpDamage);
+        if (hpDamage > 0) ApplyStatusPassivesForPlayer(EffectTrigger.OnPlayerDamaged);
         if (hpDamage > 0) DecayPlayerStatuses(StatusDecayTiming.OnDamageTaken);
     }
 
@@ -1833,9 +1841,10 @@ public class CombatManager : MonoBehaviour
                     val = effect.value * CompterSkillsAvecTagSurEquipement(sourceEquipment, effect.comptageTag);
 
                 bool estStatCombatTemporaire =
-                    effect.statToModify == StatType.ArmorGainMultiplier ||
-                    effect.statToModify == StatType.HealGainMultiplier  ||
-                    effect.statToModify == StatType.DamageGainMultiplier;
+                    effect.statToModify == StatType.ArmorGainMultiplier  ||
+                    effect.statToModify == StatType.HealGainMultiplier   ||
+                    effect.statToModify == StatType.DamageGainMultiplier ||
+                    effect.statToModify == StatType.EnergyCostReduction;
 
                 if (estStatCombatTemporaire)
                 {
@@ -2089,6 +2098,35 @@ public class CombatManager : MonoBehaviour
                     ennemi.currentHP += healed;
                     Log($"{ennemi.GetName()} récupère {healed} HP grâce à {status.statusName}");
                     break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Déclenche les effets passifs des statuts actifs du joueur correspondant au trigger donné.
+    /// usedSkill : transmis pour le filtre SkillUtilise (OnSkillUsed uniquement).
+    /// </summary>
+    private void ApplyStatusPassivesForPlayer(EffectTrigger trigger, SkillData usedSkill = null)
+    {
+        if (playerStatuses.Count == 0) return;
+        List<StatusData> snapshot = new List<StatusData>(playerStatuses.Keys);
+        foreach (StatusData status in snapshot)
+        {
+            if (!playerStatuses.TryGetValue(status, out int stacks) || stacks <= 0) continue;
+            if (status.passiveEffects == null) continue;
+            foreach (EffectData effet in status.passiveEffects)
+            {
+                if (effet == null || effet.trigger != trigger) continue;
+                // Filtre tag pour OnSkillUsed
+                if (trigger == EffectTrigger.OnSkillUsed &&
+                    effet.scalingSource == EffectScalingSource.SkillUtilise &&
+                    effet.comptageTag != null)
+                {
+                    if (usedSkill == null || usedSkill.tags == null) continue;
+                    bool hasTag = usedSkill.tags.Any(t => t != null && t.tagName == effet.comptageTag.tagName);
+                    if (!hasTag) continue;
+                }
+                ApplyModuleEffect(effet, $"[Statut] {status.statusName}");
             }
         }
     }
@@ -2633,17 +2671,26 @@ public class CombatManager : MonoBehaviour
         }
     }
 
+    private int GetCurrentEnergyCostReduction()
+    {
+        var (flat, _) = GetPlayerStatModifiers(StatType.EnergyCostReduction);
+        return Mathf.Max(0, Mathf.RoundToInt(flat));
+    }
+
     private void UpdateSkillButtons()
     {
+        int reduction = GetCurrentEnergyCostReduction();
         foreach (SkillButton sb in spawnedSkillButtons)
         {
             if (sb.Skill == null) continue;
             int cd = skillCooldowns.TryGetValue((sb.SourceEquipment, sb.Skill), out int val) ? val : 0;
+            int coutReel = Mathf.Max(0, sb.EffectiveCost - reduction);
             sb.SetCooldown(cd);
+            sb.SetDisplayedCost(coutReel);
             bool canUse = battleState == BattleState.PlayerTurn
                        && !isSelectingTarget
                        && cd == 0
-                       && currentEnergy >= sb.EffectiveCost;
+                       && currentEnergy >= coutReel;
             sb.SetInteractable(canUse);
         }
     }

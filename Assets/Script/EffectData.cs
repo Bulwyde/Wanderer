@@ -182,6 +182,7 @@ public enum StatType
     ArmorGainMultiplier, // Bonus % d'armure gagnée (ex : 0.1 = +10%)
     HealGainMultiplier,  // Bonus % de soins reçus  (ex : 0.1 = +10%)
     DamageGainMultiplier,// Bonus % de dégâts infligés (ex : 0.1 = +10%)
+    EnergyCostReduction, // Réduit le coût en énergie de tous les skills (flat, plancher 0). Valeur positive = réduction.
 }
 
 /// <summary>

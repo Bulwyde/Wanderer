@@ -29,7 +29,7 @@ MonoBehaviour:
   tags:
   - {fileID: 11400000, guid: 666f6447c3e3aa74db1ac3f6fb8e7c2f, type: 2}
   maxEquippedArms: 4
-  startingModule: {fileID: 11400000, guid: 989de3618fbfa54458e13f2fc5939564, type: 2}
+  startingModule: {fileID: 11400000, guid: 0cc8e728129508249a25ec4d87a48a4e, type: 2}
   startingHead: {fileID: 0}
   startingTorso: {fileID: 0}
   startingLegs: {fileID: 11400000, guid: 06b4ecbeaf8fb144bb69ac9fbd707739, type: 2}

@@ -86,12 +86,33 @@ public class StatusDataEditor : Editor
 
         if (behavior == StatusBehavior.ModifyStat)
         {
-            EditorGUILayout.PropertyField(serializedObject.FindProperty("statToModify"));
+            SerializedProperty statProp = serializedObject.FindProperty("statToModify");
+            EditorGUILayout.PropertyField(statProp);
             EditorGUILayout.PropertyField(serializedObject.FindProperty("statModifierType"));
             EditorGUILayout.PropertyField(serializedObject.FindProperty("valueScalesWithStacks"));
             EditorGUILayout.PropertyField(
                 serializedObject.FindProperty("effectPerStack"),
                 new GUIContent("Valeur par stack"));
+
+            // Affiche conditionTagForModifyStat seulement pour les stats combat-temporaires
+            StatType stat = (StatType)statProp.enumValueIndex;
+            bool isCombatTemporaryStat =
+                stat == StatType.ArmorGainMultiplier ||
+                stat == StatType.HealGainMultiplier ||
+                stat == StatType.DamageGainMultiplier ||
+                stat == StatType.EnergyCostReduction;
+
+            if (isCombatTemporaryStat)
+            {
+                EditorGUILayout.Space(4);
+                EditorGUILayout.PropertyField(
+                    serializedObject.FindProperty("conditionTagForModifyStat"),
+                    new GUIContent("Filtre tag (optionnel)"));
+                EditorGUILayout.HelpBox(
+                    "Si renseigné, le bonus de stat ne s'applique que si le skill utilisé porte ce tag.\n" +
+                    "Null = le bonus s'applique à tous les skills.",
+                    MessageType.None);
+            }
         }
 
         EditorGUILayout.Space();

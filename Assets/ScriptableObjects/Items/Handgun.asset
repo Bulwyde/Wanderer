@@ -15,8 +15,8 @@ MonoBehaviour:
   equipmentID: handgun
   equipmentName: Handgun
   icon: {fileID: 4045322650220621105, guid: 9a108847d8e47a34097a5d949c23aee5, type: 3}
-  description: "D\xE9but de tour : r\xE9duit al\xE9atoirement le CD d'une de vos
-    comp\xE9tences \xE9quip\xE9 sur cet objet de 1 tour."
+  description: "D\xE9but de tour : le premier skill port\xE9 par un \"Handgun\" co\xFBte
+    1 de moins."
   keywords: []
   equipmentType: 3
   level: 1
@@ -27,14 +27,12 @@ MonoBehaviour:
   bonusCriticalMultiplier: 0
   bonusRegeneration: 0
   bonusLifeSteal: 0
-  passiveEffects: []
-  skillModifiers:
-  - type: 5
-    value: 1
-    conditionTag: {fileID: 0}
-    effectToTrigger: {fileID: 0}
+  passiveEffects:
+  - {fileID: 11400000, guid: f75b746f987c82a42a5dde71f37d63a6, type: 2}
+  skillModifiers: []
   skillSlots:
-  - state: 0
-    equippedSkill: {fileID: 11400000, guid: 75bfa1dbea09fc0428f19808f0b4ca87, type: 2}
-  tags: []
+  - state: 1
+    equippedSkill: {fileID: 11400000, guid: a7036231f1e2a0d4a9b1d335a6766655, type: 2}
+  tags:
+  - {fileID: 11400000, guid: e084f6279b53cbd489ecc1948bbf0945, type: 2}
   setID: 

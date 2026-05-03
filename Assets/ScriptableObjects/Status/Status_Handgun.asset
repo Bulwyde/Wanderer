@@ -16,14 +16,15 @@ MonoBehaviour:
   statusName: Status_Handgun
   description: 
   icon: {fileID: 4045322650220621105, guid: 9a108847d8e47a34097a5d949c23aee5, type: 3}
-  behavior: 0
+  behavior: 2
   perTurnAction: 0
-  effectPerStack: 0
-  decayPerTurn: 0
+  effectPerStack: 1
+  decayPerTurn: 1
   decayTiming: 2
   decayConditionTag: {fileID: 11400000, guid: e084f6279b53cbd489ecc1948bbf0945, type: 2}
   maxStacks: 0
   passiveEffects: []
-  statToModify: 0
+  statToModify: 10
   statModifierType: 0
   valueScalesWithStacks: 0
+  conditionTagForModifyStat: {fileID: 11400000, guid: e084f6279b53cbd489ecc1948bbf0945, type: 2}

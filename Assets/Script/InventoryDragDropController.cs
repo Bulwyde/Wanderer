@@ -223,15 +223,26 @@ public class InventoryDragDropController : MonoBehaviour,
                     {
                         // Placement réussi → maintenant on peut modifier l'état
 
-                        // Si vient d'un slot équipé, nettoyer manuellement (sans passer par UnequipSkill)
+                        // Si vient d'un slot équipé, nettoyer manuellement.
+                        // Note : on ne peut pas appeler UnequipSkill ici car il remettrait le skill
+                        // en inventaire, alors qu'il vient d'être placé via SetSkillToInventorySlot.
+                        // On utilise GetEquipmentTagsNotInSkill pour la suppression sélective des
+                        // inheritedTags — même logique que UnequipSkill, sans la gestion d'inventaire.
                         if (_originEquipment != null && _originSlotIndex >= 0)
                         {
                             SkillSlot originSlot = _originEquipment.skillSlots[_originSlotIndex];
 
-                            // Retirer les tags hérités de l'équipement
-                            // Note : inheritedTags sont dans skill.inheritedTags, PAS dans skill.tags → Clear() direct
-                            if (_dragSkillData.inheritedTags != null && _dragSkillData.inheritedTags.Count > 0)
-                                _dragSkillData.inheritedTags.Clear();
+                            // Retirer sélectivement les tags hérités (cohérent avec UnequipSkill)
+                            RunManager run2 = RunManager.Instance;
+                            if (run2 != null)
+                            {
+                                foreach (TagData tag in run2.GetEquipmentTagsNotInSkill(_originEquipment, _dragSkillData))
+                                    _dragSkillData.inheritedTags.Remove(tag);
+                            }
+                            else if (_dragSkillData.inheritedTags != null)
+                            {
+                                _dragSkillData.inheritedTags.Clear();  // fallback test isolé
+                            }
 
                             originSlot.equippedSkill = null;
                             originSlot.state         = SkillSlot.SlotState.Available;

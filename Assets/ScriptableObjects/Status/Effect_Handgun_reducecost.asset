@@ -10,29 +10,29 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5713ebea065ef3643a7749f10079cbca, type: 3}
-  m_Name: Effect_Status_Handgun
+  m_Name: Effect_Handgun_reducecost
   m_EditorClassIdentifier: Assembly-CSharp::EffectData
-  effectID: Effect_Status_Handgun
-  displayName: Effect_Status_Handgun
+  effectID: Effect_Handgun_reducecost
+  displayName: Effect_Handgun_reducecost
   description: 
   keywords: []
-  trigger: 1
-  action: 2
+  trigger: 0
+  action: 3
   value: 1
   secondaryValue: 0
-  statusToApply: {fileID: 11400000, guid: 49c95effd0a09af4ea2b312f04a88800, type: 2}
+  statusToApply: {fileID: 0}
   scalingStatus: {fileID: 0}
   consumeStacks: 0
   target: 0
-  statToModify: 0
+  statToModify: 10
   consommableLootTable: {fileID: 0}
   equipementLootTable: {fileID: 0}
   moduleLootTable: {fileID: 0}
   filtreTag: {fileID: 0}
   filtreParTagHero: 0
-  comptageTag: {fileID: 11400000, guid: e084f6279b53cbd489ecc1948bbf0945, type: 2}
+  comptageTag: {fileID: 0}
   scalingSource: 0
-  conditionTag: {fileID: 0}
+  conditionTag: {fileID: 11400000, guid: e084f6279b53cbd489ecc1948bbf0945, type: 2}
   conditionCible: 0
   bonusConditionnel: 0
   typeBonusConditionnel: 0

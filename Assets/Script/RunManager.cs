@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using System.Linq;
 
 /// <summary>
 /// Singleton persistant entre les scènes (DontDestroyOnLoad).
@@ -193,6 +194,40 @@ public class RunManager : MonoBehaviour
             }
 
             clone.skillSlots.Add(newSlot);
+        }
+
+        // Clone aussi les skills pour isoler inheritedTags — deux équipements ne doivent pas partager
+        // le même asset SkillData car leurs inheritedTags s'accumuleraient. Exemple : Saber + Handgun
+        // avec le même skill ne doivent pas mélanger leurs tags hérités.
+        foreach (var slot in clone.skillSlots)
+        {
+            if (slot.equippedSkill != null)
+            {
+                slot.equippedSkill = Instantiate(slot.equippedSkill);
+                slot.equippedSkill.inheritedTags = new List<TagData>(); // Réinitialise les tags hérités
+            }
+        }
+
+        // Applique l'héritage de tags pour les slots pré-remplis.
+        // EquipSkill n'est pas appelé lors du clonage, donc les inheritedTags restent vides
+        // sans cette passe. Même logique que GetEquipmentTagsNotInSkill : on n'hérite que les
+        // tags de l'équipement absents des tags propres du skill (pas de doublons).
+        if (clone.tags != null)
+        {
+            foreach (SkillSlot slot in clone.skillSlots)
+            {
+                if (slot.equippedSkill == null) continue;
+                if (slot.state != SkillSlot.SlotState.Used && slot.state != SkillSlot.SlotState.LockedInUse) continue;
+
+                foreach (TagData tag in clone.tags)
+                {
+                    if (tag == null) continue;
+                    bool déjàDansSkill = slot.equippedSkill.tags != null &&
+                                        slot.equippedSkill.tags.Any(t => t != null && t.tagName == tag.tagName);
+                    if (!déjàDansSkill && !slot.equippedSkill.inheritedTags.Contains(tag))
+                        slot.equippedSkill.inheritedTags.Add(tag);
+                }
+            }
         }
 
         return clone;
@@ -456,7 +491,7 @@ public class RunManager : MonoBehaviour
     /// Ces tags sont ceux à ajouter dans inheritedTags lors de l'équipement (et à retirer lors du déséquipement).
     /// Évite les doublons si le skill et l'équipement partagent un même tag.
     /// </summary>
-    private List<TagData> GetEquipmentTagsNotInSkill(EquipmentData equipment, SkillData skill)
+    public List<TagData> GetEquipmentTagsNotInSkill(EquipmentData equipment, SkillData skill)
     {
         List<TagData> result = new List<TagData>();
         if (equipment == null || equipment.tags == null || skill == null || skill.tags == null)

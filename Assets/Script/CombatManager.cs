@@ -163,6 +163,7 @@ public class CombatManager : MonoBehaviour
         public int           bonusStacksStatut;          // stacks supplementaires sur tout ApplyStatus
         public int           coutEnergieSupplementaire;  // s'ajoute a skill.energyCost
         public EquipmentData sourceEquipment;            // equipement source du skill (pour SkillEquipeSurCetObjet)
+        public SkillData     sourceSkill;                // skill source (pour filtrer les statuts par tag conditionTagForModifyStat)
 
         public static ContexteExecutionSkill Default => new ContexteExecutionSkill
         {
@@ -174,6 +175,7 @@ public class CombatManager : MonoBehaviour
             bonusStacksStatut         = 0,
             coutEnergieSupplementaire = 0,
             sourceEquipment           = null,
+            sourceSkill               = null,
         };
     }
 
@@ -690,6 +692,7 @@ public class CombatManager : MonoBehaviour
         ApplyPlayerPerTurnEffects();
         ApplyStatusPassivesForPlayer(EffectTrigger.OnPlayerTurnStart);
         DecayPlayerStatuses(StatusDecayTiming.OnTurnStart);
+        UpdateSkillButtons();  // Rafraîchit les coûts après changements de statut
 
         if (effectiveRegeneration > 0)
         {
@@ -708,6 +711,7 @@ public class CombatManager : MonoBehaviour
 
         UpdatePlayerUI();
         GameEvents.TriggerPlayerTurnStarted();
+        UpdateSkillButtons();  // Rafraîchit après que ModuleManager ait déclenché les passifs OnPlayerTurnStart via GameEvents
     }
 
     private void StartEnemyTurn()
@@ -823,6 +827,7 @@ public class CombatManager : MonoBehaviour
     {
         ContexteExecutionSkill ctx = ContexteExecutionSkill.Default;
         ctx.sourceEquipment = equip;
+        ctx.sourceSkill = skill;
 
         if (equip == null || equip.skillModifiers == null || equip.skillModifiers.Count == 0)
             return ctx;
@@ -834,18 +839,8 @@ public class CombatManager : MonoBehaviour
             // Verifie la condition tag si elle existe
             if (m.conditionTag != null)
             {
-                bool hasTag = false;
-                if (skill != null && skill.tags != null)
-                {
-                    foreach (TagData tag in skill.tags)
-                    {
-                        if (tag != null && tag.tagName == m.conditionTag.tagName)
-                        {
-                            hasTag = true;
-                            break;
-                        }
-                    }
-                }
+                bool hasTag = skill != null &&
+                             skill.AllTags().Any(t => t.tagName == m.conditionTag.tagName);
                 if (!hasTag) continue;
             }
 
@@ -902,6 +897,7 @@ public class CombatManager : MonoBehaviour
         Log($"{GetPlayerName()} termine son tour.");
         ApplyStatusPassivesForPlayer(EffectTrigger.OnPlayerTurnEnd);
         DecayPlayerStatuses(StatusDecayTiming.OnTurnEnd);
+        UpdateSkillButtons();  // Rafraîchit les coûts si EnergyCostReduction a changé
         GameEvents.TriggerPlayerTurnEnded();
         StartEnemyTurn();
     }
@@ -923,7 +919,7 @@ public class CombatManager : MonoBehaviour
         // Construit le contexte d'execution depuis l'equipement source transmis par le bouton
         ContexteExecutionSkill ctx   = ObtenirContexteExecution(skill, equipSource);
         int coutEffectif             = skill.energyCost + ctx.coutEnergieSupplementaire;
-        coutEffectif = Mathf.Max(0, coutEffectif - GetCurrentEnergyCostReduction());
+        coutEffectif = Mathf.Max(0, coutEffectif - GetCurrentEnergyCostReduction(skill));
 
         if (currentEnergy < coutEffectif)
         {
@@ -1171,13 +1167,15 @@ public class CombatManager : MonoBehaviour
 
             case EffectAction.Heal:
             {
-                var (healFlat, healPct) = GetPlayerStatModifiers(StatType.HealGainMultiplier);
+                SkillData skillForFiltering = sourceSkill ?? ctx.sourceSkill;
+                var (healFlat, healPct) = GetPlayerStatModifiers(StatType.HealGainMultiplier, skillForFiltering);
                 int healed = Mathf.RoundToInt(effect.value * (1f + healPct) + healFlat);
                 healed = Mathf.Min(healed, GetPlayerMaxHP() - currentPlayerHP);
                 if (healed > 0)
                 {
                     currentPlayerHP += healed;
                     DecayPlayerStatuses(StatusDecayTiming.OnHealing);
+                    UpdateSkillButtons();  // Rafraîchit les coûts après décroissance
                 }
                 Log($"{GetPlayerName()} utilise {sourceName} — Soin de {healed} HP → {currentPlayerHP}/{GetPlayerMaxHP()}");
                 break;
@@ -1185,10 +1183,12 @@ public class CombatManager : MonoBehaviour
 
             case EffectAction.AddArmor:
             {
-                var (armorFlat, armorPct) = GetPlayerStatModifiers(StatType.ArmorGainMultiplier);
+                SkillData skillForFiltering = sourceSkill ?? ctx.sourceSkill;
+                var (armorFlat, armorPct) = GetPlayerStatModifiers(StatType.ArmorGainMultiplier, skillForFiltering);
                 int armor = Mathf.Max(0, Mathf.RoundToInt(effect.value * (1f + armorPct) + armorFlat));
                 currentPlayerArmor += armor;
                 DecayPlayerStatuses(StatusDecayTiming.OnArmorGain);
+                UpdateSkillButtons();  // Rafraîchit les coûts après décroissance
                 Log($"{GetPlayerName()} utilise {sourceName} — +{armor} armure → {currentPlayerArmor} armure totale");
                 break;
             }
@@ -1336,8 +1336,7 @@ public class CombatManager : MonoBehaviour
                 if (effet.scalingSource  != EffectScalingSource.SkillUtilise)      continue;
                 if (effet.statusToApply  != status)                                continue;
                 if (effet.comptageTag    == null)                                  continue;
-                if (sourceSkill.tags     == null)                                  continue;
-                if (!sourceSkill.tags.Any(t => t != null && t.tagName == effet.comptageTag.tagName)) continue;
+                if (!sourceSkill.AllTags().Any(t => t.tagName == effet.comptageTag.tagName)) continue;
                 total += Mathf.RoundToInt(effet.value);
             }
         }
@@ -1354,8 +1353,7 @@ public class CombatManager : MonoBehaviour
                 if (effet.scalingSource  != EffectScalingSource.SkillUtilise)      continue;
                 if (effet.statusToApply  != status)                                continue;
                 if (effet.comptageTag    == null)                                  continue;
-                if (sourceSkill.tags     == null)                                  continue;
-                if (!sourceSkill.tags.Any(t => t != null && t.tagName == effet.comptageTag.tagName)) continue;
+                if (!sourceSkill.AllTags().Any(t => t.tagName == effet.comptageTag.tagName)) continue;
                 total += Mathf.RoundToInt(effet.value);
             }
         }
@@ -1386,8 +1384,8 @@ public class CombatManager : MonoBehaviour
         if (equip == null || tag == null || equip.skillSlots == null) return 0;
         return equip.skillSlots.Count(s =>
             s != null && s.state != SkillSlot.SlotState.Available &&
-            s.equippedSkill != null && s.equippedSkill.tags != null &&
-            s.equippedSkill.tags.Any(t => t != null && t.tagName == tag.tagName));
+            s.equippedSkill != null &&
+            s.equippedSkill.AllTags().Any(t => t.tagName == tag.tagName));
     }
 
     /// <summary>
@@ -1407,8 +1405,8 @@ public class CombatManager : MonoBehaviour
             // Filtre par tag si conditionTag est renseigné
             if (mod.conditionTag != null)
             {
-                bool aLeTag = skill != null && skill.tags != null &&
-                              skill.tags.Any(t => t != null && t.tagName == mod.conditionTag.tagName);
+                bool aLeTag = skill != null &&
+                             skill.AllTags().Any(t => t.tagName == mod.conditionTag.tagName);
                 if (!aLeTag) continue;
             }
 
@@ -1477,7 +1475,7 @@ public class CombatManager : MonoBehaviour
             rawDamage = Mathf.Max(1, rawDamage + bonusFlat);
 
         if (isCrit) rawDamage = Mathf.RoundToInt(rawDamage * GetCurrentCritMultiplier());
-        var (dmgFlat, dmgPct) = GetPlayerStatModifiers(StatType.DamageGainMultiplier);
+        var (dmgFlat, dmgPct) = GetPlayerStatModifiers(StatType.DamageGainMultiplier, contextEffectif.sourceSkill);
         if (dmgPct != 0f || dmgFlat != 0f)
             rawDamage = Mathf.Max(1, Mathf.RoundToInt(rawDamage * (1f + dmgPct) + dmgFlat));
         if (contextEffectif.multiplicateurDegatsFinal != 0f)
@@ -1631,7 +1629,11 @@ public class CombatManager : MonoBehaviour
         if (hpDamage > 0)
             GameEvents.TriggerPlayerDamaged(hpDamage);
         if (hpDamage > 0) ApplyStatusPassivesForPlayer(EffectTrigger.OnPlayerDamaged);
-        if (hpDamage > 0) DecayPlayerStatuses(StatusDecayTiming.OnDamageTaken);
+        if (hpDamage > 0)
+        {
+            DecayPlayerStatuses(StatusDecayTiming.OnDamageTaken);
+            UpdateSkillButtons();  // Rafraîchit les coûts après décroissance
+        }
     }
 
     // -----------------------------------------------
@@ -1746,6 +1748,7 @@ public class CombatManager : MonoBehaviour
     {
         if (effect == null) return;
 
+        Debug.Log($"[Combat] ApplyModuleEffect: {effect.effectID} from {moduleName}");
         string source    = $"[Module] {moduleName}";
         bool targetsSelf = effect.target == EffectTarget.Self;
 
@@ -2122,8 +2125,8 @@ public class CombatManager : MonoBehaviour
                     effet.scalingSource == EffectScalingSource.SkillUtilise &&
                     effet.comptageTag != null)
                 {
-                    if (usedSkill == null || usedSkill.tags == null) continue;
-                    bool hasTag = usedSkill.tags.Any(t => t != null && t.tagName == effet.comptageTag.tagName);
+                    if (usedSkill == null) continue;
+                    bool hasTag = usedSkill.AllTags().Any(t => t.tagName == effet.comptageTag.tagName);
                     if (!hasTag) continue;
                 }
                 ApplyModuleEffect(effet, $"[Statut] {status.statusName}");
@@ -2141,8 +2144,8 @@ public class CombatManager : MonoBehaviour
             if (status.decayTiming != timing) continue;
             if (timing == StatusDecayTiming.OnSkillUse && status.decayConditionTag != null)
             {
-                if (usedSkill == null || usedSkill.tags == null) continue;
-                bool hasTag = usedSkill.tags.Any(t => t != null && t.tagName == status.decayConditionTag.tagName);
+                if (usedSkill == null) continue;
+                bool hasTag = usedSkill.AllTags().Any(t => t.tagName == status.decayConditionTag.tagName);
                 if (!hasTag) continue;
             }
             playerStatuses[status] = Mathf.Max(0, playerStatuses[status] - status.decayPerTurn);
@@ -2264,7 +2267,7 @@ public class CombatManager : MonoBehaviour
         return Mathf.Max(0, Mathf.RoundToInt((skillValue + effectiveAttack + flat) * (1f + pct)));
     }
 
-    private (float flat, float pct) GetPlayerStatModifiers(StatType stat)
+    private (float flat, float pct) GetPlayerStatModifiers(StatType stat, SkillData skillContext = null)
     {
         float flat = 0f, pct = 0f;
         if (combatStatModifiers.TryGetValue(stat, out float directMod))
@@ -2275,6 +2278,19 @@ public class CombatManager : MonoBehaviour
             int stacks = kvp.Value;
             if (stacks <= 0 || status == null || status.behavior != StatusBehavior.ModifyStat) continue;
             if (status.statToModify != stat) continue;
+
+            // Filtre par tag si conditionTagForModifyStat est renseigné
+            if (status.conditionTagForModifyStat != null && skillContext != null)
+            {
+                bool skillHasTag = skillContext.AllTags().Any(t => t != null && t.tagName == status.conditionTagForModifyStat.tagName);
+                if (!skillHasTag) continue;
+            }
+            else if (status.conditionTagForModifyStat != null && skillContext == null)
+            {
+                // Pas de skill context mais condition renseignée → ne pas appliquer
+                continue;
+            }
+
             float amount = status.valueScalesWithStacks ? status.effectPerStack * stacks : status.effectPerStack;
             if (status.statModifierType == StatModifierType.Percentage) pct += amount;
             else flat += amount;
@@ -2671,19 +2687,19 @@ public class CombatManager : MonoBehaviour
         }
     }
 
-    private int GetCurrentEnergyCostReduction()
+    private int GetCurrentEnergyCostReduction(SkillData skill = null)
     {
-        var (flat, _) = GetPlayerStatModifiers(StatType.EnergyCostReduction);
+        var (flat, _) = GetPlayerStatModifiers(StatType.EnergyCostReduction, skill);
         return Mathf.Max(0, Mathf.RoundToInt(flat));
     }
 
     private void UpdateSkillButtons()
     {
-        int reduction = GetCurrentEnergyCostReduction();
         foreach (SkillButton sb in spawnedSkillButtons)
         {
             if (sb.Skill == null) continue;
             int cd = skillCooldowns.TryGetValue((sb.SourceEquipment, sb.Skill), out int val) ? val : 0;
+            int reduction = GetCurrentEnergyCostReduction(sb.Skill);  // Passe le skill pour filtrer par tag
             int coutReel = Mathf.Max(0, sb.EffectiveCost - reduction);
             sb.SetCooldown(cd);
             sb.SetDisplayedCost(coutReel);

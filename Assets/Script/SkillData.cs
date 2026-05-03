@@ -49,6 +49,18 @@ public class SkillData : ScriptableObject
     [HideInInspector]
     public List<TagData> inheritedTags = new List<TagData>();
 
+    /// <summary>
+    /// Retourne tous les tags du skill — propres + hérités de l'équipement porteur.
+    /// À utiliser partout où on vérifie les tags d'un skill en combat.
+    /// </summary>
+    public System.Collections.Generic.IEnumerable<TagData> AllTags()
+    {
+        if (tags != null)
+            foreach (var t in tags) if (t != null) yield return t;
+        if (inheritedTags != null)
+            foreach (var t in inheritedTags) if (t != null) yield return t;
+    }
+
     // -----------------------------------------------
     // COMPÉTENCE DE NAVIGATION (jambes)
     // -----------------------------------------------

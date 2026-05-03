@@ -97,6 +97,12 @@ public class StatusData : ScriptableObject
     // Si false : modificateur = effectPerStack fixe, les stacks = durée (cas 2 — valeur constante)
     //   Exemple : Affaiblissement × 3 stacks avec effectPerStack = -0.5 → -50% attaque pendant 3 tours
     public bool valueScalesWithStacks;
+
+    // Optionnel : filtre la modification de stat par tag du skill utilisé.
+    // Uniquement pertinent pour les stats combat-temporaires (ArmorGainMultiplier, HealGainMultiplier, DamageGainMultiplier, EnergyCostReduction).
+    // Null = s'applique à tous les skills.
+    // Exemple : "Ce bonus d'armure ne s'applique que si le skill porte le tag 'Defense'".
+    public TagData conditionTagForModifyStat;
 }
 
 /// <summary>

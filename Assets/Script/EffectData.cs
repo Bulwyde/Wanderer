@@ -118,6 +118,17 @@ public class EffectData : ScriptableObject
     // Interprétation de bonusConditionnel : pourcentage ou valeur plate.
     [Tooltip("Comment interpréter bonusConditionnel : Pourcentage (fraction) ou Flat (valeur brute)")]
     [SerializeField] public TypeBonusConditionnel typeBonusConditionnel;
+
+    [Header("Condition de coût du skill (OnSkillUsed uniquement)")]
+    // Coût minimum du skill pour que l'effet se déclenche.
+    // 0 = pas de minimum (s'applique à tous les coûts).
+    [Tooltip("Coût minimum du skill pour déclencher l'effet. 0 = pas de minimum")]
+    public int minSkillCost;
+
+    // Coût maximum du skill pour que l'effet se déclenche.
+    // 0 = pas de maximum (s'applique à tous les coûts).
+    [Tooltip("Coût maximum du skill pour déclencher l'effet. 0 = pas de maximum")]
+    public int maxSkillCost;
 }
 
 /// <summary>

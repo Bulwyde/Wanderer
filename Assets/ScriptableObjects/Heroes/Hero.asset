@@ -33,8 +33,8 @@ MonoBehaviour:
   startingHead: {fileID: 0}
   startingTorso: {fileID: 0}
   startingLegs: {fileID: 11400000, guid: 06b4ecbeaf8fb144bb69ac9fbd707739, type: 2}
-  startingArm1: {fileID: 11400000, guid: 492f6edad1c4d2240a29e92f91a063c5, type: 2}
-  startingArm2: {fileID: 11400000, guid: bf373469d72c874479be14314bf13bd1, type: 2}
+  startingArm1: {fileID: 11400000, guid: 943d97b68ea946246a73ef247692a5ec, type: 2}
+  startingArm2: {fileID: 0}
   startingArm3: {fileID: 0}
   startingArm4: {fileID: 0}
   startingConsumables:

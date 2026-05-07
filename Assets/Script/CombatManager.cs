@@ -1337,6 +1337,12 @@ public class CombatManager : MonoBehaviour
                 if (effet.statusToApply  != status)                                continue;
                 if (effet.comptageTag    == null)                                  continue;
                 if (!sourceSkill.AllTags().Any(t => t.tagName == effet.comptageTag.tagName)) continue;
+                // Filtre par coût du skill (OnSkillUsed uniquement)
+                if (sourceSkill != null)
+                {
+                    if (effet.minSkillCost > 0 && sourceSkill.energyCost < effet.minSkillCost) continue;
+                    if (effet.maxSkillCost > 0 && sourceSkill.energyCost > effet.maxSkillCost) continue;
+                }
                 total += Mathf.RoundToInt(effet.value);
             }
         }
@@ -1354,6 +1360,12 @@ public class CombatManager : MonoBehaviour
                 if (effet.statusToApply  != status)                                continue;
                 if (effet.comptageTag    == null)                                  continue;
                 if (!sourceSkill.AllTags().Any(t => t.tagName == effet.comptageTag.tagName)) continue;
+                // Filtre par coût du skill (OnSkillUsed uniquement)
+                if (sourceSkill != null)
+                {
+                    if (effet.minSkillCost > 0 && sourceSkill.energyCost < effet.minSkillCost) continue;
+                    if (effet.maxSkillCost > 0 && sourceSkill.energyCost > effet.maxSkillCost) continue;
+                }
                 total += Mathf.RoundToInt(effet.value);
             }
         }
@@ -2128,6 +2140,12 @@ public class CombatManager : MonoBehaviour
                     if (usedSkill == null) continue;
                     bool hasTag = usedSkill.AllTags().Any(t => t.tagName == effet.comptageTag.tagName);
                     if (!hasTag) continue;
+                }
+                // Filtre par coût du skill (OnSkillUsed uniquement)
+                if (trigger == EffectTrigger.OnSkillUsed && usedSkill != null)
+                {
+                    if (effet.minSkillCost > 0 && usedSkill.energyCost < effet.minSkillCost) continue;
+                    if (effet.maxSkillCost > 0 && usedSkill.energyCost > effet.maxSkillCost) continue;
                 }
                 ApplyModuleEffect(effet, $"[Statut] {status.statusName}");
             }

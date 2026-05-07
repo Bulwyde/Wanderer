@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b76755a0a8a0b0741b5d7badea9590bb, type: 3}
   m_Name: Shield
   m_EditorClassIdentifier: Assembly-CSharp::EquipmentData
-  equipmentID: shield
+  equipmentID: rod
   equipmentName: Shield
   icon: {fileID: -6717884257390833292, guid: 9843791f03e3746479f73babf67daaa7, type: 3}
   description: "Utiliser une comp\xE9tence de co\xFBt 2 ou plus vous donne 10 armure."
@@ -26,11 +26,11 @@ MonoBehaviour:
   bonusCriticalMultiplier: 0
   bonusRegeneration: 0
   bonusLifeSteal: 0
-  passiveEffects: []
+  passiveEffects:
+  - {fileID: 11400000, guid: 3c045977a672e1f4287b511d5a605c0b, type: 2}
+  skillModifiers: []
   skillSlots:
   - state: 0
-    equippedSkill: {fileID: 0}
-  - state: 0
-    equippedSkill: {fileID: 0}
+    equippedSkill: {fileID: 11400000, guid: 8a838b7f076feea4a98507067eb21226, type: 2}
   tags: []
   setID: 

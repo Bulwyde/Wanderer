@@ -194,6 +194,13 @@ public class ModuleManager : MonoBehaviour
                         if (!aLeTag) continue;
                     }
 
+                    // Filtre par coût du skill (OnSkillUsed uniquement)
+                    if (skillUtilisé != null)
+                    {
+                        if (effet.minSkillCost > 0 && skillUtilisé.energyCost < effet.minSkillCost) continue;
+                        if (effet.maxSkillCost > 0 && skillUtilisé.energyCost > effet.maxSkillCost) continue;
+                    }
+
                     Debug.Log($"[Module] '{module.moduleName}' déclenché (OnSkillUsed — {skillUtilisé?.skillName})");
                     if (combat != null)
                         combat.ApplyModuleEffect(effet, module.moduleName);
@@ -221,6 +228,13 @@ public class ModuleManager : MonoBehaviour
                         if (skillUtilisé == null || skillUtilisé.tags == null) continue;
                         bool aLeTag = skillUtilisé.tags.Any(t => t != null && t.tagName == effet.comptageTag.tagName);
                         if (!aLeTag) continue;
+                    }
+
+                    // Filtre par coût du skill (OnSkillUsed uniquement)
+                    if (skillUtilisé != null)
+                    {
+                        if (effet.minSkillCost > 0 && skillUtilisé.energyCost < effet.minSkillCost) continue;
+                        if (effet.maxSkillCost > 0 && skillUtilisé.energyCost > effet.maxSkillCost) continue;
                     }
 
                     string nom = $"{equip.equipmentName} — {(string.IsNullOrEmpty(effet.displayName) ? effet.effectID : effet.displayName)}";

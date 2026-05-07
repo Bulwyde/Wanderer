@@ -333,6 +333,32 @@ public class EffectDataEditor : Editor
             EditorGUI.indentLevel--;
         }
 
+        EditorGUILayout.Space();
+
+        // -----------------------------------------------
+        // CONDITION DE COÛT DU SKILL
+        // -----------------------------------------------
+
+        EditorGUILayout.LabelField("Condition de coût du skill", EditorStyles.boldLabel);
+        EditorGUILayout.HelpBox("Filtrage par coût du skill — s'applique seulement avec trigger = OnSkillUsed.", MessageType.None);
+
+        SerializedProperty triggerProp = serializedObject.FindProperty("trigger");
+        EffectTrigger triggerVal = (EffectTrigger)triggerProp.enumValueIndex;
+
+        if (triggerVal == EffectTrigger.OnSkillUsed)
+        {
+            EditorGUI.indentLevel++;
+            EditorGUILayout.PropertyField(serializedObject.FindProperty("minSkillCost"),
+                new GUIContent("Coût minimum (0 = aucun)"));
+            EditorGUILayout.PropertyField(serializedObject.FindProperty("maxSkillCost"),
+                new GUIContent("Coût maximum (0 = aucun)"));
+            EditorGUI.indentLevel--;
+        }
+        else
+        {
+            EditorGUILayout.HelpBox("Disponible uniquement quand trigger = OnSkillUsed", MessageType.None);
+        }
+
         serializedObject.ApplyModifiedProperties();
     }
 }

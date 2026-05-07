@@ -17,7 +17,7 @@ MonoBehaviour:
   icon: {fileID: -2966200626249415253, guid: 5212c9326693c944e8bf5458c81d5bb4, type: 3}
   description: 
   keywords: []
-  energyCost: 3
+  energyCost: 2
   cooldown: 0
   effects:
   - {fileID: 11400000, guid: 377db85c737292d4ba40edb1d5ad9a94, type: 2}

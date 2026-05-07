@@ -15,7 +15,8 @@ MonoBehaviour:
   equipmentID: rod
   equipmentName: Rod
   icon: {fileID: 3539517282536894737, guid: 3e4457d85a88eb742a52753791a27c97, type: 3}
-  description: "Utiliser une comp\xE9tence de co\xFBt 2 ou plus vous donne 10 armure."
+  description: "Utiliser une comp\xE9tence de co\xFBt 2 ou plus, inflige 20 d\xE9g\xE2ts
+    \xE0 un ennemi al\xE9atoire."
   keywords: []
   equipmentType: 3
   level: 1
@@ -26,13 +27,11 @@ MonoBehaviour:
   bonusCriticalMultiplier: 0
   bonusRegeneration: 0
   bonusLifeSteal: 0
-  passiveEffects: []
+  passiveEffects:
+  - {fileID: 11400000, guid: 2377d386e86bf234e9410ffa32d5aeac, type: 2}
+  skillModifiers: []
   skillSlots:
   - state: 0
-    equippedSkill: {fileID: 0}
-  - state: 0
-    equippedSkill: {fileID: 0}
-  - state: 0
-    equippedSkill: {fileID: 0}
+    equippedSkill: {fileID: 11400000, guid: 8a838b7f076feea4a98507067eb21226, type: 2}
   tags: []
   setID: 

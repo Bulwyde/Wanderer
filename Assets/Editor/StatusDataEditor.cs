@@ -56,7 +56,9 @@ public class StatusDataEditor : Editor
 
         EditorGUILayout.LabelField("Durée & Décroissance", EditorStyles.boldLabel);
 
-        EditorGUILayout.PropertyField(serializedObject.FindProperty("decayPerTurn"));
+        EditorGUILayout.PropertyField(
+            serializedObject.FindProperty("decayPerTurn"),
+            new GUIContent("Decay Per Trigger"));
 
         SerializedProperty decayTimingProp = serializedObject.FindProperty("decayTiming");
         EditorGUILayout.PropertyField(decayTimingProp);

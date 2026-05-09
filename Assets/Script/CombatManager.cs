@@ -79,6 +79,10 @@ public class CombatManager : MonoBehaviour
     public Transform       skillButtonContainer;
     public GameObject      skillButtonPrefab;
 
+    [Header("UI — Armes et Skills en icones")]
+    public Transform       armsContainer;
+    public GameObject      armSlotUIPrefab;
+
     // -----------------------------------------------
     // UI — CONSOMMABLES
     // -----------------------------------------------
@@ -151,6 +155,9 @@ public class CombatManager : MonoBehaviour
 
     // Canvas racine — mis en cache pour la conversion pixels écran → unités canvas (flèche ciblage)
     private Canvas _rootCanvas;
+
+    // Contrôleur d'affichage des armes + skills en icones
+    private CombatUIArmsController _armsController;
 
     // Contexte d'execution du skill en attente (mode selection de cible)
     private struct ContexteExecutionSkill
@@ -313,6 +320,9 @@ public class CombatManager : MonoBehaviour
         equipementsLootDifféré.Clear();
         ResolveEquipment();
 
+        // Initialise et génère l'affichage des armes + skills en icones
+        InitializeArmsUI();
+
         currentPlayerHP    = (RunManager.Instance != null && RunManager.Instance.currentHP > 0)
             ? RunManager.Instance.currentHP
             : effectiveMaxHP;
@@ -338,12 +348,42 @@ public class CombatManager : MonoBehaviour
         }
         _afterNSkillsCounters.Clear();
 
-        SpawnSkillButtons();
+        // SpawnSkillButtons();    // Commenté : skills affichés via icones armes (SpawnArmsUI)
         SpawnConsumableButtons();
         UpdatePlayerUI();
         Log($"Combat commencé — {GetPlayerName()} vs {GetRencontreName()}");
         InventoryUIManager.Instance?.SetDragDropEnabled(false);
         StartPlayerTurn();
+    }
+
+    // -----------------------------------------------
+    // INITIALISATION DE L'AFFICHAGE DES ARMES
+    // -----------------------------------------------
+
+    /// <summary>
+    /// Initialise le contrôleur d'affichage des armes + skills en icones.
+    /// Crée les slots ArmSlotUI pour chaque arme équipée.
+    /// </summary>
+    private void InitializeArmsUI()
+    {
+        if (armsContainer == null || armSlotUIPrefab == null)
+        {
+            Debug.LogWarning("[CombatManager] armsContainer ou armSlotUIPrefab non assigné! Affichage icones armes désactivé.");
+            return;
+        }
+
+        // Trouve ou crée le contrôleur d'armes
+        _armsController = GetComponent<CombatUIArmsController>();
+        if (_armsController == null)
+        {
+            _armsController = gameObject.AddComponent<CombatUIArmsController>();
+        }
+
+        // Configure le contrôleur avec les références et callback
+        _armsController.Initialize(armsContainer, armSlotUIPrefab, UseSkill);
+
+        // Génère l'affichage
+        _armsController.SpawnArmsUI();
     }
 
     // -----------------------------------------------
@@ -2390,6 +2430,10 @@ public class CombatManager : MonoBehaviour
         if (combatEnded) return;
         combatEnded = true;
 
+        // Cleanup armes + skills en icones
+        if (_armsController != null)
+            _armsController.Clear();
+
         // Annule le ciblage si en cours
         if (isSelectingTarget)
         {
@@ -2713,6 +2757,7 @@ public class CombatManager : MonoBehaviour
 
     private void UpdateSkillButtons()
     {
+        // Mise à jour des anciens SkillButton (texte)
         foreach (SkillButton sb in spawnedSkillButtons)
         {
             if (sb.Skill == null) continue;
@@ -2726,6 +2771,26 @@ public class CombatManager : MonoBehaviour
                        && cd == 0
                        && currentEnergy >= coutReel;
             sb.SetInteractable(canUse);
+        }
+
+        // Mise à jour des SkillIconButton (icones armes)
+        if (_armsController != null)
+        {
+            var iconButtons = _armsController.GetAllSpawnedSkillButtons();
+            foreach (SkillIconButton sib in iconButtons)
+            {
+                if (sib.Skill == null) continue;
+                int cd = skillCooldowns.TryGetValue((sib.SourceEquipment, sib.Skill), out int val) ? val : 0;
+                int reduction = GetCurrentEnergyCostReduction(sib.Skill);
+                int coutReel = Mathf.Max(0, sib.EffectiveCost - reduction);
+                sib.SetCooldown(cd);
+                sib.SetDisplayedCost(coutReel);
+                bool canUse = battleState == BattleState.PlayerTurn
+                           && !isSelectingTarget
+                           && cd == 0
+                           && currentEnergy >= coutReel;
+                sib.SetInteractable(canUse);
+            }
         }
     }
 

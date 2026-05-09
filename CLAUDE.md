@@ -55,6 +55,26 @@ Pour les détails complets : voir **INVENTAIRE.md**.
 - **Panneau gauche** : Legs + Arm1/Arm2 (selon `selectedCharacter.maxEquippedArms`). Chaque équipement affiché avec ses skill slots. Slots `Unavailable` masqués.
 - **Panneau droit** : GridLayout équipements (64×64) + GridLayout skills (48×48).
 
+### Combat — Affichage Armes + Skills en Icones (Objectif 1)
+
+**`CombatUIArmsController.cs`** — Contrôleur UI pour l'affichage des armes + skills en icones (remplace anciens boutons texte).
+- `BuildArmSetups()` : construit la liste des armes équipées (Arm1–4) + leurs skills (état Used/LockedInUse). Affichage seulement si contenu.
+- `SpawnArmsUI()` : crée la hiérarchie UI via ArmSlotUI prefab. Chaque arme équipée → un ArmSlotUI avec grille skills.
+- `Initialize(container, slotUIPrefab, callback)` : configure les références et callback de clic skills → UseSkill.
+- `Clear()` : nettoie tous les slots UI générés (appelé dans EndCombat).
+- `GetAllSpawnedSkillButtons()` : retourne tous les SkillIconButton spawned (utilisé par UpdateSkillButtons pour sync état cooldown/énergie).
+
+**`ArmSlotUI.cs`** — Composant prefab : affiche une arme (icone 64×64) + ses skills en ligne horizontale.
+- `Setup(arm, equippedSkills, callback)` : configure l'affichage de l'arme (icone) + génère les SkillIconButton.
+- `SpawnSkillIcons()` : crée un SkillIconButton par skill (état Used/LockedInUse), applique les EnergyCostModifier de l'équipement source.
+- `GetSpawnedSkillButtons()` : retourne la liste des buttons pour sync état via CombatUIArmsController.
+
+**`SkillIconButton.cs`** — Composant prefab : icone skill (48×48) + coût d'énergie (TMP, bas-droit) + cooldown (TMP, centré gros).
+- `Setup(skill, sourceEquipment, effectiveCost, callback)` : configure l'icone + coût initial + callback au clic.
+- `SetDisplayedCost(cost)` : met à jour le texte du coût (après réductions d'énergie globales appliquées par UpdateSkillButtons).
+- `SetCooldown(remainingTurns)` : affiche cooldown centré en gros + grise l'icone (opacité 0.5).
+- `SetInteractable(bool)` : grise/dégrise l'icone selon disponibilité (énergie suffisante, pas en cooldown, tour joueur).
+
 ### Navigation
 
 **`NavigationManager.cs`** — Déplacements, brouillard de guerre, NavEffects, tirage d'events.
@@ -83,7 +103,9 @@ Pour les détails complets : voir **INVENTAIRE.md**.
 
 **`CombatManager.cs`** — États `PlayerTurn → EnemyTurn → Victory/Defeat`. Multi-ennemis (1 à 4 simultanés).
 - `BuildEnemyList()` : depuis `RunManager.currentEnemyGroup` (groupe) ou `currentEnemyData` (solo). Fallback champs Inspector = tests isolés uniquement.
-- `InitializeCombat()` : applique `spawnEffects` de chaque ennemi via `ApplyEnemyEffect` avant le premier tour.
+- `InitializeCombat()` : crée `_armsController` + appelle `SpawnArmsUI()` après `ResolveEquipment()`. Applique `spawnEffects` de chaque ennemi via `ApplyEnemyEffect` avant le premier tour. **SpawnSkillButtons() commenté** (skills affichés via icones armes Objectif 1).
+- `EndCombat()` : appelle `_armsController.Clear()` pour cleanup GameObjects orphelins.
+- `UpdateSkillButtons()` : met à jour état des SkillButton (anciens, commentés) + SkillIconButton (nouveaux icones) — cooldown, coût effectif (après réductions stat), SetInteractable selon énergie/tour/ciblage.
 - **Ciblage** : `RequiertCiblage` → false si ≤ 1 ennemi vivant (auto-cible). Flèche : `_rootCanvas` depuis `arrowTransform` (pas depuis `this`). `sizeDelta.x = distance / scaleFactor`. Clic via `RectTransformUtility.RectangleContainsScreenPoint(spriteImage.rectTransform)` dans `Update()` — pas `Button.onClick` (root élargi par HLG → décalage). Annulation RMB/Escape rembourse énergie/cooldown.
 - `CheckEnemyDeath` : exclut → `TriggerEnemyDied()` → `deathEffects` (avant `AllEnemiesDead()`) → `MortEnnemiRoutine`. Guard `combatEnded` contre double-appel sur AoE.
 - `MortEnnemiRoutine` : `animator.SetTrigger("Death")` → pause → fade `CanvasGroup.alpha`. **Pas `SetActive(false)`** — bloc reste dans HLG, positions survivants préservées.
@@ -180,7 +202,7 @@ Pour les détails complets : voir **INVENTAIRE.md**.
 ## État du développement
 
 ### Fonctionnel ✅
-- **Combat** : tours, énergie, armure StS, cooldowns, statuts (decay, stacks, perTurn), crits, regen, lifesteal, IA circulaire. Multi-ennemis (1–4) : ciblage flèche, tour séquentiel, mort fade CanvasGroup, spawnEffects/deathEffects, stats symétrique joueur, icônes statuts par ennemi. SkillModifier Zone 2 (ForceAoE, BaseDamageMultiplier, DamageMultiplier, CritChanceBonus, RepeatExecution, EnergyCostModifier, BonusStatusStacks). Multi-bras Arm1–Arm4 (InitialiserEquipementEtSkills + SpawnPassifsBras via enum auto-coverage). Passifs de statut (passiveEffects, ApplyStatusPassivesForPlayer). StatusDecayTiming étendu (OnSkillUse/OnDamageTaken/OnArmorGain/OnHealing). EnergyCostReduction (stat combat-temporaire, affichage SetDisplayedCost). StatusDataEditor custom (sections conditionnelles). AllTags() helper (tags + inheritedTags). StatusData.conditionTagForModifyStat pour filtrer stat modifications par tag de skill, filtrage OnSkillUsed par coût du skill (minSkillCost / maxSkillCost).
+- **Combat** : tours, énergie, armure StS, cooldowns, statuts (decay, stacks, perTurn), crits, regen, lifesteal, IA circulaire. Multi-ennemis (1–4) : ciblage flèche, tour séquentiel, mort fade CanvasGroup, spawnEffects/deathEffects, stats symétrique joueur, icônes statuts par ennemi. SkillModifier Zone 2 (ForceAoE, BaseDamageMultiplier, DamageMultiplier, CritChanceBonus, RepeatExecution, EnergyCostModifier, BonusStatusStacks). Multi-bras Arm1–Arm4 (InitialiserEquipementEtSkills + SpawnPassifsBras via enum auto-coverage). **Affichage armes + skills en icones (Objectif 1)** : CombatUIArmsController + ArmSlotUI + SkillIconButton. Icones skills affichent coût d'énergie + cooldown (grisage + texte centré). Passifs de statut (passiveEffects, ApplyStatusPassivesForPlayer). StatusDecayTiming étendu (OnSkillUse/OnDamageTaken/OnArmorGain/OnHealing). EnergyCostReduction (stat combat-temporaire, affichage SetDisplayedCost). StatusDataEditor custom (sections conditionnelles). AllTags() helper (tags + inheritedTags). StatusData.conditionTagForModifyStat pour filtrer stat modifications par tag de skill, filtrage OnSkillUsed par coût du skill (minSkillCost / maxSkillCost).
 - **Navigation** : brouillard de guerre, clavier, sauvegarde position, NavEffects complets, BloqueurLD conditionnel, cases Aléatoires (CellAleaPool, maxOccurrences, Fisher-Yates), maximums par type, GetEffectiveCellType source de vérité, postVisitTypes automatiques. OnRoomEntered couvre tous les types (PointInteret/Teleporteur→specificEvent/defaultTeleportEvent, Radar/Coffre/Ferrailleur→ChoisirEventAleatoire, FerailleurUtilise/TeleporteurUtilise→log). NavEffects différés (navEffectsEnAttente).
 - **Équipement** : stats effectives, skills, passifs, loot post-combat, EquipmentOfferController partagé 3 scènes.
 - **Events** : tous EventEffectType, pool anti-doublon, offres équipement interactives, consommables utilisables en event.
@@ -190,7 +212,10 @@ Pour les détails complets : voir **INVENTAIRE.md**.
 
 ### À faire 🔧
 - Scène de sélection de personnage (`MainMenuManager.defaultCharacter` = placeholder)
-- Passifs torse/tête : effets actifs mais pas de bouton d'affichage
+- **Objectif 2 — Tooltips skills + équipements** : affichage description/effets au survol (description + keywords + passifs armes)
+- **Objectif 3 — Prefab Arm pour Shop/Navigation** : réutiliser SkillIconButton dans NavigationManager (skills nav icones) + Shop (tous équipements Head/Torso/Legs/Arm + skills)
+- Affichage passifs des armes : actuellement non affichés en combat (seront visibles via tooltip Objectif 2)
+- Cohérence InventoryUIManager : valider structure alignée avec CombatUIArmsController
 - Sons, animations, retours visuels
 - Popup "Utiliser / Jeter" consommables
 - Paramètres (panel)
@@ -316,3 +341,6 @@ Pour les détails complets : voir **INVENTAIRE.md**.
 73. **`AllTags()` helper — tags + inheritedTags** : `SkillData.AllTags()` retourne `IEnumerable<TagData>` qui cible à la fois `tags` (propres au skill) et `inheritedTags` (via équipement). Tous les filtres de tag dans CombatManager (`SkillModifier.conditionTag`, `EffectData.comptageTag`, `status.decayConditionTag`) utilisent `AllTags()` au lieu de `skill.tags` direct. `SkillModifier.conditionTag` compare uniquement `tags`, pas `inheritedTags`.
 74. **`StatusData.conditionTagForModifyStat` — filtrage condition stat** : quand un statut ModifyStat est actif et que sa stat est lue dans `GetPlayerStatModifiers(optionalSkill)`, le modificateur n'est appliqué que si le skill contexte porte `conditionTagForModifyStat`. Utile pour les statuts comme "ce bonus d'armure ne vaut que si le skill porte le tag 'Defense'". Uniquement visible dans l'Inspector pour les stats combat-temporaires (`ArmorGainMultiplier`, `HealGainMultiplier`, `DamageGainMultiplier`, `EnergyCostReduction`).
 75. **`minSkillCost` / `maxSkillCost`** — Filtrage de coût du skill pour OnSkillUsed. Quand un effet a `trigger = OnSkillUsed`, les champs `minSkillCost` (minimum) et `maxSkillCost` (maximum) filtrent l'application selon `skill.energyCost`. Valeur 0 = pas de limite (défaut). Implémenté dans : `ApplyStatusPassivesForPlayer()` (CombatManager), `ApplyModulesAvecSkill()` (ModuleManager, modules + équipements), `ObtenirBonusStacksModules()` (CombatManager, modules + équipements). ⚠️ Le filtre utilise `skill.energyCost` direct, pas le coût effectif après réduction (`EnergyCostReduction`).
+76. **CombatUIArmsController — cleanup obligatoire** : `_armsController.Clear()` doit être appelé dans `EndCombat()` dès le début (après `combatEnded = true`), sinon GameObjects orphelins (ArmSlotUI + SkillIconButton) persistent entre combats → memory leak.
+77. **SkillIconButton — coût effectif** : le coût affiché est calculé dans `ArmSlotUI.SpawnSkillIcons()` (base + `EnergyCostModifier` de l'équipement source). `UpdateSkillButtons()` applique les réductions d'énergie globales (stat `EnergyCostReduction`) et met à jour `SetDisplayedCost()` en temps réel selon l'état du joueur.
+78. **UpdateSkillButtons() — deux systèmes** : itère sur `spawnedSkillButtons` (anciens SkillButton texte, actuellement commentés) ET sur `_armsController.GetAllSpawnedSkillButtons()` (SkillIconButton icones). Les deux reçoivent `SetCooldown()`/`SetDisplayedCost()`/`SetInteractable()` pour cohérence visuelle. Maintenir les deux chemins même si un est commenté (risque réactivation).

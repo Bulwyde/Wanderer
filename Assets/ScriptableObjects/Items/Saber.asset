@@ -37,5 +37,9 @@ MonoBehaviour:
     equippedSkill: {fileID: 11400000, guid: a7036231f1e2a0d4a9b1d335a6766655, type: 2}
   - state: 0
     equippedSkill: {fileID: 11400000, guid: 8a838b7f076feea4a98507067eb21226, type: 2}
+  - state: 0
+    equippedSkill: {fileID: 11400000, guid: 8a838b7f076feea4a98507067eb21226, type: 2}
+  - state: 0
+    equippedSkill: {fileID: 11400000, guid: 8a838b7f076feea4a98507067eb21226, type: 2}
   tags: []
   setID: 

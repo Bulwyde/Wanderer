@@ -17,6 +17,7 @@ public class ShopItemButton : MonoBehaviour
     [Header("Références")]
     public TextMeshProUGUI itemNameText;
     public TextMeshProUGUI priceText;
+    public Image itemIconImage;  // Affiche l'icone de l'article
 
     private Button     button;
     private Action     onAcheter;
@@ -29,11 +30,12 @@ public class ShopItemButton : MonoBehaviour
     }
 
     /// <summary>
-    /// Initialise le bouton avec le nom, le prix et le callback d'achat.
+    /// Initialise le bouton avec le nom, le prix, l'icone et le callback d'achat.
     /// Si achetable = false (déjà acheté ou fonds insuffisants), le bouton est grisé.
     /// labelPrix permet de surcharger l'affichage (ex : "Acheté" ou "Déjà possédé").
+    /// icon affiche l'icone de l'article (optionnel).
     /// </summary>
-    public void Setup(string nom, int prix, bool achetable, Action callback, string labelPrix = null)
+    public void Setup(string nom, int prix, bool achetable, Action callback, string labelPrix = null, Sprite icon = null)
     {
         onAcheter = callback;
 
@@ -42,6 +44,10 @@ public class ShopItemButton : MonoBehaviour
 
         if (priceText != null)
             priceText.text = labelPrix ?? $"{prix} credits";
+
+        // Affiche l'icone si fourni
+        if (itemIconImage != null && icon != null)
+            itemIconImage.sprite = icon;
 
         SetInteractable(achetable);
     }

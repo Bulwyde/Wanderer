@@ -303,7 +303,7 @@ public class ShopManager : MonoBehaviour
             if (btn == null) continue;
 
             btn.Setup(item.data.equipmentName, item.prix, achetable,
-                () => AcheterEquipement(itemRef), label);
+                () => AcheterEquipement(itemRef), label, item.data.icon);
 
             _boutonsEquipement.Add((btn, item));
             indexDansRangee++;
@@ -344,7 +344,7 @@ public class ShopManager : MonoBehaviour
             if (btn == null) continue;
 
             btn.Setup(item.data.moduleName, item.prix, achetable,
-                () => AcheterModule(itemRef), label);
+                () => AcheterModule(itemRef), label, item.data.icon);
 
             _boutonsModules.Add((btn, item));
             indexDansRangee++;
@@ -382,7 +382,7 @@ public class ShopManager : MonoBehaviour
             if (btn == null) continue;
 
             btn.Setup(item.data.consumableName, item.prix, achetable,
-                () => AcheterConsommable(itemRef), label);
+                () => AcheterConsommable(itemRef), label, item.data.icon);
 
             _boutonsConsommables.Add((btn, item));
             indexDansRangee++;
@@ -420,7 +420,7 @@ public class ShopManager : MonoBehaviour
             if (btn == null) continue;
 
             btn.Setup(item.data.skillName, item.prix, achetable,
-                () => AcheterSkill(itemRef), label);
+                () => AcheterSkill(itemRef), label, item.data.icon);
 
             _boutonsSkills.Add((btn, item));
             indexDansRangee++;

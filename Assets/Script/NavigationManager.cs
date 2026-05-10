@@ -1236,6 +1236,11 @@ public class NavigationManager : MonoBehaviour
             TextMeshProUGUI label = btn.GetComponentInChildren<TextMeshProUGUI>();
             if (label != null) label.text = skill.skillName;
 
+            // Affiche l'icone du skill
+            Image iconImage = btn.GetComponent<Image>();
+            if (iconImage != null && skill.icon != null)
+                iconImage.sprite = skill.icon;
+
             // Branche le clic et grise le bouton si le skill est en cooldown
             Button btnComp = btn.GetComponent<Button>();
             if (btnComp != null)

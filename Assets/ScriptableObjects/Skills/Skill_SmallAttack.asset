@@ -15,7 +15,7 @@ MonoBehaviour:
   skillID: smallattack
   skillName: SmallAttack
   icon: {fileID: -5099292496197868168, guid: 68673b1d555e0fc418d9d0338a198501, type: 3}
-  description: 
+  description: "Inflige des d\xE9g\xE2ts (faible)"
   keywords: []
   energyCost: 1
   cooldown: 0

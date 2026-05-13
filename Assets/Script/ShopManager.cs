@@ -302,8 +302,9 @@ public class ShopManager : MonoBehaviour
             ShopItemButton btn = go.GetComponent<ShopItemButton>();
             if (btn == null) continue;
 
+            var tags = item.data.tags ?? new System.Collections.Generic.List<TagData>();
             btn.Setup(item.data.equipmentName, item.prix, achetable,
-                () => AcheterEquipement(itemRef), label, item.data.icon);
+                () => AcheterEquipement(itemRef), label, item.data.icon, tags, item.data.description);
 
             _boutonsEquipement.Add((btn, item));
             indexDansRangee++;
@@ -343,8 +344,9 @@ public class ShopManager : MonoBehaviour
             ShopItemButton btn = go.GetComponent<ShopItemButton>();
             if (btn == null) continue;
 
+            var tags = item.data.tags ?? new System.Collections.Generic.List<TagData>();
             btn.Setup(item.data.moduleName, item.prix, achetable,
-                () => AcheterModule(itemRef), label, item.data.icon);
+                () => AcheterModule(itemRef), label, item.data.icon, tags, item.data.description);
 
             _boutonsModules.Add((btn, item));
             indexDansRangee++;
@@ -381,8 +383,9 @@ public class ShopManager : MonoBehaviour
             ShopItemButton btn = go.GetComponent<ShopItemButton>();
             if (btn == null) continue;
 
+            var tags = item.data.tags ?? new System.Collections.Generic.List<TagData>();
             btn.Setup(item.data.consumableName, item.prix, achetable,
-                () => AcheterConsommable(itemRef), label, item.data.icon);
+                () => AcheterConsommable(itemRef), label, item.data.icon, tags, item.data.description);
 
             _boutonsConsommables.Add((btn, item));
             indexDansRangee++;
@@ -419,8 +422,9 @@ public class ShopManager : MonoBehaviour
             ShopItemButton btn = go.GetComponent<ShopItemButton>();
             if (btn == null) continue;
 
+            var tags = item.data.tags ?? new System.Collections.Generic.List<TagData>();
             btn.Setup(item.data.skillName, item.prix, achetable,
-                () => AcheterSkill(itemRef), label, item.data.icon);
+                () => AcheterSkill(itemRef), label, item.data.icon, tags, item.data.description);
 
             _boutonsSkills.Add((btn, item));
             indexDansRangee++;

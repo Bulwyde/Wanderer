@@ -15,7 +15,7 @@ MonoBehaviour:
   skillID: heal
   skillName: Soin
   icon: {fileID: -1540426309290004842, guid: 7f3956974b277b540bc42ac0cdff1695, type: 3}
-  description: 
+  description: Soigne votre personnage
   keywords: []
   energyCost: 2
   cooldown: 0

@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using System;
+using System.Collections.Generic;
 
 /// <summary>
 /// Bouton représentant un consommable dans l'UI (combat, navigation ou event).
@@ -30,6 +31,7 @@ public class ConsumableButton : MonoBehaviour
     private Action<ConsumableData> onUse;
     private Button button;
     private RectTransform rectTransform;
+    private List<TagData> _consumableTags = new List<TagData>();
 
     // Taille d'origine lue depuis le prefab — sert de référence pour le redimensionnement
     private Vector2 tailleNormale;
@@ -62,11 +64,17 @@ public class ConsumableButton : MonoBehaviour
     {
         consumable = data;
         onUse      = callback;
+        _consumableTags = data.tags ?? new List<TagData>();
 
         if (iconImage != null && data.icon != null) iconImage.sprite = data.icon;
 
         if (button != null)
             button.onClick.AddListener(() => onUse?.Invoke(consumable));
+
+        // Configure le tooltip
+        TooltipTrigger trigger = GetComponent<TooltipTrigger>();
+        if (trigger != null)
+            trigger.SetTooltipData(data.consumableName, data.description, _consumableTags);
     }
 
     /// <summary>

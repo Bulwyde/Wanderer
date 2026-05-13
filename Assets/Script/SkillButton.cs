@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using System;
+using System.Collections.Generic;
 
 /// <summary>
 /// Composant attaché au préfab de bouton de compétence.
@@ -51,6 +52,14 @@ public class SkillButton : MonoBehaviour
 
         // Cooldown à 0 au départ — aucun texte de cooldown visible
         SetCooldown(0);
+
+        // Configure le tooltip du skill
+        var skillTags = skillData.tags ?? new List<TagData>();
+        TooltipTrigger trigger = GetComponent<TooltipTrigger>();
+        if (trigger == null)
+            trigger = gameObject.AddComponent<TooltipTrigger>();
+
+        trigger.SetTooltipData(skillData.skillName, skillData.description, skillTags);
     }
 
     // -----------------------------------------------

@@ -15,7 +15,7 @@ MonoBehaviour:
   skillID: heavy_attack
   skillName: Heavy Attack
   icon: {fileID: -2966200626249415253, guid: 5212c9326693c944e8bf5458c81d5bb4, type: 3}
-  description: 
+  description: "Inflige des d\xE9g\xE2ts (\xE9lev\xE9)"
   keywords: []
   energyCost: 2
   cooldown: 0

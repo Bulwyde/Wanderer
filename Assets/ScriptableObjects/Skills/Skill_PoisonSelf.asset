@@ -15,7 +15,7 @@ MonoBehaviour:
   skillID: skill_poison_self
   skillName: Poison_Self
   icon: {fileID: -1540426309290004842, guid: 7f3956974b277b540bc42ac0cdff1695, type: 3}
-  description: 
+  description: "Applique du poison sur votre h\xE9ros."
   keywords: []
   energyCost: 3
   cooldown: 1

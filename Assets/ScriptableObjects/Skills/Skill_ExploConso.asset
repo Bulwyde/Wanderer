@@ -15,7 +15,8 @@ MonoBehaviour:
   skillID: skill_explo_conso
   skillName: ExploConso
   icon: {fileID: -6470460504253458178, guid: cd78b1b6a33bbdf4e891d6206d760459, type: 3}
-  description: 
+  description: "Consommes les stacks d'explosivit\xE9 sur la cible et inflige des
+    d\xE9g\xE2ts en fonction du nombre consomm\xE9."
   keywords: []
   energyCost: 1
   cooldown: 0

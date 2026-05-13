@@ -426,6 +426,7 @@ GameObject:
   - component: {fileID: 7483005321613808990}
   - component: {fileID: 3337503988638850162}
   - component: {fileID: 9219399888699295007}
+  - component: {fileID: 6450184713225078946}
   m_Layer: 5
   m_Name: SkillButtonPrefab
   m_TagString: Untagged
@@ -553,3 +554,18 @@ MonoBehaviour:
   skillNameText: {fileID: 3357349722861605637}
   energyCostText: {fileID: 2771236552979214343}
   cooldownText: {fileID: 2760309239470815343}
+--- !u!114 &6450184713225078946
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7306436943141010282}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 749dece2454e9fa48a1b36fae1a9c863, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TooltipTrigger
+  itemName: 
+  itemDescription: 
+  itemTags: []

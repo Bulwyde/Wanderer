@@ -15,7 +15,7 @@ MonoBehaviour:
   skillID: smallarmor
   skillName: Small Armor
   icon: {fileID: 2714453574471835212, guid: ffaa6ebcc8b491441a609a57a3fac76f, type: 3}
-  description: 
+  description: Vous gagnez de l'armure (faible)
   keywords: []
   energyCost: 1
   cooldown: 0

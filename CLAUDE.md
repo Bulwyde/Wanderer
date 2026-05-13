@@ -118,6 +118,39 @@ Pour les détails complets : voir **INVENTAIRE.md**.
 **`EquipmentOfferController.cs`** — Partagé Combat/Event/Shop. Se désactive dans `Awake()`.
 - `LootContinueButton` = **frère** de `EquipmentOfferArea` (jamais enfant — caché par `SetActive(false)`). `SkipButton`/`ArmSelectionPanel` = **enfants** (se cachent avec le parent).
 
+### Système de Tooltips — Affichage description/effets au clic droit (Objectif 2)
+
+**`TooltipController.cs`** — Singleton DDOL. Gère affichage/masquage + positionnement intelligent.
+- `ShowTooltip(RectTransform hoverElement, string name, string description, List<TagData> tags)` : affiche avec délai + fade.
+- `HideTooltip()` : masque via `DisappearRoutine()` — délai 0.5s, fade-out 0.2s.
+- `PositionTooltipSmart(hoverElement)` : 4 quadrants basés sur `elemCenterX/Y` (canvas locales). Détermine pivot + Y selon quadrant. Padding adaptatif : `Mathf.Clamp(elementSize * 0.15f, 2f, 10f)` — évite petits tooltips trop proches, gros trop éloignés. Clamping final X/Y asymétrique selon pivot : si `pivot.x == 0`, X clamped `[min + screenPadding, max - tooltipSize.x]` ; si `pivot.x == 1`, `[min + tooltipSize.x, max - screenPadding]`. Pareil Y. `screenPadding = 20f`.
+- `MonitorTooltipHover()` : coroutine légère tick 0.1s — résout surdetection raycast. Vérifie si souris sur élément OU sur tooltip ; masque si aucun des deux.
+- `CurrentHoverElement` (propriété publique) : RectTransform du dernier élément survolé.
+
+**`TooltipTrigger.cs`** — Composant attaché aux éléments UI. Gère détection clic droit + données.
+- `SetTooltipData(string name, string description, List<TagData> tags)` : configure (appelé lors du Setup du composant parent).
+- `OnPointerClick(PointerEventData eventData)` : déclenche `ShowTooltip()` seulement si clic droit (`eventData.button == Right`). Bloque propagation si tooltip déjà affiché.
+- Pas de recherche TooltipTrigger au setup — `GetComponent()` dans le composant parent, ajout dynamique `AddComponent<TooltipTrigger>()` si absent.
+
+**Intégration dans les composants**
+Tous les composants UI appelent `SetTooltipData()` dans `Setup()` :
+- **`SkillButton.cs`** (combat + navigation) : `trigger.SetTooltipData(skillData.skillName, skillData.description, skillTags)`.
+- **`SkillIconButton.cs`** (icones armes) : idem.
+- **`ArmSlotUI.cs`** : configure tooltip arme dans Setup.
+- **`ModuleIcon.cs`** : `trigger.SetTooltipData(module.moduleName, module.description, module.tags ?? new List<TagData>())`.
+- **`ConsumableButton.cs`** : configure tooltip consommable.
+- **`ShopItemButton.cs`** : configure tooltip équipements/modules/skills/consommables (avec `item.data.description`).
+- **`NavigationManager.cs`** : `SpawnSkillsJambes()` configure tooltip skills nav.
+
+**Notes de design non-évidentes**
+1. **Clic droit au lieu de hover** : évite surdetection raycast + clignotement sur transitions souris. Tooltip affiché à la demande.
+2. **Padding adaptatif** : formule basée sur taille élément — consommables petits (~32×32) → ~3px, armes (~64×64) → ~7px. Évite collage trop proche ou trop loin.
+3. **Coroutine légère vs Update()** : `MonitorTooltipHover()` tick 0.1s, jamais chaque frame — réduction drastique CPU. Dédié aux conflits raycast parent/child + souris qui traverse tooltip sans déclencher ExitHandler.
+4. **Clamping asymétrique pivot** : si `pivot.y == 0` (coin BAS), Y clamped `[min + screenPadding, max - tooltipSize.y]` (pareil pivot.x == 0) ; si `pivot.y == 1` (coin HAUT), `[min + tooltipSize.y, max - screenPadding]`. Évite tooltip écrasé par les bords après repositionnement.
+5. **Tags filtrés** : `PopulateTooltip()` filtre `tag.affiché == true` — tags avec affichage désactivé ne s'affichent pas.
+6. **Raycast sur ModuleIcon** : `Image.raycastTarget = true` obligatoire — sinon events UI ne se déclenchent jamais.
+7. **CurrentHoverElement publique** : utilisé par `TooltipTrigger` pour bloquer propagation si tooltip déjà actif.
+
 ### Shop / Event
 
 **`ShopManager.cs`** — Résout `ShopData` (`cell.shopData` > `currentMapData.defaultShopData`). `RafraichirArticles()` = destroy+recreate. `MettreAJourDisponibilite()` = in-place (évite flash interactable).
@@ -212,7 +245,7 @@ Pour les détails complets : voir **INVENTAIRE.md**.
 
 ### À faire 🔧
 - Scène de sélection de personnage (`MainMenuManager.defaultCharacter` = placeholder)
-- **Objectif 2 — Tooltips skills + équipements** : affichage description/effets au survol (description + keywords + passifs armes)
+- **Objectif 2 — Tooltips skills + équipements ✅** : affichage description/effets au clic droit (TooltipController + intégration tous composants)
 - **Objectif 3 — Prefab Arm pour Shop/Navigation** : réutiliser SkillIconButton dans NavigationManager (skills nav icones) + Shop (tous équipements Head/Torso/Legs/Arm + skills)
 - Affichage passifs des armes : actuellement non affichés en combat (seront visibles via tooltip Objectif 2)
 - Cohérence InventoryUIManager : valider structure alignée avec CombatUIArmsController
@@ -299,6 +332,8 @@ Pour les détails complets : voir **INVENTAIRE.md**.
 31. **`sizeDelta` vs pixels écran** : diviser par `Canvas.scaleFactor` pour convertir.
 32. **Ciblage ennemi — `Button.onClick`** : root élargi par HLG → décalage. Préférer `RectTransformUtility.RectangleContainsScreenPoint(spriteImage.rectTransform)` dans `Update()`.
 33. **Mort d'ennemi — fade vs `SetActive`** : `SetActive(false)` redistribue le HLG. `CanvasGroup.alpha = 0` uniquement pour préserver les positions.
+34. **TooltipTrigger sur éléments UI multiples** : chaque composant (SkillButton, ModuleIcon, SkillIconButton…) crée son propre TooltipTrigger dans `Setup()` avec `GetComponent()`/`AddComponent()` si absent. Ne pas créer un seul TooltipTrigger parent partagé — chaque élément possède ses propres données (nom, description, tags). Chaque `SetTooltipData()` configure l'instance locale.
+35. **TooltipController.MonitorTooltipHover() coroutine légère** : s'exécute tous les 0.1s, jamais chaque frame. Résout surdetection raycast quand parent + child ont tous deux des TooltipTriggers (la coroutine vérifie souris sur élément OU sur tooltip, le raycast potentiellement bloqué par hiérarchie UI). Réduction drastique CPU — pas de ticks frame inutiles.
 34. **`EnemySprite` — nom exact** : `SpawnEnemyUI` cherche par `Find("EnemySprite")`. Nom différent → sprite null, fade non fonctionnel, ciblage impossible.
 35. **`ennemi.data.attack` direct — interdit** : toujours `GetEnemyAttack(ennemi)` (tient compte de `combatStatBonuses` et statuts).
 36. **`deathEffects` — ordre** : appliqués APRÈS exclusion du ciblage, AVANT `AllEnemiesDead()`. Si deathEffect tue le joueur, `combatEnded=true` → pas de victoire fausse.

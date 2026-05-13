@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using System.Collections.Generic;
 
 /// <summary>
 /// Composant d'une icône de module dans le HUD.
@@ -52,6 +53,17 @@ public class ModuleIcon : MonoBehaviour
             else
                 iconImage.color = new Color(0.55f, 0.55f, 0.55f); // Gris si pas d'icône définie
         }
+
+        // Configure le tooltip du module
+        TooltipTrigger trigger = GetComponent<TooltipTrigger>();
+        if (trigger == null)
+            trigger = gameObject.AddComponent<TooltipTrigger>();
+
+        trigger.SetTooltipData(
+            module.moduleName,
+            module.description,
+            module.tags ?? new List<TagData>()
+        );
 
         gameObject.name = $"ModuleIcon_{module.moduleID}";
     }

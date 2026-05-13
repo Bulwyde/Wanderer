@@ -41,6 +41,16 @@ public class ArmSlotUI : MonoBehaviour
         if (armIconImage != null && arm.icon != null)
             armIconImage.sprite = arm.icon;
 
+        // Configure le tooltip de l'arme
+        if (armIconImage != null)
+        {
+            TooltipTrigger trigger = armIconImage.GetComponent<TooltipTrigger>();
+            if (trigger == null)
+                trigger = armIconImage.gameObject.AddComponent<TooltipTrigger>();
+
+            trigger.SetTooltipData(arm.equipmentName, arm.description, arm.tags ?? new List<TagData>());
+        }
+
         // Génère les boutons skills
         SpawnSkillIcons(equippedSkills, arm, onSkillClicked);
     }

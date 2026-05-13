@@ -66,7 +66,7 @@ public class TagDataEditor : Editor
     {
         tagNameProp  = serializedObject.FindProperty("tagName");
         categorieProp = serializedObject.FindProperty("categorie");
-        couleurProp  = serializedObject.FindProperty("couleur");
+        couleurProp  = serializedObject.FindProperty("Color");          // ← "Color" avec C majuscule
     }
 
     // -----------------------------------------------
@@ -85,6 +85,9 @@ public class TagDataEditor : Editor
 
         EditorGUILayout.PropertyField(categorieProp, new GUIContent("Catégorie"));
         EditorGUILayout.PropertyField(couleurProp,   new GUIContent("Couleur"));
+
+        EditorGUILayout.PropertyField(serializedObject.FindProperty("textColor"), new GUIContent("Text Color"));
+        EditorGUILayout.PropertyField(serializedObject.FindProperty("affiché"), new GUIContent("Affiché"));
 
         serializedObject.ApplyModifiedProperties();
 

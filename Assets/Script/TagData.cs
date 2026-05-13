@@ -61,7 +61,14 @@ public class TagData : ScriptableObject
 
     [Header("Affichage")]
     // Couleur d'accentuation — pour un éventuel affichage dans l'UI ou l'Inspector
-    public Color couleur = Color.white;
+    public Color Color = Color.white;
+
+    [Header("Affichage Tooltip")]
+    // Couleur du texte du tag en tooltip (noir, blanc, etc.)
+    public Color textColor = Color.white;
+
+    // Si false, le tag n'est pas affiché dans les tooltips
+    public bool affiché = true;
 }
 
 /// <summary>

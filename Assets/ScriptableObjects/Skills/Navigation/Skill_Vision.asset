@@ -15,7 +15,7 @@ MonoBehaviour:
   skillID: skill_vision
   skillName: Vision
   icon: {fileID: -4178046375966092550, guid: 34a370f257f3b8144a5452b3c07ec1cc, type: 3}
-  description: 
+  description: Augmente votre range de vision de 1
   keywords: []
   energyCost: 0
   cooldown: 0

@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using System.Collections.Generic;
 
 /// <summary>
 /// Composant attaché au prefab SkillIconButton.
@@ -22,6 +23,7 @@ public class SkillIconButton : MonoBehaviour
     private SkillData _skill;
     private EquipmentData _sourceEquipment;
     private int _effectiveCost;
+    private List<TagData> _skillTags = new List<TagData>();
 
     // -----------------------------------------------
     // INITIALISATION
@@ -53,6 +55,12 @@ public class SkillIconButton : MonoBehaviour
 
         // Pas de cooldown au départ
         SetCooldown(0);
+
+        // Configure le tooltip
+        _skillTags = skill.tags ?? new List<TagData>();
+        TooltipTrigger trigger = GetComponent<TooltipTrigger>();
+        if (trigger != null)
+            trigger.SetTooltipData(skill.skillName, skill.description, _skillTags);
     }
 
     // -----------------------------------------------

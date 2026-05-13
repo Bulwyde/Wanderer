@@ -15,7 +15,7 @@ MonoBehaviour:
   skillID: armor
   skillName: Armure
   icon: {fileID: 1581100681859306766, guid: c99ab50306bd99841b95d7890b3fb913, type: 3}
-  description: 
+  description: Donne de l'armure (moyen)
   keywords: []
   energyCost: 3
   cooldown: 0

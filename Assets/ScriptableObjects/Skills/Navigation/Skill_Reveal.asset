@@ -15,7 +15,7 @@ MonoBehaviour:
   skillID: skill_reveal
   skillName: Reveal
   icon: {fileID: 8473866954013550209, guid: a3435cb2522ff0b4d846084d703bfda7, type: 3}
-  description: 
+  description: "Permet de r\xE9veller les cases dans une zone de 3x3"
   keywords: []
   energyCost: 0
   cooldown: 0

@@ -287,6 +287,7 @@ GameObject:
   - component: {fileID: 81907283108463486}
   - component: {fileID: 7418591269729892036}
   - component: {fileID: 4635814995020151594}
+  - component: {fileID: 7430638020951506636}
   m_Layer: 5
   m_Name: ShopitemButton
   m_TagString: Untagged
@@ -412,3 +413,18 @@ MonoBehaviour:
   itemNameText: {fileID: 4215613321401298639}
   priceText: {fileID: 3224654296169910571}
   itemIconImage: {fileID: 81907283108463486}
+--- !u!114 &7430638020951506636
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7337484516947150688}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 749dece2454e9fa48a1b36fae1a9c863, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TooltipTrigger
+  itemName: 
+  itemDescription: 
+  itemTags: []

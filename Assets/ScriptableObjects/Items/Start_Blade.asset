@@ -15,7 +15,7 @@ MonoBehaviour:
   equipmentID: start_blade
   equipmentName: Start_Blade
   icon: {fileID: -2578031526789040135, guid: 700ae0db825ff80488958e69cc95f8c9, type: 3}
-  description: 
+  description: "Une \xE9p\xE9e qu'elle est belle."
   keywords: []
   equipmentType: 3
   level: 1

@@ -15,7 +15,7 @@ MonoBehaviour:
   skillID: skill_affaiblissement
   skillName: Affaiblissement
   icon: {fileID: 8459777460899806319, guid: 84de98567f153ac479f51c336a401fa5, type: 3}
-  description: 
+  description: "R\xE9duit les d\xE9g\xE2ts de la cible de X%"
   keywords: []
   energyCost: 1
   cooldown: 0

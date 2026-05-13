@@ -1241,6 +1241,14 @@ public class NavigationManager : MonoBehaviour
             if (iconImage != null && skill.icon != null)
                 iconImage.sprite = skill.icon;
 
+            // Configure le tooltip du skill
+            TooltipTrigger tooltip = btn.GetComponent<TooltipTrigger>();
+            if (tooltip != null)
+            {
+                var skillTags = skill.tags ?? new List<TagData>();
+                tooltip.SetTooltipData(skill.skillName, skill.description, skillTags);
+            }
+
             // Branche le clic et grise le bouton si le skill est en cooldown
             Button btnComp = btn.GetComponent<Button>();
             if (btnComp != null)

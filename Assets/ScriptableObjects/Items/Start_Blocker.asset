@@ -15,7 +15,7 @@ MonoBehaviour:
   equipmentID: blocker
   equipmentName: Blocker
   icon: {fileID: 994794506271154450, guid: 0b6cea4e568699148891c644ff381be3, type: 3}
-  description: 
+  description: Rock solid
   keywords: []
   equipmentType: 3
   level: 1
@@ -27,6 +27,7 @@ MonoBehaviour:
   bonusRegeneration: 0
   bonusLifeSteal: 0
   passiveEffects: []
+  skillModifiers: []
   skillSlots:
   - state: 1
     equippedSkill: {fileID: 11400000, guid: 75bfa1dbea09fc0428f19808f0b4ca87, type: 2}

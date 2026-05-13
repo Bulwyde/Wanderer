@@ -15,7 +15,7 @@ MonoBehaviour:
   skillID: attack
   skillName: Attaque
   icon: {fileID: 4113829005332862926, guid: c524a4c9700249148a7b1cb3db7f1bf6, type: 3}
-  description: 
+  description: "Inflige des d\xE9gats (moyen)"
   keywords: []
   energyCost: 1
   cooldown: 0

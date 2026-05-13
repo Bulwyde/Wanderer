@@ -15,7 +15,7 @@ MonoBehaviour:
   skillID: skill_explo_stack
   skillName: ExploStack
   icon: {fileID: 8781821384698901968, guid: 75dda192898f6204a9d6e6f1297bb048, type: 3}
-  description: 
+  description: "Applique des stacks d'explosivit\xE9 sur la cible."
   keywords: []
   energyCost: 1
   cooldown: 0

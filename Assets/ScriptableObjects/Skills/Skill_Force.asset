@@ -15,7 +15,7 @@ MonoBehaviour:
   skillID: skill_force
   skillName: Force
   icon: {fileID: -5544042806758884858, guid: 7c1509541cf2ded4ab695bd9d3023a84, type: 3}
-  description: 
+  description: Augmente votre force.
   keywords: []
   energyCost: 2
   cooldown: 2

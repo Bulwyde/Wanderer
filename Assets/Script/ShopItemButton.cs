@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using System;
+using System.Collections.Generic;
 
 /// <summary>
 /// Composant d'un bouton d'article dans la scène Marchand.
@@ -21,6 +22,7 @@ public class ShopItemButton : MonoBehaviour
 
     private Button     button;
     private Action     onAcheter;
+    private List<TagData> _itemTags = new List<TagData>();
 
     void Awake()
     {
@@ -34,10 +36,15 @@ public class ShopItemButton : MonoBehaviour
     /// Si achetable = false (déjà acheté ou fonds insuffisants), le bouton est grisé.
     /// labelPrix permet de surcharger l'affichage (ex : "Acheté" ou "Déjà possédé").
     /// icon affiche l'icone de l'article (optionnel).
+    /// tags affiche les tags dans le tooltip (optionnel).
+    /// description affiche la description dans le tooltip (optionnel).
     /// </summary>
-    public void Setup(string nom, int prix, bool achetable, Action callback, string labelPrix = null, Sprite icon = null)
+    public void Setup(string nom, int prix, bool achetable, Action callback,
+                      string labelPrix = null, Sprite icon = null, List<TagData> tags = null,
+                      string description = "")
     {
         onAcheter = callback;
+        _itemTags = tags ?? new List<TagData>();
 
         if (itemNameText != null)
             itemNameText.text = nom;
@@ -50,6 +57,11 @@ public class ShopItemButton : MonoBehaviour
             itemIconImage.sprite = icon;
 
         SetInteractable(achetable);
+
+        // Configure le tooltip — PASSER LA DESCRIPTION
+        TooltipTrigger trigger = GetComponent<TooltipTrigger>();
+        if (trigger != null)
+            trigger.SetTooltipData(nom, description, _itemTags);
     }
 
     public void SetInteractable(bool interactable)

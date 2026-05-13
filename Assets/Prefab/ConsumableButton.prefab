@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 2908832353792944895}
   - component: {fileID: 5946945941561472967}
   - component: {fileID: 19010188173386063}
+  - component: {fileID: 4703445576936718650}
   m_Layer: 5
   m_Name: ConsumableButton
   m_TagString: Untagged
@@ -134,3 +135,18 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ConsumableButton
   iconImage: {fileID: 2908832353792944895}
+--- !u!114 &4703445576936718650
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7048912491923774506}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 749dece2454e9fa48a1b36fae1a9c863, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TooltipTrigger
+  itemName: 
+  itemDescription: 
+  itemTags: []

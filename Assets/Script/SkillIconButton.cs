@@ -56,11 +56,12 @@ public class SkillIconButton : MonoBehaviour
         // Pas de cooldown au départ
         SetCooldown(0);
 
-        // Configure le tooltip
+        // Configure le tooltip — ajout dynamique du TooltipTrigger si absent du prefab (piège 34)
         _skillTags = skill.tags ?? new List<TagData>();
         TooltipTrigger trigger = GetComponent<TooltipTrigger>();
-        if (trigger != null)
-            trigger.SetTooltipData(skill.skillName, skill.description, _skillTags);
+        if (trigger == null)
+            trigger = gameObject.AddComponent<TooltipTrigger>();
+        trigger.SetTooltipData(skill.skillName, skill.description, _skillTags);
     }
 
     // -----------------------------------------------

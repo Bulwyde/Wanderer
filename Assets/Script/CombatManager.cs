@@ -76,8 +76,6 @@ public class CombatManager : MonoBehaviour
     public TextMeshProUGUI turnText;
     public TextMeshProUGUI combatLogText;
     public Button          endTurnButton;
-    public Transform       skillButtonContainer;
-    public GameObject      skillButtonPrefab;
 
     [Header("UI — Armes et Skills en icones")]
     public Transform       armsContainer;
@@ -211,7 +209,6 @@ public class CombatManager : MonoBehaviour
 
     private List<SkillData>        availableSkills          = new List<SkillData>();
     private List<EquipmentData>    _availableSkillSources   = new List<EquipmentData>();
-    private List<SkillButton>      spawnedSkillButtons      = new List<SkillButton>();
     private List<ConsumableButton> spawnedConsumableButtons = new List<ConsumableButton>();
     private Dictionary<(EquipmentData equip, SkillData skill), int> skillCooldowns
         = new Dictionary<(EquipmentData, SkillData), int>();
@@ -348,7 +345,6 @@ public class CombatManager : MonoBehaviour
         }
         _afterNSkillsCounters.Clear();
 
-        // SpawnSkillButtons();    // Commenté : skills affichés via icones armes (SpawnArmsUI)
         SpawnConsumableButtons();
         UpdatePlayerUI();
         Log($"Combat commencé — {GetPlayerName()} vs {GetRencontreName()}");
@@ -620,71 +616,6 @@ public class CombatManager : MonoBehaviour
     }
 
     // -----------------------------------------------
-    // GÉNÉRATION DES BOUTONS DE COMPÉTENCES
-    // -----------------------------------------------
-
-    private void SpawnSkillButtons()
-    {
-        if (skillButtonPrefab == null || skillButtonContainer == null) return;
-
-        for (int i = 0; i < availableSkills.Count; i++)
-        {
-            SkillData     skill = availableSkills[i];
-            EquipmentData equip = (i < _availableSkillSources.Count) ? _availableSkillSources[i] : null;
-
-            if (skill == null || skill.isNavigationSkill) continue;
-
-            int effectiveCost = skill.energyCost
-                + ObtenirContexteExecution(skill, equip).coutEnergieSupplementaire;
-
-            GameObject go = Instantiate(skillButtonPrefab, skillButtonContainer);
-            SkillButton sb = go.GetComponent<SkillButton>();
-            if (sb == null) continue;
-            sb.Setup(skill, equip, effectiveCost, UseSkill);
-            spawnedSkillButtons.Add(sb);
-        }
-
-        SpawnPassifsBras();
-    }
-
-    private void SpawnPassifsBras()
-    {
-        if (RunManager.Instance != null)
-        {
-            // Run normale : tous les slots arm via l'enum.
-            // Slot vide = null → SpawnPassifsEquipement gère le null gracieusement.
-            SpawnPassifsEquipement(RunManager.Instance.GetEquipped(EquipmentSlot.Arm1));
-            SpawnPassifsEquipement(RunManager.Instance.GetEquipped(EquipmentSlot.Arm2));
-            SpawnPassifsEquipement(RunManager.Instance.GetEquipped(EquipmentSlot.Arm3));
-            SpawnPassifsEquipement(RunManager.Instance.GetEquipped(EquipmentSlot.Arm4));
-        }
-        else
-        {
-            // Test direct de scène sans RunManager.
-            SpawnPassifsEquipement(characterData?.startingArm1);
-            SpawnPassifsEquipement(characterData?.startingArm2);
-            if (characterData != null && characterData.maxEquippedArms >= 3)
-                SpawnPassifsEquipement(characterData.startingArm3);
-            if (characterData != null && characterData.maxEquippedArms >= 4)
-                SpawnPassifsEquipement(characterData.startingArm4);
-        }
-    }
-
-    private void SpawnPassifsEquipement(EquipmentData equip)
-    {
-        if (equip == null || equip.passiveEffects == null) return;
-        foreach (EffectData effet in equip.passiveEffects)
-        {
-            if (effet == null) continue;
-            GameObject go = Instantiate(skillButtonPrefab, skillButtonContainer);
-            SkillButton sb = go.GetComponent<SkillButton>();
-            if (sb == null) continue;
-            sb.SetupPassif(effet);
-            Debug.Log($"[Combat] Bouton passif généré : {effet.displayName ?? effet.effectID} ({equip.equipmentName})");
-        }
-    }
-
-    // -----------------------------------------------
     // GÉNÉRATION DES BOUTONS DE CONSOMMABLES
     // -----------------------------------------------
 
@@ -761,7 +692,6 @@ public class CombatManager : MonoBehaviour
         if (endTurnButton != null) endTurnButton.interactable = false;
         if (turnText      != null) turnText.text = "Tour des ennemis";
 
-        foreach (SkillButton   sb in spawnedSkillButtons)      sb.SetInteractable(false);
         foreach (ConsumableButton cb in spawnedConsumableButtons) cb.SetInteractable(false);
 
         StartCoroutine(EnemyTurnRoutine());
@@ -2449,7 +2379,6 @@ public class CombatManager : MonoBehaviour
         battleState = victory ? BattleState.Victory : BattleState.Defeat;
 
         if (endTurnButton != null) endTurnButton.interactable = false;
-        foreach (SkillButton   sb in spawnedSkillButtons)      sb.SetInteractable(false);
         foreach (ConsumableButton cb in spawnedConsumableButtons) cb.SetInteractable(false);
 
         if (combatActivePanel != null) combatActivePanel.SetActive(false);
@@ -2757,22 +2686,6 @@ public class CombatManager : MonoBehaviour
 
     private void UpdateSkillButtons()
     {
-        // Mise à jour des anciens SkillButton (texte)
-        foreach (SkillButton sb in spawnedSkillButtons)
-        {
-            if (sb.Skill == null) continue;
-            int cd = skillCooldowns.TryGetValue((sb.SourceEquipment, sb.Skill), out int val) ? val : 0;
-            int reduction = GetCurrentEnergyCostReduction(sb.Skill);  // Passe le skill pour filtrer par tag
-            int coutReel = Mathf.Max(0, sb.EffectiveCost - reduction);
-            sb.SetCooldown(cd);
-            sb.SetDisplayedCost(coutReel);
-            bool canUse = battleState == BattleState.PlayerTurn
-                       && !isSelectingTarget
-                       && cd == 0
-                       && currentEnergy >= coutReel;
-            sb.SetInteractable(canUse);
-        }
-
         // Mise à jour des SkillIconButton (icones armes)
         if (_armsController != null)
         {

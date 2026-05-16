@@ -82,6 +82,14 @@ public class TooltipController : MonoBehaviour
         }
         else
         {
+            // Guard : le CanvasGroup peut avoir été perdu (changement de scène,
+            // Canvas parent détruit). On le re-récupère pour rester cohérent.
+            if (_tooltipCanvasGroup == null)
+            {
+                _tooltipCanvasGroup = _tooltipInstance.GetComponent<CanvasGroup>();
+                if (_tooltipCanvasGroup == null)
+                    _tooltipCanvasGroup = _tooltipInstance.AddComponent<CanvasGroup>();
+            }
             _tooltipInstance.SetActive(true);
             _tooltipCanvasGroup.alpha = 1f;
         }
@@ -170,13 +178,9 @@ public class TooltipController : MonoBehaviour
                     Image badgeBG = badgeGO.GetComponent<Image>();
                     TextMeshProUGUI badgeText = badgeGO.GetComponentInChildren<TextMeshProUGUI>();
 
-                    // DEBUG
-                    Debug.Log($"[Tooltip] Badge '{tag.tagName}': Image trouvée = {badgeBG != null}, Text trouvé = {badgeText != null}");
-
                     if (badgeBG != null)
                     {
                         badgeBG.color = tag.Color;
-                        Debug.Log($"[Tooltip] Couleur appliquée à '{tag.tagName}': {tag.Color}");
                     }
                     else
                     {

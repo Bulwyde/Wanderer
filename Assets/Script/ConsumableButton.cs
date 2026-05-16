@@ -71,10 +71,11 @@ public class ConsumableButton : MonoBehaviour
         if (button != null)
             button.onClick.AddListener(() => onUse?.Invoke(consumable));
 
-        // Configure le tooltip
+        // Configure le tooltip — ajout dynamique du TooltipTrigger si absent du prefab (piège 34)
         TooltipTrigger trigger = GetComponent<TooltipTrigger>();
-        if (trigger != null)
-            trigger.SetTooltipData(data.consumableName, data.description, _consumableTags);
+        if (trigger == null)
+            trigger = gameObject.AddComponent<TooltipTrigger>();
+        trigger.SetTooltipData(data.consumableName, data.description, _consumableTags);
     }
 
     /// <summary>

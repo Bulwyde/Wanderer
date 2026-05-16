@@ -19,7 +19,7 @@ public class ArmSlotUI : MonoBehaviour
 {
     [Header("Références")]
     [SerializeField] private Image armIconImage;
-    [SerializeField] private Transform skillsGridContainer;  // Changed: GridLayoutGroup → Transform
+    [SerializeField] private Transform skillsGridContainer;
     [SerializeField] private GameObject skillIconPrefab;
 
     private EquipmentData _currentArm;

@@ -58,10 +58,11 @@ public class ShopItemButton : MonoBehaviour
 
         SetInteractable(achetable);
 
-        // Configure le tooltip — PASSER LA DESCRIPTION
+        // Configure le tooltip — ajout dynamique du TooltipTrigger si absent du prefab (piège 34)
         TooltipTrigger trigger = GetComponent<TooltipTrigger>();
-        if (trigger != null)
-            trigger.SetTooltipData(nom, description, _itemTags);
+        if (trigger == null)
+            trigger = gameObject.AddComponent<TooltipTrigger>();
+        trigger.SetTooltipData(nom, description, _itemTags);
     }
 
     public void SetInteractable(bool interactable)

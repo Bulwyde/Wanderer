@@ -123,8 +123,6 @@ public class CombatUIArmsController : MonoBehaviour
                 Debug.LogWarning("[CombatUIArmsController] ArmSlotUI composant non trouvé sur le prefab!");
             }
         }
-
-        Debug.Log($"[CombatUIArmsController] {setups.Count} armes affichées.");
     }
 
     // -----------------------------------------------

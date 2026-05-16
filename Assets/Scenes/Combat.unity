@@ -575,8 +575,6 @@ MonoBehaviour:
   turnText: {fileID: 1288210782}
   combatLogText: {fileID: 181910700}
   endTurnButton: {fileID: 1632313901}
-  skillButtonContainer: {fileID: 0}
-  skillButtonPrefab: {fileID: 2175451399632347633, guid: 3a101cde42d860149b70ce3ad3ec5111, type: 3}
   armsContainer: {fileID: 1502931969}
   armSlotUIPrefab: {fileID: 3937438036293453280, guid: ddb282f64daa9ba45a5ffac9a97a0e1c, type: 3}
   consumableButtonContainer: {fileID: 1532463690}
